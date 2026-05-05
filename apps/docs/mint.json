@@ -1,0 +1,73 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "AgentDomain",
+  "logo": {
+    "dark": "/logo/dark.svg",
+    "light": "/logo/light.svg"
+  },
+  "favicon": "/favicon.ico",
+  "colors": {
+    "primary": "#3B82F6",
+    "light": "#60A5FA",
+    "dark": "#1D4ED8"
+  },
+  "topbarLinks": [
+    {
+      "name": "Dashboard",
+      "url": "https://agentdomain.app/dashboard"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Register Agent",
+    "url": "https://agentdomain.app/register"
+  },
+  "anchors": [
+    {
+      "name": "API Reference",
+      "icon": "rectangle-terminal",
+      "url": "api-reference"
+    },
+    {
+      "name": "GitHub",
+      "icon": "github",
+      "url": "https://github.com/agentdomain/agentdomain"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Get Started",
+      "pages": ["introduction", "quickstart", "concepts"]
+    },
+    {
+      "group": "Guides",
+      "pages": ["guides/registration", "guides/dns", "guides/email", "guides/ssl", "guides/renewal"]
+    },
+    {
+      "group": "SDK",
+      "pages": ["sdk/typescript", "sdk/mcp"]
+    },
+    {
+      "group": "Frameworks",
+      "pages": [
+        "frameworks/elizaos",
+        "frameworks/agentkit",
+        "frameworks/langchain",
+        "frameworks/crewai"
+      ]
+    },
+    {
+      "group": "API Reference",
+      "pages": [
+        "api-reference/register",
+        "api-reference/agents",
+        "api-reference/dns",
+        "api-reference/email"
+      ]
+    }
+  ],
+  "footerSocials": {
+    "twitter": "https://twitter.com/agentdomain",
+    "github": "https://github.com/agentdomain",
+    "farcaster": "https://warpcast.com/agentdomain"
+  }
+}

@@ -1,0 +1,16 @@
+---
+title: Autonomous Renewals
+description: 'Keep agent identities alive with the RenewalVault and keeper bot.'
+---
+
+# Autonomous Renewals
+
+AgentDomain includes a RenewalVault contract that holds USDC per AgentID token.
+
+## Renewal model
+
+- NFT owners deposit USDC into their token vault.
+- Owners enable auto-renewal per token.
+- AgentDomain checks renewal windows automatically.
+- If the token is renewable and funded, renewal is executed before expiry.
+- The registry expiry is extended after a successful renewal.

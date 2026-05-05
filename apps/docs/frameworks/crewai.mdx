@@ -1,0 +1,16 @@
+---
+title: CrewAI
+description: 'Assign persistent internet identities to CrewAI workers.'
+---
+
+# CrewAI
+
+CrewAI teams often contain specialized workers. AgentDomain lets each worker get
+a public identity it can use across APIs, email, and onchain workflows.
+
+## Recommended pattern
+
+- One domain per production crew
+- One Basename per externally visible agent
+- Email enabled for agents that communicate with humans
+- Renewal vault funded before public launch

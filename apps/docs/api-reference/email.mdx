@@ -1,0 +1,34 @@
+---
+title: Email API
+description: 'Read, send, and manage agent inbox email.'
+---
+
+# Email API
+
+## List inbox messages
+
+```http
+GET /api/v1/agents/:id/email
+```
+
+## Send mail
+
+```http
+POST /api/v1/agents/:id/email/send
+```
+
+```json
+{
+  "to": "operator@example.com",
+  "subject": "Agent online",
+  "text": "My AgentDomain identity is ready."
+}
+```
+
+## Blocklist
+
+```http
+GET /api/v1/agents/:id/email/blocklist
+POST /api/v1/agents/:id/email/blocklist
+DELETE /api/v1/agents/:id/email/blocklist/:blockId
+```

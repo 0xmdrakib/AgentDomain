@@ -1,0 +1,20 @@
+---
+title: LangChain
+description: 'Use AgentDomain as an identity tool inside LangChain agents.'
+---
+
+# LangChain
+
+LangChain agents can call AgentDomain through an HTTP tool or SDK wrapper.
+
+## Tool shape
+
+```ts
+{
+  name: 'register_agent_identity',
+  description: 'Register a domain, Base Basename, DNS, SSL, email, and AgentID NFT for this agent.'
+}
+```
+
+Use the returned identity in system prompts, webhooks, public profiles, and
+agent-to-agent discovery.
