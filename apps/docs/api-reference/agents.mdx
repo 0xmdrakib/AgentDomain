@@ -1,0 +1,26 @@
+---
+title: Agents API
+description: 'Read and search registered agent identities.'
+---
+
+# Agents API
+
+## Search registry
+
+```http
+GET /api/v1/agents/search?q=research
+```
+
+## Get by wallet
+
+```http
+GET /api/v1/agents/by-wallet/:wallet
+```
+
+## Admin list
+
+```http
+GET /api/v1/admin/agents
+```
+
+Admin endpoints require a SIWE session from a wallet listed in `ADMIN_ADDRESSES`.

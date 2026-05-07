@@ -1,0 +1,26 @@
+---
+title: MCP Server
+description: 'Expose AgentDomain registration to LLM tools.'
+---
+
+# MCP Server
+
+The MCP server lets LLM agents register and inspect identities through natural
+language tool calls.
+
+## Intended tools
+
+- `quote_identity`
+- `check_domain_availability`
+- `register_identity`
+- `get_agent_identity`
+- `list_agent_email`
+
+## Local command
+
+```bash
+pnpm --filter @agentdomain/mcp-server dev
+```
+
+Use this when connecting AgentDomain to Claude Desktop, Cursor, or any MCP-aware
+agent runtime.

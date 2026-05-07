@@ -1,0 +1,12 @@
+{
+  "name": "@agentdomain/docs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AgentDomain documentation site (Mintlify)",
+  "scripts": {
+    "dev": "echo \"Run with: mintlify dev\"",
+    "build": "echo \"Mintlify deploys via git push\"",
+    "lint": "echo \"no lint\"",
+    "typecheck": "echo \"no typecheck\""
+  }
+}

@@ -1,0 +1,518 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useAccount, useConnect } from 'wagmi';
+import type { Connector } from 'wagmi';
+import { injected } from 'wagmi/connectors';
+import { Check, Loader2, Wallet, X } from 'lucide-react';
+import { Button, type ButtonProps } from '@/components/ui/button';
+import { cn, shortAddress } from '@/lib/utils';
+
+interface ConnectWalletButtonProps {
+  className?: string;
+  variant?: ButtonProps['variant'];
+  size?: ButtonProps['size'];
+}
+
+const CONNECTOR_LABELS: Record<string, string> = {
+  injected: 'Injected Wallet',
+  walletConnect: 'WalletConnect',
+  coinbaseWalletSDK: 'Coinbase Wallet',
+};
+
+const CONNECTOR_DESCRIPTIONS: Record<string, string> = {
+  injected: 'MetaMask, Rabby, Brave, Backpack',
+  walletConnect: 'Scan QR or open mobile wallet',
+  coinbaseWalletSDK: 'Coinbase app or Smart Wallet',
+};
+
+const CONNECTOR_ORDER = ['injected', 'walletConnect', 'coinbaseWalletSDK'];
+const INJECTED_WALLET_ORDER = ['metaMask', 'rabby', 'brave', 'backpack'];
+const CONNECT_TIMEOUT_MS = 20_000;
+
+type InjectedWalletId = string;
+type ConnectableConnector = Connector | ReturnType<typeof injected>;
+
+type InjectedWalletOption = {
+  id: InjectedWalletId;
+  name: string;
+  description: string;
+  connector: ConnectableConnector;
+  pendingId: string;
+  installed: boolean;
+  iconUrl?: string;
+  fallback: string;
+  accent: string;
+};
+
+type InjectedProvider = {
+  isBackpack?: true;
+  isBraveWallet?: true;
+  isMetaMask?: true;
+  isRabby?: true;
+  providers?: InjectedProvider[];
+};
+
+type Eip6963ProviderDetail = {
+  info: {
+    uuid: string;
+    name: string;
+    icon?: string;
+    rdns: string;
+  };
+  provider: InjectedProvider;
+};
+
+type Eip6963AnnounceEvent = CustomEvent<Eip6963ProviderDetail>;
+
+const INJECTED_WALLETS: Record<string, Omit<InjectedWalletOption, 'connector' | 'pendingId' | 'installed'>> = {
+  metaMask: {
+    id: 'metaMask',
+    name: 'MetaMask',
+    description: 'Browser extension wallet',
+    iconUrl: 'https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg',
+    fallback: 'M',
+    accent: 'from-orange-400 to-amber-500',
+  },
+  rabby: {
+    id: 'rabby',
+    name: 'Rabby',
+    description: 'DeFi-friendly injected wallet',
+    iconUrl: 'https://rabby.io/assets/images/logo-128.png',
+    fallback: 'R',
+    accent: 'from-sky-400 to-blue-500',
+  },
+  brave: {
+    id: 'brave',
+    name: 'Brave Wallet',
+    description: 'Built into Brave browser',
+    iconUrl: 'https://brave.com/static-assets/images/brave-logo-sans-text.svg',
+    fallback: 'B',
+    accent: 'from-orange-500 to-red-500',
+  },
+  backpack: {
+    id: 'backpack',
+    name: 'Backpack',
+    description: 'Backpack browser wallet',
+    fallback: 'BP',
+    accent: 'from-violet-500 to-fuchsia-500',
+  },
+};
+
+export function ConnectWalletButton({
+  className,
+  variant = 'gradient',
+  size = 'sm',
+}: ConnectWalletButtonProps) {
+  const { address, isConnected, status } = useAccount();
+  const { connectAsync, connectors, error, reset } = useConnect();
+  const [open, setOpen] = useState(false);
+  const [showInjectedSelector, setShowInjectedSelector] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [pendingConnectorUid, setPendingConnectorUid] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [eip6963Providers, setEip6963Providers] = useState<Eip6963ProviderDetail[]>([]);
+
+  useEffect(() => {
+    if (status !== 'reconnecting') setReady(true);
+  }, [status]);
+
+  useEffect(() => {
+    if (isConnected) {
+      setOpen(false);
+      setShowInjectedSelector(false);
+      setPendingConnectorUid(null);
+      setLocalError(null);
+    }
+  }, [isConnected]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    function onAnnounce(event: Event) {
+      const detail = (event as Eip6963AnnounceEvent).detail;
+      if (!detail?.info?.uuid || !detail.info.name || !detail.provider) return;
+
+      setEip6963Providers((current) => {
+        const exists = current.some(
+          (provider) =>
+            provider.info.uuid === detail.info.uuid || provider.info.rdns === detail.info.rdns,
+        );
+        if (exists) return current;
+        return [...current, detail].sort((a, b) => a.info.name.localeCompare(b.info.name));
+      });
+    }
+
+    window.addEventListener('eip6963:announceProvider', onAnnounce);
+    window.dispatchEvent(new Event('eip6963:requestProvider'));
+
+    return () => window.removeEventListener('eip6963:announceProvider', onAnnounce);
+  }, []);
+
+  function closeSelector() {
+    reset();
+    setOpen(false);
+    setShowInjectedSelector(false);
+    setPendingConnectorUid(null);
+    setLocalError(null);
+  }
+
+  async function handleConnect(connector: ConnectableConnector, pendingId?: string) {
+    reset();
+    setPendingConnectorUid(pendingId ?? ('uid' in connector ? connector.uid : null));
+    setLocalError(null);
+
+    let timedOut = false;
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      reset();
+      setPendingConnectorUid(null);
+    }, CONNECT_TIMEOUT_MS);
+
+    try {
+      await connectAsync({ connector });
+    } catch (e) {
+      reset();
+      if (!isCancelledConnectError(e) && !timedOut) {
+        setLocalError(e instanceof Error ? e.message : 'Failed to connect wallet');
+      }
+    } finally {
+      window.clearTimeout(timeout);
+      setPendingConnectorUid(null);
+    }
+  }
+
+  const walletOptions = useMemo(() => {
+    return connectors
+      .filter((connector) => CONNECTOR_ORDER.includes(connector.id))
+      .sort((a, b) => CONNECTOR_ORDER.indexOf(a.id) - CONNECTOR_ORDER.indexOf(b.id));
+  }, [connectors]);
+
+  const injectedOptions = useMemo(() => {
+    if (typeof window === 'undefined') return [];
+
+    const eip6963Options = eip6963Providers.map((detail) => {
+      const id = normalizeInjectedWalletId(detail.info.rdns, detail.info.name);
+      const meta = INJECTED_WALLETS[id];
+
+      return {
+        id,
+        name: meta?.name ?? detail.info.name,
+        description: meta?.description ?? 'Detected browser wallet',
+        connector: injected({
+          shimDisconnect: true,
+          target: {
+            id: detail.info.rdns || detail.info.uuid,
+            name: detail.info.name,
+            icon: detail.info.icon,
+            provider: detail.provider as never,
+          },
+        }),
+        pendingId: detail.info.uuid,
+        installed: true,
+        iconUrl: detail.info.icon ?? meta?.iconUrl,
+        fallback: meta?.fallback ?? getInitials(detail.info.name),
+        accent: meta?.accent ?? 'from-blue-500 to-violet-500',
+      } satisfies InjectedWalletOption;
+    });
+
+    if (eip6963Options.length > 0) return dedupeInjectedOptions(eip6963Options);
+
+    const knownOptions = INJECTED_WALLET_ORDER.map((id) => {
+      const connector = connectors.find((item) => item.id === id);
+      const meta = INJECTED_WALLETS[id];
+      if (!connector || !meta || !isInjectedWalletAvailable(id)) return null;
+      return { ...meta, connector, pendingId: connector.uid, installed: true } satisfies InjectedWalletOption;
+    }).filter(Boolean) as InjectedWalletOption[];
+
+    if (knownOptions.length > 0) return knownOptions;
+
+    const browserConnector = connectors.find((item) => item.id === 'injected');
+    if (browserConnector && hasAnyInjectedProvider()) {
+      return [
+        {
+          id: 'browser',
+          name: 'Browser Wallet',
+          description: 'Detected injected wallet provider',
+          connector: browserConnector,
+          pendingId: browserConnector.uid,
+          installed: true,
+          fallback: 'W',
+          accent: 'from-blue-500 to-violet-500',
+        },
+      ] satisfies InjectedWalletOption[];
+    }
+
+    return [];
+  }, [connectors, eip6963Providers]);
+
+  if (!ready || status === 'reconnecting') {
+    return <div className={cn('h-9 w-36 rounded-md', className)} />;
+  }
+
+  return (
+    <div className="relative inline-flex">
+      <Button
+        type="button"
+        variant={isConnected ? 'outline' : variant}
+        size={size}
+        className={cn(isConnected && 'font-mono', className)}
+        onClick={() => setOpen(true)}
+      >
+        {isConnected && address ? (
+          <>
+            <span className="h-2 w-2 rounded-full bg-emerald-400" />
+            {shortAddress(address)}
+          </>
+        ) : (
+          <>
+            <Wallet className="h-4 w-4" />
+            Connect Wallet
+          </>
+        )}
+      </Button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40 bg-background/40 backdrop-blur-sm" onClick={closeSelector} aria-hidden />
+          <div className="absolute right-0 top-full z-50 mt-3 w-[min(92vw,360px)] overflow-hidden rounded-2xl border border-border/60 bg-popover shadow-2xl shadow-black/30">
+            <div className="flex items-start justify-between border-b border-border/40 p-4">
+              <div>
+                <div className="text-sm font-semibold">Connect wallet</div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  Choose one wallet provider to continue.
+                </div>
+              </div>
+              <button
+                type="button"
+                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                onClick={closeSelector}
+                aria-label="Close wallet selector"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2 p-3">
+              {walletOptions.map((connector) => (
+                <WalletOption
+                  key={connector.uid}
+                  connector={connector}
+                  pending={pendingConnectorUid === connector.uid}
+                  onConnect={() => {
+                    if (connector.id === 'injected') {
+                      reset();
+                      setLocalError(null);
+                      setPendingConnectorUid(null);
+                      setShowInjectedSelector(true);
+                      return;
+                    }
+                    handleConnect(connector);
+                  }}
+                />
+              ))}
+            </div>
+
+            {(localError || error) && (
+              <div className="border-t border-border/40 bg-destructive/10 px-4 py-3 text-xs text-destructive">
+                {localError ?? error?.message}
+              </div>
+            )}
+          </div>
+
+          {showInjectedSelector &&
+            createPortal(
+              <InjectedWalletSelector
+                wallets={injectedOptions}
+                pendingConnectorUid={pendingConnectorUid}
+                onClose={() => {
+                  reset();
+                  setShowInjectedSelector(false);
+                  setPendingConnectorUid(null);
+                  setLocalError(null);
+                }}
+                onConnect={handleConnect}
+              />,
+              document.body,
+            )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function InjectedWalletSelector({
+  wallets,
+  pendingConnectorUid,
+  onClose,
+  onConnect,
+}: {
+  wallets: InjectedWalletOption[];
+  pendingConnectorUid: string | null;
+  onClose: () => void;
+  onConnect: (connector: ConnectableConnector, pendingId?: string) => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-sm overflow-hidden rounded-2xl border border-border/70 bg-popover shadow-2xl shadow-black/40">
+        <div className="flex items-start justify-between border-b border-border/40 p-4">
+          <div>
+            <div className="text-sm font-semibold">Choose injected wallet</div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              Available browser wallets on this device.
+            </div>
+          </div>
+          <button
+            type="button"
+            className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            onClick={onClose}
+            aria-label="Close injected wallet selector"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="space-y-2 p-3">
+          {wallets.length > 0 ? (
+            wallets.map((wallet) => (
+              <button
+                key={wallet.id}
+                type="button"
+                className="group flex w-full items-center gap-3 rounded-xl border border-border/40 bg-card/50 p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/10"
+                onClick={() => onConnect(wallet.connector, wallet.pendingId)}
+                disabled={pendingConnectorUid === wallet.pendingId}
+              >
+                <WalletLogo wallet={wallet} pending={pendingConnectorUid === wallet.pendingId} />
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium">{wallet.name}</div>
+                  <div className="truncate text-xs text-muted-foreground">{wallet.description}</div>
+                </div>
+                <Check className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+              </button>
+            ))
+          ) : (
+            <div className="rounded-xl border border-border/40 bg-card/50 p-4 text-sm text-muted-foreground">
+              No injected wallet found. Install MetaMask, Rabby, Brave Wallet, or Backpack and try again.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WalletLogo({ wallet, pending }: { wallet: InjectedWalletOption; pending: boolean }) {
+  return (
+    <div className={cn('relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br text-sm font-bold text-white shadow-lg', wallet.accent)}>
+      {pending ? (
+        <Loader2 className="h-5 w-5 animate-spin" />
+      ) : (
+        <>
+          <span>{wallet.fallback}</span>
+          {wallet.iconUrl && (
+            <span
+              className="absolute inset-0 bg-white bg-contain bg-center bg-no-repeat p-1.5"
+              style={{ backgroundImage: `url(${wallet.iconUrl})` }}
+              aria-hidden="true"
+            />
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function normalizeInjectedWalletId(rdns: string, name: string): string {
+  const key = `${rdns} ${name}`.toLowerCase();
+  if (key.includes('metamask')) return 'metaMask';
+  if (key.includes('rabby')) return 'rabby';
+  if (key.includes('brave')) return 'brave';
+  if (key.includes('backpack')) return 'backpack';
+  return rdns || name.toLowerCase().replace(/\s+/g, '-');
+}
+
+function dedupeInjectedOptions(options: InjectedWalletOption[]) {
+  const seen = new Set<string>();
+  return options.filter((option) => {
+    const key = `${option.id}:${option.name.toLowerCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function getInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('') || 'W';
+}
+
+function hasAnyInjectedProvider() {
+  return Boolean((window as Window & { ethereum?: unknown }).ethereum);
+}
+
+function isInjectedWalletAvailable(id: string) {
+  const ethereum = (window as Window & { ethereum?: InjectedProvider }).ethereum;
+  const providers: InjectedProvider[] = ethereum?.providers ?? (ethereum ? [ethereum] : []);
+  return providers.some((provider) => {
+    if (id === 'metaMask') {
+      return Boolean(
+        provider.isMetaMask &&
+          !provider.isRabby &&
+          !provider.isBraveWallet &&
+          !provider.isBackpack,
+      );
+    }
+    if (id === 'rabby') return Boolean(provider.isRabby);
+    if (id === 'brave') return Boolean(provider.isBraveWallet);
+    if (id === 'backpack') return Boolean(provider.isBackpack);
+    return false;
+  });
+}
+
+function isCancelledConnectError(error: unknown) {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return (
+    message.includes('user rejected') ||
+    message.includes('user denied') ||
+    message.includes('user closed') ||
+    message.includes('cancel') ||
+    message.includes('modal closed') ||
+    message.includes('request rejected')
+  );
+}
+
+function WalletOption({
+  connector,
+  pending,
+  onConnect,
+}: {
+  connector: Connector;
+  pending: boolean;
+  onConnect: () => void;
+}) {
+  const label = CONNECTOR_LABELS[connector.id] ?? connector.name;
+  const description = CONNECTOR_DESCRIPTIONS[connector.id] ?? connector.name;
+
+  return (
+    <button
+      type="button"
+      className="group flex w-full items-center gap-3 rounded-xl border border-border/40 bg-card/50 p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/10"
+      onClick={onConnect}
+      disabled={pending}
+    >
+      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 via-violet-500 to-fuchsia-500 text-white shadow-lg shadow-blue-500/20">
+        {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="font-medium">{label}</div>
+        <div className="truncate text-xs text-muted-foreground">{description}</div>
+      </div>
+      <Check className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+    </button>
+  );
+}

@@ -1,0 +1,26 @@
+---
+title: DNS Automation
+description: 'How Cloudflare DNS is provisioned for every agent domain.'
+---
+
+# DNS Automation
+
+AgentDomain creates a Cloudflare zone for each registered domain and writes the
+baseline records required for web routing, email, and SSL challenges.
+
+## Baseline records
+
+- Apex `A` or `CNAME` based on the configured target
+- `www` CNAME pointing to the apex domain
+- MX, SPF, DKIM, and DMARC records when email is enabled
+- `_acme-challenge` TXT records during certificate issuance
+
+## Custom DNS records
+
+Agents can add DNS records through:
+
+```http
+POST /api/v1/agents/:id/dns
+```
+
+Supported record types are `A`, `AAAA`, `CNAME`, `MX`, `TXT`, `NS`, and `SRV`.

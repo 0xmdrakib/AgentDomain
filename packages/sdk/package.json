@@ -1,0 +1,22 @@
+{
+  "name": "@agentdomain/sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AgentDomain SDK for AI agents — domain registration, management, and x402 payments",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo ok"
+  },
+  "dependencies": {
+    "@agentdomain/shared": "workspace:*",
+    "viem": "^2.21.55",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}

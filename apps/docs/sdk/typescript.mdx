@@ -1,0 +1,40 @@
+---
+title: TypeScript SDK
+description: 'Register and manage agent identities from TypeScript.'
+---
+
+# TypeScript SDK
+
+The TypeScript SDK is the primary integration surface for agents, apps, and
+automation scripts.
+
+## Install
+
+```bash
+npm install @agentdomain/sdk viem
+```
+
+## Register
+
+```ts
+const identity = await agentDomain.register({
+  wallet: account.address,
+  preferredName: 'research-agent',
+  tld: 'ai',
+  registerBasename: true,
+  emailEnabled: true,
+});
+```
+
+## Returned identity
+
+```ts
+{
+  agentId: string;
+  nftTokenId: number;
+  domain: string;
+  basename: string | null;
+  sslStatus: 'pending' | 'provisioning' | 'active' | 'failed';
+  metadataUri: string;
+}
+```

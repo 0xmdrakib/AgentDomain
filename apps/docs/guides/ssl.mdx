@@ -1,0 +1,26 @@
+---
+title: SSL Automation
+description: 'Issue and renew Let’s Encrypt certificates with DNS-01.'
+---
+
+# SSL Automation
+
+The SSL provisioner polls active agents that need first-time certificates or
+renewal.
+
+## How it works
+
+1. Find agents with pending, failed, or expiring certificates.
+2. Create an ACME order through Let’s Encrypt.
+3. Write DNS-01 TXT records through Cloudflare.
+4. Finalize the order and download the certificate chain.
+5. Encrypt the certificate and private key in Postgres.
+6. Mark the agent SSL status as active.
+
+## Worker command
+
+```bash
+pnpm --filter @agentdomain/ssl-provisioner dev
+```
+
+The worker reads `apps/web/.env.local` during local development.

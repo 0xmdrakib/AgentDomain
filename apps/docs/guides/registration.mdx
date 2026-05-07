@@ -1,0 +1,124 @@
+---
+title: Registration Flow
+description: 'How AgentDomain registers a complete agent identity.'
+---
+
+# Registration Flow
+
+The registration API is designed to be safe before payment and idempotent after
+payment.
+
+## Steps
+
+1. Validate the requested label and TLD.
+2. Check local database availability.
+3. Check registrar availability through Spaceship.
+4. Check Basename availability on Base if selected. This can use a custom `basenameLabel`.
+5. Check ENS availability and backend Ethereum funding if selected. This can use a custom `ensLabel`.
+6. Return an x402 payment challenge.
+7. Settle USDC payment on Base.
+8. Register ENS through Ethereum mainnet commit/reveal if selected.
+9. Register the domain and configure Cloudflare DNS.
+10. Provision email if selected.
+11. Register the Basename if selected.
+12. Mint the AgentID NFT.
+13. Store the final record in Postgres.
+
+## Supported names
+
+Domain labels must be 3-63 lowercase alphanumeric characters with optional
+hyphens, not at the beginning or end.
+
+Basename and ENS labels follow the same label rule. They do not have to match
+the domain label, so `atlas.com`, `atlas-ai.base.eth`, and `atlasbot.eth` can be
+registered together when the matching onchain names are unavailable.
+
+## Payer vs owner
+
+The `wallet` field is the payer for x402. The optional `ownerAddress` field is
+the final owner/recipient. If `ownerAddress` is set, AgentDomain delivers the
+AgentID NFT, Basename, ENS name, resolver records, and database ownership to
+that address while still settling payment from `wallet`.
+
+## ENS status
+
+ENS `.eth` registration is supported on Ethereum mainnet. The user still pays in
+USDC on Base; the backend pays the L1 ETH commit/reveal transactions and the ENS
+rent from the quoted amount.
+
+---
+
+## Agent API Walkthrough (Raw HTTP)
+
+If your agent is not using the AgentDomain SDK or plugins, it can interact with the API directly using standard HTTP requests.
+
+### 1. Get a Quote
+
+First, the agent checks availability and calculates the total cost (including multi-year pricing).
+
+```http
+POST /api/v1/agents/quote
+Content-Type: application/json
+
+{
+  "preferredName": "research-agent",
+  "tld": "ai",
+  "years": 3,
+  "registerBasename": true
+}
+```
+
+The response will return the required `totalUsdcAtomic` (in 6 decimals) and availability status.
+
+### 2. Initiate Registration (x402 Challenge)
+
+Next, the agent sends the registration payload.
+
+```http
+POST /api/v1/agents/register
+Content-Type: application/json
+
+{
+  "wallet": "0xYourAgentWalletAddress...",
+  "preferredName": "research-agent",
+  "tld": "ai",
+  "years": 3,
+  "autoRenew": true,
+  "registerBasename": true
+}
+```
+
+If the agent has not yet paid, the server responds with a **402 Payment Required** status and an `X-Payment-Required` header containing the payment instructions (recipient address, USDC amount, chain ID).
+
+### 3. Fulfill Payment via EIP-3009
+
+The agent's wallet must sign an EIP-3009 `transferWithAuthorization` message for the requested USDC amount to the backend's recipient address. 
+
+Once signed, the agent repeats the exact same registration request, but this time includes the signature in the `X-Payment` header:
+
+```http
+POST /api/v1/agents/register
+Content-Type: application/json
+X-Payment: eip3009; v=27; r=0x...; s=0x...; validAfter=...; validBefore=...; nonce=...
+
+{ ... same body as before ... }
+```
+
+The server verifies the signature, executes the transfer on-chain, and immediately provisions the identity bundle. It returns the newly minted AgentID NFT `tokenId`.
+
+### 4. Enable Auto-Renew (On-Chain)
+
+If the agent passed `"autoRenew": true`, the backend flags the database, but the **Agent's Wallet** must authorize the RenewalVault contract on-chain to allow the Keeper Bot to deduct USDC in the future.
+
+The agent submits a transaction to the `RenewalVault` smart contract on Base:
+
+```solidity
+// Contract: RenewalVault (Base L2)
+function setAutoRenew(uint256 tokenId, bool enabled) external;
+```
+
+**Parameters:**
+- `tokenId`: The NFT Token ID returned from the registration API.
+- `enabled`: `true`
+
+*Note: The wallet must also ensure it has approved USDC to the RenewalVault contract or deposited funds into it.*

@@ -1,0 +1,34 @@
+{
+  "name": "agentdomain",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AgentDomain - The autonomous identity stack for AI agents. Domain + Basename + ENS + DNS + Email + SSL in one checkout on Base.",
+  "license": "MIT",
+  "packageManager": "pnpm@10.33.2",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "dev:core": "turbo run dev --filter=@agentdomain/web --filter=@agentdomain/keeper-bot --filter=@agentdomain/ssl-provisioner",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "clean": "turbo run clean && rimraf node_modules",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,md,json}\""
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "prettier": "^3.4.2",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.7.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "viem": "^2.21.55"
+    }
+  }
+}

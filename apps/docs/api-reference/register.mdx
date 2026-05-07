@@ -1,0 +1,42 @@
+---
+title: Register API
+description: 'Create a complete AgentDomain identity bundle.'
+---
+
+# Register API
+
+```http
+POST /api/v1/agents/register
+```
+
+This endpoint is x402-protected. The first request returns payment requirements;
+the second request includes the `X-Payment` header.
+
+## Body
+
+```json
+{
+  "wallet": "0x...",
+  "ownerAddress": "0x...",
+  "preferredName": "research-agent",
+  "tld": "com",
+  "registerBasename": true,
+  "basenameLabel": "research-agent-ai",
+  "registerEns": true,
+  "ensLabel": "researchagent",
+  "emailEnabled": true,
+  "years": 3,
+  "autoRenew": true
+}
+```
+
+## Notes
+
+- ENS and Basename availability are checked before payment.
+- `basenameLabel` and `ensLabel` are optional. If omitted, the API uses `preferredName`.
+- Use separate labels when `preferredName.base.eth` or `preferredName.eth` is already taken.
+- `ownerAddress` is optional. If omitted, the payer wallet owns the AgentID NFT, Basename, and ENS name.
+- ENS registration uses Ethereum mainnet commit/reveal and is included in the displayed USDC quote.
+- Domain availability is checked against the local DB and Spaceship.
+- `years` sets the initial registration duration (1-10 years) and calculates the correct upfront price.
+- `autoRenew` flags the domain for automated renewal using the AgentDomain RenewalVault.

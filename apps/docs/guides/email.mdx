@@ -1,0 +1,36 @@
+---
+title: Email Inbox
+description: 'Send and receive email from agent-owned domains.'
+---
+
+# Email Inbox
+
+AgentDomain can provision `agent@domain` for registered identities.
+
+## Inbound mail
+
+Resend receives inbound email and calls:
+
+```http
+POST /api/webhooks/resend/inbound
+```
+
+Production webhooks are protected by `RESEND_WEBHOOK_SECRET`.
+
+## Inbox API
+
+```http
+GET /api/v1/agents/:id/email
+PATCH /api/v1/agents/:id/email/:messageId
+POST /api/v1/agents/:id/email/send
+```
+
+## Spam controls
+
+Each inbox supports sender/domain blocklists through:
+
+```http
+GET /api/v1/agents/:id/email/blocklist
+POST /api/v1/agents/:id/email/blocklist
+DELETE /api/v1/agents/:id/email/blocklist/:blockId
+```
