@@ -337,9 +337,9 @@ export class SpaceshipClient {
       if (!res.ok) {
         throw new Error(`Spaceship createContact failed: ${res.status} ${await res.text()}`);
       }
-      const json = (await res.json()) as { id: string };
-      log.info('contact created', { id: json.id });
-      return { id: json.id };
+      const json = (await res.json()) as { contactId: string };
+      log.info('contact created', { id: json.contactId });
+      return { id: json.contactId };
     });
   }
 
