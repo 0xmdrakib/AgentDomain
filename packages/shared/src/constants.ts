@@ -43,25 +43,9 @@ export const SUPPORTED_TLDS = [
   'net',
   'co',
   'app',
-  'dev',
-  'me',
-  'info',
-  'biz',
-  'us',
-  'uk',
-  'de',
-  'fr',
-  'jp',
-  'kr',
-  'cn',
-  'ru',
 ] as const;
 
-export const PRIMARY_SUPPORTED_TLDS = ['xyz', 'com', 'ai', 'org', 'io', 'net', 'co', 'app'] as const;
-
-export const ADDITIONAL_SUPPORTED_TLDS = SUPPORTED_TLDS.filter(
-  (tld) => !PRIMARY_SUPPORTED_TLDS.includes(tld as (typeof PRIMARY_SUPPORTED_TLDS)[number]),
-);
+export const PRIMARY_SUPPORTED_TLDS = SUPPORTED_TLDS;
 
 export const SUPPORTED_FRAMEWORKS = [
   'agentkit',
