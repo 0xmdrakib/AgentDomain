@@ -1094,7 +1094,7 @@ function Toggle({
       </div>
       <div
         className={cn(
-          'h-6 w-11 rounded-full p-0.5 transition-colors',
+          'flex-shrink-0 h-6 w-11 rounded-full p-0.5 transition-colors',
           checked ? 'bg-primary' : 'bg-muted',
         )}
       >
