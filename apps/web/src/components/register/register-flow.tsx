@@ -21,13 +21,11 @@ import { useUsdcBalance } from '@/hooks/use-usdc-balance';
 import { useRegisterAgent } from '@/hooks/use-register-agent';
 import { TurnstileWidget } from '@/components/turnstile-widget';
 import { toast } from 'sonner';
-import { ADDITIONAL_SUPPORTED_TLDS, PRIMARY_SUPPORTED_TLDS } from '@agentdomain/shared/constants';
+import { PRIMARY_SUPPORTED_TLDS } from '@agentdomain/shared/constants';
 import type { SupportedTld } from '@agentdomain/shared';
 
 const TLDS = PRIMARY_SUPPORTED_TLDS;
 type Tld = (typeof TLDS)[number];
-
-const MORE_TLDS = ADDITIONAL_SUPPORTED_TLDS;
 
 const BASE_MAINNET_CHAIN_ID = 8453;
 const COINBASE_BUY_USDC_URL = 'https://www.coinbase.com/buy/usdc';
@@ -89,7 +87,6 @@ export function RegisterFlow() {
   const [ensLabel, setEnsLabel] = useState('');
   const [emailEnabled, setEmailEnabled] = useState(false);
   const [ownerAddressInput, setOwnerAddressInput] = useState('');
-  const [showMoreTlds, setShowMoreTlds] = useState(false);
   const [years, setYears] = useState(1);
   const [autoRenew, setAutoRenew] = useState(false);
 
@@ -336,11 +333,7 @@ export function RegisterFlow() {
               />
               <TldSelector
                 value={tld}
-                onChange={(v) => {
-                  setTld(v);
-                  setShowMoreTlds(false);
-                }}
-                onShowMore={() => setShowMoreTlds(true)}
+                onChange={setTld}
                 disabled={regState.phase !== 'idle' && regState.phase !== 'error'}
               />
             </div>
@@ -444,7 +437,6 @@ export function RegisterFlow() {
                     type="button"
                     onClick={() => {
                       setTld(alt.tld);
-                      setShowMoreTlds(false);
                     }}
                     disabled={regState.phase !== 'idle' && regState.phase !== 'error'}
                     className="group rounded-lg border border-border/50 bg-card/80 px-3 py-2 text-left transition hover:border-primary/60 hover:bg-primary/10 disabled:pointer-events-none disabled:opacity-60"
@@ -464,43 +456,6 @@ export function RegisterFlow() {
                   </button>
                 ))}
               </div>
-              <MoreTldsToggle
-                show={showMoreTlds}
-                onToggle={() => setShowMoreTlds((prev) => !prev)}
-                disabled={regState.phase !== 'idle' && regState.phase !== 'error'}
-              />
-              {showMoreTlds && (
-                <MoreTldsGrid
-                  tld={tld}
-                  setTld={(v) => {
-                    setTld(v);
-                    setShowMoreTlds(false);
-                  }}
-                  disabled={regState.phase !== 'idle' && regState.phase !== 'error'}
-                />
-              )}
-            </div>
-          )}
-          {suggestedAlternatives.length === 0 && showMoreTlds && name && validName && (
-            <div className="mt-4 rounded-xl border border-primary/30 bg-card/50 p-4">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <span className="text-sm font-semibold">All top-level domains</span>
-                <button
-                  type="button"
-                  onClick={() => setShowMoreTlds(false)}
-                  className="text-xs text-muted-foreground hover:text-foreground"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-              <MoreTldsGrid
-                tld={tld}
-                setTld={(v) => {
-                  setTld(v);
-                  setShowMoreTlds(false);
-                }}
-                disabled={regState.phase !== 'idle' && regState.phase !== 'error'}
-              />
             </div>
           )}
         </CardContent>
@@ -522,8 +477,8 @@ export function RegisterFlow() {
                     ? 'border-primary/50 bg-primary/10'
                     : 'border-border/40 hover:border-border bg-card/40',
                   regState.phase !== 'idle' &&
-                    regState.phase !== 'error' &&
-                    'opacity-60 cursor-not-allowed',
+                  regState.phase !== 'error' &&
+                  'opacity-60 cursor-not-allowed',
                 )}
               >
                 <div>
@@ -822,12 +777,10 @@ export function RegisterFlow() {
 function TldSelector({
   value,
   onChange,
-  onShowMore,
   disabled,
 }: {
   value: SupportedTld;
   onChange: (value: SupportedTld) => void;
-  onShowMore: () => void;
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -889,18 +842,6 @@ function TldSelector({
               </button>
             );
           })}
-          <div className="my-1 border-t border-border/30" />
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false);
-              onShowMore();
-            }}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition hover:bg-primary/15 hover:text-foreground"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            More TLDs
-          </button>
         </div>
       )}
     </div>
@@ -1175,62 +1116,6 @@ function Line({ label, value, bold }: { label: string; value: string; bold?: boo
         {label}
       </span>
       <span className={cn('font-mono', bold && 'text-lg font-semibold')}>{value}</span>
-    </div>
-  );
-}
-
-function MoreTldsToggle({
-  show,
-  onToggle,
-  disabled,
-}: {
-  show: boolean;
-  onToggle: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      disabled={disabled}
-      className="mt-2 flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-muted-foreground transition hover:bg-primary/10 hover:text-foreground"
-    >
-      <Plus className="h-3 w-3" />
-      {show ? 'Hide' : 'More TLDs'}
-    </button>
-  );
-}
-
-function MoreTldsGrid({
-  tld,
-  setTld,
-  disabled,
-}: {
-  tld: SupportedTld;
-  setTld: (v: SupportedTld) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <div className="mt-2 flex flex-wrap gap-2">
-      {MORE_TLDS.map((item) => {
-        const active = item === tld;
-        return (
-          <button
-            key={item}
-            type="button"
-            onClick={() => setTld(item)}
-            disabled={disabled}
-            className={cn(
-              'rounded-lg border px-3 py-1.5 font-mono text-sm transition',
-              active
-                ? 'border-primary bg-primary text-primary-foreground'
-                : 'border-border/50 bg-card/80 text-muted-foreground hover:border-primary/60 hover:bg-primary/10 hover:text-foreground',
-            )}
-          >
-            .{item}
-          </button>
-        );
-      })}
     </div>
   );
 }
