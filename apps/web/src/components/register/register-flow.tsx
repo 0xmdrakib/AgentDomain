@@ -81,6 +81,7 @@ export function RegisterFlow() {
   const { state: regState, register: submitRegister, reset: resetRegister } = useRegisterAgent();
 
   const [name, setName] = useState('');
+  const [searchedName, setSearchedName] = useState('');
   const [tld, setTld] = useState<SupportedTld>('xyz');
   const [registerBasename, setRegisterBasename] = useState(true);
   const [basenameLabel, setBasenameLabel] = useState('');
@@ -105,9 +106,9 @@ export function RegisterFlow() {
   const checkedBasenameLabel = registerBasename ? effectiveBasenameLabel : name;
   const checkedEnsLabel = registerEns ? effectiveEnsLabel : name;
 
-  // Live availability check, debounced
+  // Live availability check
   useEffect(() => {
-    if (name.length < 3) {
+    if (searchedName.length < 3) {
       setAvailability(null);
       return;
     }
@@ -116,16 +117,16 @@ export function RegisterFlow() {
     const t = setTimeout(async () => {
       try {
         const query = new URLSearchParams({
-          name,
+          name: searchedName,
           tld,
-          basenameLabel: checkedBasenameLabel,
-          ensLabel: checkedEnsLabel,
+          basenameLabel: registerBasename ? (basenameLabel || searchedName) : searchedName,
+          ensLabel: registerEns ? (ensLabel || searchedName) : searchedName,
         });
         const res = await fetch(`/api/v1/domains/availability?${query.toString()}`);
         if (!res.ok) {
           // API error — optimistically mark available so user can attempt
           if (!cancelled)
-            setAvailability({ domain: `${name}.${tld}`, available: true, reason: 'api_error' });
+            setAvailability({ domain: `${searchedName}.${tld}`, available: true, reason: 'api_error' });
           return;
         }
         const data = (await res.json()) as AvailabilityResult;
@@ -133,7 +134,7 @@ export function RegisterFlow() {
       } catch {
         // Network error — optimistically mark available
         if (!cancelled)
-          setAvailability({ domain: `${name}.${tld}`, available: true, reason: 'network_error' });
+          setAvailability({ domain: `${searchedName}.${tld}`, available: true, reason: 'network_error' });
       } finally {
         if (!cancelled) setChecking(false);
       }
@@ -143,22 +144,22 @@ export function RegisterFlow() {
       clearTimeout(t);
       setChecking(false);
     };
-  }, [name, tld, checkedBasenameLabel, checkedEnsLabel]);
+  }, [searchedName, tld, basenameLabel, ensLabel, registerBasename, registerEns]);
 
   // Live quote
   useEffect(() => {
-    if (name.length < 3) {
+    if (searchedName.length < 3) {
       setQuote(null);
       return;
     }
     let cancelled = false;
     const query = new URLSearchParams({
-      preferredName: name,
+      preferredName: searchedName,
       tld,
       registerBasename: String(registerBasename),
-      basenameLabel: checkedBasenameLabel,
+      basenameLabel: registerBasename ? (basenameLabel || searchedName) : searchedName,
       registerEns: String(registerEns),
-      ensLabel: checkedEnsLabel,
+      ensLabel: registerEns ? (ensLabel || searchedName) : searchedName,
       years: String(years),
     });
     if (discountCode) query.set('discountCode', discountCode);
@@ -173,12 +174,12 @@ export function RegisterFlow() {
       cancelled = true;
     };
   }, [
-    name,
+    searchedName,
     tld,
     registerBasename,
     registerEns,
-    checkedBasenameLabel,
-    checkedEnsLabel,
+    basenameLabel,
+    ensLabel,
     years,
     discountCode,
   ]);
@@ -318,7 +319,16 @@ export function RegisterFlow() {
             <div className="flex-1 flex items-center bg-background border rounded-lg focus-within:ring-2 focus-within:ring-primary">
               <input
                 value={name}
-                onChange={(e) => setName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                onChange={(e) => {
+                  setName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''));
+                  if (availability) setAvailability(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (name.length >= 3) setSearchedName(name);
+                  }
+                }}
                 placeholder="myagent"
                 className="flex-1 bg-transparent px-4 py-3 outline-none font-mono rounded-l-lg"
                 autoFocus
@@ -334,8 +344,17 @@ export function RegisterFlow() {
                 disabled={regState.phase !== 'idle' && regState.phase !== 'error'}
               />
             </div>
+            <Button
+              onClick={() => {
+                if (name.length >= 3) setSearchedName(name);
+              }}
+              disabled={regState.phase !== 'idle' && regState.phase !== 'error' || name.length < 3 || checking}
+              className="py-3 px-6 h-auto bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              Search
+            </Button>
           </div>
-          {name && (
+          {name && searchedName && name === searchedName && (
             <div className="mt-3 flex items-center gap-2 text-sm">
               {checking ? (
                 <>
