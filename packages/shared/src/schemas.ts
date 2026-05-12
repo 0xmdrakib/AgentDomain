@@ -24,18 +24,6 @@ export const tldSchema = z.enum([
   'net',
   'co',
   'app',
-  'dev',
-  'me',
-  'info',
-  'biz',
-  'us',
-  'uk',
-  'de',
-  'fr',
-  'jp',
-  'kr',
-  'cn',
-  'ru',
 ]);
 
 export const registrationParamsSchema = z.object({
