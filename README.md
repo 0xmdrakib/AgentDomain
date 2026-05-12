@@ -17,7 +17,7 @@ The project includes a web app, public registry, operator dashboard, API routes,
 ## Features
 
 - One-flow identity registration for AI agents
-- Traditional domain registration with supported TLDs such as **.xyz**, **.com**, **.ai**, **.org**, **.io**, **.net**, **.co**, **.app**, and more
+- Traditional domain registration with supported TLDs such as **.xyz**, **.com**, **.ai**, **.org**, **.io**, **.net**, **.co**, **.app**
 - Optional **Basename** registration on Base
 - Optional **ENS** registration on Ethereum mainnet
 - **AgentID NFT** minted on Base to represent the identity bundle
