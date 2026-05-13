@@ -10,6 +10,7 @@ export type MetricName =
   | 'registration_completed'
   | 'registration_failed'
   | 'registration_rate_limited'
+  | 'registration_pricing'
   | 'bot_check_passed'
   | 'bot_check_failed'
   | 'payment_required'
