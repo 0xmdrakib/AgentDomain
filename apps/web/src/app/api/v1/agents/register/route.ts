@@ -103,11 +103,12 @@ export async function POST(req: NextRequest) {
         years: params.years,
       });
       let totalAtomic = parseUsdc(pricing.totalUsdc);
-      const treasuryFeeAtomic = parseUsdc(pricing.treasuryFeeUsdc);
+      let treasuryFeeAtomic = parseUsdc(pricing.treasuryFeeUsdc);
 
       // Validate and apply discount code
       let appliedDiscountCode: string | undefined;
       let appliedDiscountId: string | undefined;
+      let discountAtomic = 0n;
       if (discountCode) {
         try {
           const { getDb } = await import('@/db');
@@ -127,13 +128,27 @@ export async function POST(req: NextRequest) {
             appliedDiscountCode = code.code;
             appliedDiscountId = code.id;
             const { SERVICE_FEE_USDC_ATOMIC } = await import('@agentdomain/shared/constants');
-            const discountAtomic = (SERVICE_FEE_USDC_ATOMIC * BigInt(code.discountPercent)) / 100n;
+            discountAtomic = (SERVICE_FEE_USDC_ATOMIC * BigInt(code.discountPercent)) / 100n;
             totalAtomic = totalAtomic - discountAtomic;
+            // Treasury fee must also be reduced — the discount lowers the service fee portion
+            treasuryFeeAtomic = treasuryFeeAtomic - discountAtomic;
           }
         } catch {
           // DB may not be available; skip discount
         }
       }
+
+      recordMetric('registration_pricing', {
+        domain: `${params.preferredName}.${params.tld}`,
+        totalAtomic: totalAtomic.toString(),
+        treasuryFeeAtomic: treasuryFeeAtomic.toString(),
+        discountCode: appliedDiscountCode ?? 'none',
+        discountAtomic: discountAtomic.toString(),
+        serviceFee: pricing.serviceFeeUsdc,
+        domainCost: pricing.domainCostUsdc,
+        basenameCost: pricing.basenameCostUsdc,
+        ensCost: pricing.ensCostUsdc,
+      });
 
       // x402 payment flow
       return withX402(
