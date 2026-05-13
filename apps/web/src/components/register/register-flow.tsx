@@ -85,7 +85,7 @@ export function RegisterFlow() {
   const [basenameLabel, setBasenameLabel] = useState('');
   const [registerEns, setRegisterEns] = useState(false);
   const [ensLabel, setEnsLabel] = useState('');
-  const [emailEnabled, setEmailEnabled] = useState(false);
+  const [emailEnabled, setEmailEnabled] = useState(true);
   const [ownerAddressInput, setOwnerAddressInput] = useState('');
   const [years, setYears] = useState(1);
   const [autoRenew, setAutoRenew] = useState(false);
@@ -189,7 +189,7 @@ export function RegisterFlow() {
   const totalCost = quote ? Number(quote.totalUsdc) : 0;
   const isMainnet = chainId === BASE_MAINNET_CHAIN_ID;
   const suggestedAlternatives = useMemo(
-    () => availability?.alternatives?.filter((alt) => alt.available).slice(0, 6) ?? [],
+    () => availability?.alternatives?.filter((alt) => alt.available) ?? [],
     [availability?.alternatives],
   );
   const basenameBlocked =
