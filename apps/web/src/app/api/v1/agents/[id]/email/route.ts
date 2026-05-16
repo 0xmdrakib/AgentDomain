@@ -45,7 +45,23 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         .orderBy(desc(emailMessages.receivedAt))
         .limit(query.limit);
 
-      return NextResponse.json({ inbox: row.inbox, messages });
+      return NextResponse.json({
+        inbox: row.inbox,
+        messages: messages.map((message) => ({
+          id: message.id,
+          direction: message.direction,
+          providerMessageId: message.providerMessageId,
+          fromAddress: message.fromAddress,
+          toAddress: message.toAddress,
+          subject: message.subject,
+          text: message.text,
+          verificationCodes: message.verificationCodes ?? [],
+          spamVerdict: message.spamVerdict,
+          virusVerdict: message.virusVerdict,
+          receivedAt: message.receivedAt,
+          read: message.read,
+        })),
+      });
     },
     { route: '/agents/[id]/email:GET' },
   );
