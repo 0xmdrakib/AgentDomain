@@ -62,9 +62,9 @@ export const searchQuerySchema = z.object({
 });
 
 export const dnsRecordSchema = z.object({
-  type: z.enum(['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS', 'SRV']),
-  name: z.string(),
-  value: z.string(),
-  ttl: z.number().int().min(1).default(1).optional(),
+  type: z.enum(['A', 'AAAA', 'ALIAS', 'CNAME', 'MX', 'TXT', 'NS', 'SRV']),
+  name: z.string().min(1).max(253),
+  value: z.string().min(1).max(4096),
+  ttl: z.number().int().min(60).max(3600).default(3600).optional(),
   priority: z.number().int().min(0).optional(),
 });
