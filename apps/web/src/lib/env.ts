@@ -58,6 +58,7 @@ const serverSchema = z.object({
   // Spaceship registrar (https://docs.spaceship.dev)
   SPACESHIP_API_KEY: optionalString,
   SPACESHIP_API_SECRET: optionalString,
+  SPACESHIP_API_BASE: z.string().url().default('https://spaceship.dev/api'),
 
   // Platform owner contact info — used as registrant for all domains.
   // These are YOUR details as the platform operator.
@@ -78,10 +79,21 @@ const serverSchema = z.object({
   SPACESHIP_DEFAULT_CONTACT_ID: optionalString,
 
   CLOUDFLARE_API_TOKEN: optionalString,
-  CLOUDFLARE_ACCOUNT_ID: optionalString,
+  CLOUDFLARE_SAAS_ZONE_ID: optionalString,
+  CLOUDFLARE_SAAS_FALLBACK_HOSTNAME: optionalString,
 
-  RESEND_API_KEY: optionalString,
-  RESEND_WEBHOOK_SECRET: optionalString,
+  AWS_REGION: z.string().default('us-east-1'),
+  AWS_SES_REGION: z.string().default('us-east-1'),
+  AWS_SES_INBOUND_BUCKET: optionalString,
+  AWS_SES_INBOUND_PREFIX: z.string().default('inbound/'),
+  AWS_SES_RULE_SET: optionalString,
+  AWS_SES_CONFIGURATION_SET: optionalString,
+  AWS_SES_WEBHOOK_SECRET: optionalString,
+  MAIL_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(180),
+  DNS_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).max(60).default(5),
+  DNS_RATE_LIMIT_PER_HOUR: z.coerce.number().int().min(1).max(600).default(20),
+  EMAIL_SEND_RATE_LIMIT_PER_HOUR: z.coerce.number().int().min(1).max(1000).default(20),
+  EMAIL_SEND_RATE_LIMIT_PER_DAY: z.coerce.number().int().min(1).max(50_000).default(200),
   PINATA_JWT: optionalString,
 
   TURNSTILE_SECRET_KEY: optionalString,
@@ -89,11 +101,6 @@ const serverSchema = z.object({
 
   ADMIN_ADDRESSES: optionalString,
   CRON_SECRET: optionalString,
-
-  ACME_ACCOUNT_PRIVATE_KEY: optionalString,
-  ACME_CONTACT_EMAIL: optionalEmail,
-  ACME_DIRECTORY_URL: optionalUrl,
-  SSL_CERT_ENCRYPTION_KEY: optionalString,
 
   SENTRY_DSN: optionalUrl,
 });
