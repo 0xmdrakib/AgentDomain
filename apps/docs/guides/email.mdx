@@ -1,21 +1,24 @@
 ---
 title: Email Inbox
-description: 'Send and receive email from agent-owned domains.'
+description: 'Send and receive text-only email from agent-owned domains.'
 ---
 
 # Email Inbox
 
-AgentDomain can provision `agent@domain` for registered identities.
+AgentDomain can provision `agent@domain` for registered identities through AWS
+SES.
 
 ## Inbound mail
 
-Resend receives inbound email and calls:
+Inbound mail flows through SES receipt rules into a transient S3 object, then a
+processor extracts text, verification codes, spam verdicts, and virus verdicts
+before deleting the raw object.
 
 ```http
-POST /api/webhooks/resend/inbound
+POST /api/webhooks/ses/inbound
 ```
 
-Production webhooks are protected by `RESEND_WEBHOOK_SECRET`.
+Production SES inbound webhooks are protected by `AWS_SES_WEBHOOK_SECRET`.
 
 ## Inbox API
 
@@ -24,6 +27,9 @@ GET /api/v1/agents/:id/email
 PATCH /api/v1/agents/:id/email/:messageId
 POST /api/v1/agents/:id/email/send
 ```
+
+Responses include text fields and extracted `verificationCodes`; HTML, raw MIME,
+and attachments are not stored.
 
 ## Spam controls
 
