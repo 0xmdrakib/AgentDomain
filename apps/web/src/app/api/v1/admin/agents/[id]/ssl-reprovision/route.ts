@@ -3,8 +3,9 @@ import { eq } from 'drizzle-orm';
 import { withErrorHandling, errorResponse } from '@/lib/api-helpers';
 import { requireAdmin } from '@/lib/auth';
 import { getDb } from '@/db';
-import { agents } from '@/db/schema';
+import { agents, sslHostnames } from '@/db/schema';
 import { logger } from '@/lib/logger';
+import { getCloudflareSaas } from '@/services/cloudflare-saas';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,8 +15,7 @@ const log = logger.child({ route: '/admin/agents/ssl-reprovision' });
 /**
  * POST /api/v1/admin/agents/{id}/ssl-reprovision
  *
- * Trigger SSL re-provisioning for a specific agent.
- * Sets sslStatus back to 'pending' so the SSL provisioner service picks it up.
+ * Recreate the apex-only Cloudflare for SaaS custom hostname for an agent.
  * Works for agents with any sslStatus (provisioning, failed, expired).
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -38,10 +38,60 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         .limit(1);
 
       if (!agent) return errorResponse(404, 'NOT_FOUND', 'Agent not found');
+      if (agent.domain.startsWith('www.')) {
+        return errorResponse(400, 'APEX_ONLY', 'Cloudflare for SaaS hostnames must be apex-only');
+      }
+
+      const cf = getCloudflareSaas();
+      const [existing] = await db
+        .select()
+        .from(sslHostnames)
+        .where(eq(sslHostnames.agentId, id))
+        .limit(1);
+
+      if (existing?.cloudflareCustomHostnameId) {
+        try {
+          await cf.deleteHostname(existing.cloudflareCustomHostnameId);
+        } catch (e) {
+          log.warn('existing cloudflare saas hostname delete failed before reprovision', {
+            agentId: id,
+            cloudflareCustomHostnameId: existing.cloudflareCustomHostnameId,
+            err: String(e),
+          });
+        }
+      }
+
+      const hostname = await cf.createApexHostname(agent.domain);
+      const ready = hostname.status === 'active' && hostname.sslStatus === 'active';
+
+      await db
+        .insert(sslHostnames)
+        .values({
+          agentId: id,
+          hostname: agent.domain,
+          cloudflareCustomHostnameId: hostname.id,
+          hostnameStatus: hostname.status,
+          sslStatus: hostname.sslStatus,
+          validationRecords: hostname.validationRecords,
+          validationErrors: hostname.validationErrors,
+          updatedAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: [sslHostnames.agentId],
+          set: {
+            cloudflareCustomHostnameId: hostname.id,
+            hostnameStatus: hostname.status,
+            sslStatus: hostname.sslStatus,
+            validationRecords: hostname.validationRecords,
+            validationErrors: hostname.validationErrors,
+            lastError: null,
+            updatedAt: new Date(),
+          },
+        });
 
       await db
         .update(agents)
-        .set({ sslStatus: 'pending', updatedAt: new Date() })
+        .set({ sslStatus: ready ? 'active' : 'provisioning', updatedAt: new Date() })
         .where(eq(agents.id, id));
 
       log.info('ssl reprovision triggered', {
@@ -55,7 +105,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         ok: true,
         agentId: id,
         previousSslStatus: agent.sslStatus,
-        newSslStatus: 'pending',
+        newSslStatus: ready ? 'active' : 'provisioning',
+        hostname,
       });
     },
     { route: '/admin/agents/ssl-reprovision' },
