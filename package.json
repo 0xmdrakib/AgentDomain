@@ -12,7 +12,7 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
-    "dev:core": "turbo run dev --filter=@agentdomain/web --filter=@agentdomain/keeper-bot --filter=@agentdomain/ssl-provisioner",
+    "dev:core": "turbo run dev --filter=@agentdomain/web --filter=@agentdomain/keeper-bot",
     "lint": "turbo run lint",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
