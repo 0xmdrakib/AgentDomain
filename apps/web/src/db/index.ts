@@ -12,7 +12,7 @@ declare global {
 function buildClient() {
   const url = process.env.DATABASE_URL;
   if (!url) {
-    throw new Error('DATABASE_URL is not set. Add it to .env.local — get a free DB at neon.tech');
+    throw new Error('DATABASE_URL is not set. Add the AWS Aurora/RDS PostgreSQL URL to .env.local');
   }
   const pg = postgres(url, {
     max: 10,
@@ -46,7 +46,7 @@ export type {
   Agent,
   Registration,
   DnsRecordRow,
-  SslCertificateRow,
+  SslHostnameRow,
   EmailInboxRow,
   Renewal,
 } from './schema';
