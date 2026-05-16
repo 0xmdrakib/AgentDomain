@@ -53,21 +53,19 @@ const REQUIRED_WEB_ENV = [
   'SPACESHIP_CONTACT_POSTAL_CODE',
   'SPACESHIP_CONTACT_COUNTRY',
   'CLOUDFLARE_API_TOKEN',
-  'CLOUDFLARE_ACCOUNT_ID',
-  'RESEND_API_KEY',
-  'RESEND_WEBHOOK_SECRET',
+  'CLOUDFLARE_SAAS_ZONE_ID',
+  'CLOUDFLARE_SAAS_FALLBACK_HOSTNAME',
+  'AWS_REGION',
+  'AWS_SES_REGION',
+  'AWS_SES_INBOUND_BUCKET',
+  'AWS_SES_RULE_SET',
+  'MAIL_RETENTION_DAYS',
   'PINATA_JWT',
   'TURNSTILE_SECRET_KEY',
   'TURNSTILE_REQUIRED',
   'NEXT_PUBLIC_APP_URL',
   'NEXT_PUBLIC_API_URL',
   'NEXT_PUBLIC_CHAIN_ID',
-] as const;
-
-const REQUIRED_SSL_ENV = [
-  'ACME_ACCOUNT_PRIVATE_KEY',
-  'ACME_CONTACT_EMAIL',
-  'SSL_CERT_ENCRYPTION_KEY',
 ] as const;
 
 const REQUIRED_OPERATION_ENV = ['ADMIN_ADDRESSES', 'CRON_SECRET'] as const;
@@ -80,7 +78,7 @@ const REQUIRED_TABLES = [
   'email_messages',
   'email_blocklist',
   'renewals',
-  'ssl_certificates',
+  'ssl_hostnames',
 ] as const;
 
 export async function runProductionPreflight(
@@ -111,7 +109,7 @@ export async function runProductionPreflight(
       'Cloudflare token preflight failed',
     );
     checks.pinata = await timedCheck(() => checkPinataToken(), 'Pinata token preflight failed');
-    checks.resend = await timedCheck(() => checkResendToken(), 'Resend token preflight failed');
+    checks.ses = await timedCheck(() => checkSesQuota(), 'AWS SES preflight failed');
     checks.spaceship = await timedCheck(
       () => checkSpaceshipAvailability(),
       'Spaceship token preflight failed',
@@ -134,7 +132,7 @@ export async function runProductionPreflight(
 }
 
 function checkEnvironment(): PreflightCheck {
-  const missingRequired = [...REQUIRED_WEB_ENV, ...REQUIRED_SSL_ENV].filter((key) => !hasEnv(key));
+  const missingRequired = [...REQUIRED_WEB_ENV].filter((key) => !hasEnv(key));
   const missingOps = REQUIRED_OPERATION_ENV.filter((key) => !hasEnv(key));
   const warnings: string[] = [];
 
@@ -149,9 +147,6 @@ function checkEnvironment(): PreflightCheck {
   }
   if (process.env.TURNSTILE_REQUIRED !== 'true') {
     warnings.push('TURNSTILE_REQUIRED is not true');
-  }
-  if (!hasEnv('ACME_DIRECTORY_URL')) {
-    warnings.push('ACME_DIRECTORY_URL is not set; SSL worker depends on NODE_ENV default');
   }
   for (const key of [
     'PAYMENT_ROUTER_ADDRESS',
@@ -168,12 +163,6 @@ function checkEnvironment(): PreflightCheck {
     !/^0x[a-fA-F0-9]{64}$/.test(process.env.BACKEND_PRIVATE_KEY)
   ) {
     warnings.push('BACKEND_PRIVATE_KEY has invalid format');
-  }
-  if (
-    process.env.SSL_CERT_ENCRYPTION_KEY &&
-    !isLikelyEncryptionKey(process.env.SSL_CERT_ENCRYPTION_KEY)
-  ) {
-    warnings.push('SSL_CERT_ENCRYPTION_KEY should be base64:32-byte-key or 64-char hex');
   }
 
   if (missingRequired.length > 0) {
@@ -390,13 +379,21 @@ async function checkContractWiring(): Promise<PreflightCheck> {
 
 async function checkCloudflareToken(): Promise<PreflightCheck> {
   if (!hasEnv('CLOUDFLARE_API_TOKEN')) return fail('CLOUDFLARE_API_TOKEN is not configured');
-  const res = await fetch('https://api.cloudflare.com/client/v4/user/tokens/verify', {
+  if (!hasEnv('CLOUDFLARE_SAAS_ZONE_ID')) {
+    return fail('CLOUDFLARE_SAAS_ZONE_ID is not configured');
+  }
+  const res = await fetch(
+    `https://api.cloudflare.com/client/v4/zones/${process.env.CLOUDFLARE_SAAS_ZONE_ID}`,
+    {
     headers: { Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}` },
     cache: 'no-store',
-  });
+    },
+  );
   if (!res.ok) return fail(`Cloudflare token verify returned HTTP ${res.status}`);
   const body = (await res.json()) as { success?: boolean };
-  return body.success ? pass('Cloudflare token verified') : fail('Cloudflare token verify failed');
+  return body.success
+    ? pass('Cloudflare for SaaS zone reachable')
+    : fail('Cloudflare for SaaS zone verify failed');
 }
 
 async function checkPinataToken(): Promise<PreflightCheck> {
@@ -408,15 +405,15 @@ async function checkPinataToken(): Promise<PreflightCheck> {
   return res.ok ? pass('Pinata token verified') : fail(`Pinata auth returned HTTP ${res.status}`);
 }
 
-async function checkResendToken(): Promise<PreflightCheck> {
-  if (!hasEnv('RESEND_API_KEY')) return fail('RESEND_API_KEY is not configured');
-  const res = await fetch('https://api.resend.com/domains', {
-    headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
-    cache: 'no-store',
+async function checkSesQuota(): Promise<PreflightCheck> {
+  if (!hasEnv('AWS_SES_REGION')) return fail('AWS_SES_REGION is not configured');
+  const { SESClient, GetSendQuotaCommand } = await import('@aws-sdk/client-ses');
+  const client = new SESClient({ region: process.env.AWS_SES_REGION });
+  const quota = await client.send(new GetSendQuotaCommand({}));
+  return pass('AWS SES credentials and quota are reachable', {
+    max24HourSend: quota.Max24HourSend ?? 0,
+    maxSendRate: quota.MaxSendRate ?? 0,
   });
-  return res.ok
-    ? pass('Resend token verified')
-    : fail(`Resend domains returned HTTP ${res.status}`);
 }
 
 async function checkSpaceshipAvailability(): Promise<PreflightCheck> {
