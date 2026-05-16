@@ -169,6 +169,45 @@ const TOOLS = [
     },
   },
   {
+    name: 'list_agent_email',
+    description: 'List received/sent text-only email messages for an email-enabled agent, including extracted verification codes.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agentId: { type: 'string', description: 'AgentDomain agent ID (UUID)' },
+        limit: { type: 'number', default: 20 },
+      },
+      required: ['agentId'],
+    },
+  },
+  {
+    name: 'list_dns_records',
+    description: 'List Spaceship-backed DNS records for an agent domain.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agentId: { type: 'string', description: 'AgentDomain agent ID (UUID)' },
+      },
+      required: ['agentId'],
+    },
+  },
+  {
+    name: 'create_dns_record',
+    description: 'Create a user-managed DNS record and sync the full DNS state to Spaceship.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agentId: { type: 'string' },
+        type: { type: 'string', enum: ['A', 'AAAA', 'ALIAS', 'CNAME', 'MX', 'TXT', 'NS', 'SRV'] },
+        name: { type: 'string' },
+        value: { type: 'string' },
+        ttl: { type: 'number', default: 3600 },
+        priority: { type: 'number' },
+      },
+      required: ['agentId', 'type', 'name', 'value'],
+    },
+  },
+  {
     name: 'fund_renewal_vault',
     description: "Deposit USDC into an agent's renewal vault to keep its domain alive.",
     inputSchema: {
@@ -283,13 +322,46 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             agentId: z.string(),
             to: z.string(),
             subject: z.string(),
-            text: z.string().optional(),
+            text: z.string(),
           })
           .parse(args);
         const result = await client.sendEmail(a.agentId, {
           to: a.to,
           subject: a.subject,
           text: a.text,
+        });
+        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      }
+
+      case 'list_agent_email': {
+        const a = z.object({ agentId: z.string(), limit: z.number().default(20) }).parse(args);
+        const result = await client.listEmail(a.agentId, { limit: a.limit });
+        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      }
+
+      case 'list_dns_records': {
+        const a = z.object({ agentId: z.string() }).parse(args);
+        const result = await client.listDnsRecords(a.agentId);
+        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      }
+
+      case 'create_dns_record': {
+        const a = z
+          .object({
+            agentId: z.string(),
+            type: z.enum(['A', 'AAAA', 'ALIAS', 'CNAME', 'MX', 'TXT', 'NS', 'SRV']),
+            name: z.string(),
+            value: z.string(),
+            ttl: z.number().default(3600),
+            priority: z.number().optional(),
+          })
+          .parse(args);
+        const result = await client.createDnsRecord(a.agentId, {
+          type: a.type,
+          name: a.name,
+          value: a.value,
+          ttl: a.ttl,
+          priority: a.priority,
         });
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       }
