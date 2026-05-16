@@ -52,6 +52,34 @@ export interface PricingBreakdown {
   totalUsdc: string;
 }
 
+export type DnsRecordType = 'A' | 'AAAA' | 'ALIAS' | 'CNAME' | 'MX' | 'TXT' | 'NS' | 'SRV';
+
+export interface DnsRecord {
+  id: string;
+  type: DnsRecordType;
+  name: string;
+  value: string;
+  ttl: number;
+  priority?: number | null;
+  systemManaged?: boolean;
+  purpose?: string | null;
+}
+
+export interface EmailMessage {
+  id: string;
+  direction: 'inbound' | 'outbound';
+  providerMessageId?: string | null;
+  fromAddress: string;
+  toAddress?: string | null;
+  subject?: string | null;
+  text?: string | null;
+  verificationCodes?: string[] | null;
+  spamVerdict?: string | null;
+  virusVerdict?: string | null;
+  receivedAt: string;
+  read: boolean;
+}
+
 export interface X402PaymentRequirement {
   scheme: string;
   network: string;
