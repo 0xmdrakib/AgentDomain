@@ -20,7 +20,7 @@ const features = [
   {
     icon: ShieldCheck,
     title: 'Auto SSL & DNS',
-    desc: "Let's Encrypt certificates auto-renewing forever. Cloudflare DNS managed for you.",
+    desc: 'Cloudflare for SaaS certificates on apex domains, with Spaceship DNS managed for you.',
   },
   {
     icon: RefreshCw,
