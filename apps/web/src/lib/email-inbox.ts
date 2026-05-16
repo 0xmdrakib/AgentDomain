@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import type { Address } from 'viem';
 import { getDb } from '@/db';
 import { agents, emailBlocklist, emailInboxes } from '@/db/schema';
@@ -36,7 +36,10 @@ export async function getOwnedEmailInbox(agentId: string, walletAddress: Address
     .where(
       and(
         eq(agents.id, agentId),
-        sql`lower(${agents.walletAddress}) = ${walletAddress.toLowerCase()}`,
+        or(
+          sql`lower(${agents.ownerAddress}) = ${walletAddress.toLowerCase()}`,
+          sql`lower(${agents.walletAddress}) = ${walletAddress.toLowerCase()}`,
+        ),
       ),
     )
     .limit(1);
