@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { withErrorHandling, parseBody, errorResponse } from '@/lib/api-helpers';
 import { requireAdmin } from '@/lib/auth';
 import { getDb } from '@/db';
-import { agents } from '@/db/schema';
+import { agents, emailInboxes, sslHostnames } from '@/db/schema';
 import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
@@ -51,6 +51,28 @@ export async function POST(
       .update(agents)
       .set({ status: 'revoked', updatedAt: new Date() })
       .where(eq(agents.id, id));
+
+    const [ssl] = await db.select().from(sslHostnames).where(eq(sslHostnames.agentId, id)).limit(1);
+    if (ssl) {
+      try {
+        const { getCloudflareSaas } = await import('@/services/cloudflare-saas');
+        await getCloudflareSaas().deleteHostname(ssl.cloudflareCustomHostnameId);
+      } catch (e) {
+        log.warn('failed to delete cloudflare saas hostname during revoke', {
+          agentId: id,
+          err: String(e),
+        });
+      }
+      await db.delete(sslHostnames).where(eq(sslHostnames.agentId, id));
+    }
+
+    try {
+      const { getSesEmail } = await import('@/services/ses');
+      await getSesEmail().deleteIdentity(agent.domain);
+    } catch (e) {
+      log.warn('failed to delete ses identity during revoke', { agentId: id, err: String(e) });
+    }
+    await db.delete(emailInboxes).where(eq(emailInboxes.agentId, id));
 
     log.info('agent revoked', {
       agentId: id,
