@@ -1,0 +1,55 @@
+---
+title: AWS Migration
+description: Move AgentDomain from Neon/Vercel-era infrastructure to AWS Postgres and private app networking.
+---
+
+# AWS Migration
+
+AgentDomain now targets Aurora/RDS PostgreSQL. Keep the Drizzle schema unchanged and cut over by changing `DATABASE_URL` after data validation.
+
+## Database
+
+1. Create an Aurora PostgreSQL or RDS PostgreSQL cluster in private subnets.
+2. Put the app and workers in the same VPC, preferably ECS Fargate behind an ALB.
+3. Use RDS Proxy for pooled private database access.
+4. Use AWS DMS full load plus CDC from Neon into AWS Postgres.
+5. Run `pnpm --filter @agentdomain/web db:migrate` against the AWS URL.
+6. Compare table counts, run preflight, then switch production `DATABASE_URL`.
+
+## Required Environment
+
+Add:
+
+```bash
+AWS_REGION=us-east-1
+AWS_SES_REGION=us-east-1
+AWS_SES_INBOUND_BUCKET=agentdomain-inbound-mail
+AWS_SES_INBOUND_PREFIX=inbound/
+AWS_SES_RULE_SET=agentdomain
+AWS_SES_CONFIGURATION_SET=agentdomain
+AWS_SES_WEBHOOK_SECRET=
+CLOUDFLARE_SAAS_ZONE_ID=
+CLOUDFLARE_SAAS_FALLBACK_HOSTNAME=
+MAIL_RETENTION_DAYS=180
+DNS_RATE_LIMIT_PER_MINUTE=5
+DNS_RATE_LIMIT_PER_HOUR=20
+EMAIL_SEND_RATE_LIMIT_PER_HOUR=20
+EMAIL_SEND_RATE_LIMIT_PER_DAY=200
+```
+
+Remove:
+
+```bash
+RESEND_API_KEY
+RESEND_WEBHOOK_SECRET
+CLOUDFLARE_ACCOUNT_ID
+ACME_ACCOUNT_PRIVATE_KEY
+ACME_CONTACT_EMAIL
+ACME_DIRECTORY_URL
+ACME_PREFERRED_CHAIN
+SSL_CERT_ENCRYPTION_KEY
+SSL_RENEW_BEFORE_DAYS
+SSL_DNS_PROPAGATION_SECONDS
+SSL_PROVISIONER_BATCH_SIZE
+SSL_PROVISIONER_TICK_INTERVAL_SECONDS
+```
