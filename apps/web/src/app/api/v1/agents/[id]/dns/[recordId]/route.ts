@@ -1,11 +1,13 @@
 import { NextRequest } from 'next/server';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
-import { withErrorHandling, errorResponse } from '@/lib/api-helpers';
+import { withErrorHandling, errorResponse, applyRateLimit, parseBody } from '@/lib/api-helpers';
 import { getDb } from '@/db/index';
 import { agents, dnsRecords as dnsTable } from '@/db/schema';
-import { getCloudflare } from '@/services/cloudflare';
 import { requireAuthOrApiKey } from '@/lib/auth';
+import { dnsRecordSchema } from '@agentdomain/shared';
+import { getServerEnv } from '@/lib/env';
+import { getSpaceshipDns, normalizeRecordName } from '@/services/dns';
 
 export const runtime = 'nodejs';
 
@@ -16,7 +18,7 @@ const idSchema = z.string().uuid();
  * Delete a DNS record.
  */
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string; recordId: string }> }
 ) {
   return withErrorHandling(async () => {
@@ -33,7 +35,7 @@ export async function DELETE(
     // Check ownership
     const [agent] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
     if (!agent) return errorResponse(404, 'NOT_FOUND', 'Agent not found');
-    if (agent.ownerAddress.toLowerCase() !== auth.address.toLowerCase()) {
+    if (!ownsAgent(agent, auth.address)) {
       return errorResponse(403, 'FORBIDDEN', 'Access denied');
     }
 
@@ -45,23 +47,15 @@ export async function DELETE(
       .limit(1);
 
     if (!record) return errorResponse(404, 'NOT_FOUND', 'DNS record not found');
-
-    // Delete from Cloudflare if it has a CF ID
-    if (record.cloudflareId) {
-      const cf = getCloudflare();
-      const zone = await cf.getZoneByName(agent.domain);
-      if (zone) {
-        try {
-          await cf.deleteDnsRecord(zone.id, record.cloudflareId);
-        } catch (e) {
-          // Log but continue if CF fails (maybe already deleted)
-          console.error('Failed to delete CF record:', e);
-        }
-      }
+    if (record.systemManaged) {
+      return errorResponse(403, 'SYSTEM_RECORD', 'System-managed DNS records cannot be deleted');
     }
 
-    // Delete from local DB
+    const limited = await enforceDnsRateLimit(req, id, auth.address);
+    if (limited) return limited;
+
     await db.delete(dnsTable).where(eq(dnsTable.id, recordId));
+    await getSpaceshipDns().syncAgentRecords(agent.id, agent.domain);
 
     return Response.json({ success: true });
   }, { route: '/agents/[id]/dns/[recordId]:DELETE' });
@@ -84,14 +78,15 @@ export async function PATCH(
       return errorResponse(400, 'BAD_ID', 'Invalid ID format');
     }
 
-    const { type, name, value, ttl, priority } = await req.json();
+    const parsed = await parseBody(req, dnsRecordSchema.partial());
+    if (parsed instanceof Response) return parsed;
 
     const db = getDb();
     
     // Check ownership
     const [agent] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
     if (!agent) return errorResponse(404, 'NOT_FOUND', 'Agent not found');
-    if (agent.ownerAddress.toLowerCase() !== auth.address.toLowerCase()) {
+    if (!ownsAgent(agent, auth.address)) {
       return errorResponse(403, 'FORBIDDEN', 'Access denied');
     }
 
@@ -103,29 +98,53 @@ export async function PATCH(
       .limit(1);
 
     if (!record) return errorResponse(404, 'NOT_FOUND', 'DNS record not found');
-
-    // Update in Cloudflare if it has a CF ID
-    if (record.cloudflareId) {
-      const cf = getCloudflare();
-      const zone = await cf.getZoneByName(agent.domain);
-      if (zone) {
-        await cf.updateDnsRecord(zone.id, record.cloudflareId, {
-          type,
-          name,
-          content: value,
-          ttl,
-          priority
-        });
-      }
+    if (record.systemManaged) {
+      return errorResponse(403, 'SYSTEM_RECORD', 'System-managed DNS records cannot be edited');
     }
 
-    // Update in local DB
+    const limited = await enforceDnsRateLimit(req, id, auth.address);
+    if (limited) return limited;
+
     const [updated] = await db
       .update(dnsTable)
-      .set({ type, name, value, ttl, priority, updatedAt: new Date() })
+      .set({
+        type: parsed.type ?? record.type,
+        name: parsed.name ? normalizeRecordName(parsed.name, agent.domain) : record.name,
+        value: parsed.value ?? record.value,
+        ttl: parsed.ttl ?? record.ttl,
+        priority: parsed.priority ?? record.priority,
+        updatedAt: new Date(),
+      })
       .where(eq(dnsTable.id, recordId))
       .returning();
 
+    await getSpaceshipDns().syncAgentRecords(agent.id, agent.domain);
+
     return Response.json(updated);
   }, { route: '/agents/[id]/dns/[recordId]:PATCH' });
+}
+
+function ownsAgent(agent: { ownerAddress: string; walletAddress: string }, address: string): boolean {
+  const normalized = address.toLowerCase();
+  return (
+    agent.ownerAddress.toLowerCase() === normalized ||
+    agent.walletAddress.toLowerCase() === normalized
+  );
+}
+
+async function enforceDnsRateLimit(req: NextRequest, agentId: string, address: string) {
+  const env = getServerEnv();
+  const key = `${agentId}:${address.toLowerCase()}`;
+  return (
+    (await applyRateLimit(req, {
+      key: `dns:${key}:minute`,
+      max: env.DNS_RATE_LIMIT_PER_MINUTE,
+      windowSeconds: 60,
+    })) ??
+    (await applyRateLimit(req, {
+      key: `dns:${key}:hour`,
+      max: env.DNS_RATE_LIMIT_PER_HOUR,
+      windowSeconds: 60 * 60,
+    }))
+  );
 }
