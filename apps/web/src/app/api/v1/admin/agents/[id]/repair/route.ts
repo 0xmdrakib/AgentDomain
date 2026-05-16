@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { withErrorHandling, parseBody, errorResponse } from '@/lib/api-helpers';
 import { requireAdmin } from '@/lib/auth';
 import { getDb } from '@/db';
-import { agents, dnsRecords, emailInboxes } from '@/db/schema';
+import { agents, emailInboxes, sslHostnames } from '@/db/schema';
 import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
@@ -22,8 +22,8 @@ const repairSchema = z.object({
  * Repair individual components of an agent identity after a partial failure.
  *
  * Actions:
- *   dns      - Re-run Cloudflare zone creation + baseline DNS + nameserver update
- *   email    - Re-run Resend domain setup + DKIM records
+ *   dns      - Re-run Spaceship Basic DNS baseline sync
+ *   email    - Re-run SES identity setup + DNS records
  *   basename - Re-run Basename registration on Base L2
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -67,52 +67,52 @@ async function repairDns(
   db: ReturnType<typeof getDb>,
   agent: { id: string; domain: string; dnsTarget: string | null },
 ) {
-  const { getCloudflare } = await import('@/services/cloudflare');
-  const { getSpaceship } = await import('@/services/spaceship');
+  const { buildBaselineDnsRecords, getSpaceshipDns } = await import('@/services/dns');
+  const { getCloudflareSaas } = await import('@/services/cloudflare-saas');
+  const dns = getSpaceshipDns();
+  await dns.ensureBasicDns(agent.domain);
 
-  const cf = getCloudflare();
-  const existingZone = await cf.getZoneByName(agent.domain);
-  const zone = existingZone ?? (await cf.createZone(agent.domain));
-
-  log.info('cloudflare zone ready for repair', { domain: agent.domain, zoneId: zone.id });
-
-  // Point Spaceship NS at Cloudflare if needed
-  if (zone.nameServers.length > 0 && !existingZone) {
-    const ss = getSpaceship();
-    await ss.setNameservers(agent.domain, zone.nameServers);
-    log.info('nameservers updated during repair', { domain: agent.domain });
-  }
-
-  // Re-configure baseline DNS
-  const records = await cf.configureBaselineDns({
-    zoneId: zone.id,
-    domain: agent.domain,
-    dnsTarget: agent.dnsTarget ?? 'agentdomain.xyz',
-    emailEnabled: false,
-    resendDkimRecords: undefined,
-  });
-
-  // Sync DNS records to local DB
-  await db.delete(dnsRecords).where(eq(dnsRecords.agentId, agent.id));
-  if (records.length > 0) {
-    await db.insert(dnsRecords).values(
-      records.map((r) => ({
+  let cfHostname;
+  try {
+    cfHostname = await getCloudflareSaas().createApexHostname(agent.domain);
+    await db
+      .insert(sslHostnames)
+      .values({
         agentId: agent.id,
-        type: r.type as 'A' | 'AAAA' | 'CNAME' | 'MX' | 'TXT' | 'NS' | 'SRV',
-        name: r.name,
-        value: r.content,
-        ttl: r.ttl,
-        priority: r.priority,
-        cloudflareId: r.id,
-      })),
-    );
+        hostname: agent.domain,
+        cloudflareCustomHostnameId: cfHostname.id,
+        hostnameStatus: cfHostname.status,
+        sslStatus: cfHostname.sslStatus,
+        validationRecords: cfHostname.validationRecords,
+        validationErrors: cfHostname.validationErrors,
+      })
+      .onConflictDoUpdate({
+        target: [sslHostnames.agentId],
+        set: {
+          cloudflareCustomHostnameId: cfHostname.id,
+          hostnameStatus: cfHostname.status,
+          sslStatus: cfHostname.sslStatus,
+          validationRecords: cfHostname.validationRecords,
+          validationErrors: cfHostname.validationErrors,
+          updatedAt: new Date(),
+        },
+      });
+  } catch (e) {
+    log.warn('cloudflare saas repair failed', { domain: agent.domain, err: String(e) });
   }
+
+  const records = await dns.replaceAgentRecords(
+    { id: agent.id, domain: agent.domain },
+    buildBaselineDnsRecords({
+      domain: agent.domain,
+      cloudflareValidationRecords: cfHostname?.dnsValidationRecords,
+    }),
+  );
 
   return NextResponse.json({
     ok: true,
     action: 'dns',
     domain: agent.domain,
-    zoneId: zone.id,
     recordsCount: records.length,
   });
 }
@@ -121,53 +121,39 @@ async function repairEmail(
   db: ReturnType<typeof getDb>,
   agent: { id: string; domain: string; dnsTarget: string | null },
 ) {
-  const { getResend } = await import('@/services/resend');
-  const resend = getResend();
+  const { getSesEmail } = await import('@/services/ses');
+  const { buildBaselineDnsRecords, getSpaceshipDns } = await import('@/services/dns');
+  const setup = await getSesEmail().setupDomain(agent.domain);
 
-  const setup = await resend.addDomain(agent.domain);
-  const dkimRecords = setup.dnsRecords
-    .filter((r) => r.type === 'TXT' || r.type === 'CNAME')
-    .map((r) => ({ name: r.name, value: r.value }));
-
-  // Upsert email inbox row
   await db
     .insert(emailInboxes)
     .values({
       agentId: agent.id,
       emailAddress: `agent@${agent.domain}`,
-      resendDomainId: setup.domainId,
+      sesIdentityArn: setup.identityArn,
+      sesVerificationStatus: setup.verificationStatus,
       dkimConfigured: false,
       spfConfigured: false,
       dmarcConfigured: false,
     })
     .onConflictDoUpdate({
       target: [emailInboxes.agentId],
-      set: { resendDomainId: setup.domainId },
+      set: { sesIdentityArn: setup.identityArn, sesVerificationStatus: setup.verificationStatus },
     });
 
-  // Add DKIM DNS records
-  if (dkimRecords.length > 0) {
-    const { getCloudflare } = await import('@/services/cloudflare');
-    const cf = getCloudflare();
-    const zone = await cf.getZoneByName(agent.domain);
-    if (zone) {
-      for (const r of dkimRecords) {
-        await cf.createDnsRecord(zone.id, {
-          type: 'TXT',
-          name: r.name,
-          content: r.value,
-          ttl: 3600,
-        });
-      }
-    }
-  }
+  const dns = getSpaceshipDns();
+  await dns.ensureBasicDns(agent.domain);
+  await dns.replaceAgentRecords(
+    { id: agent.id, domain: agent.domain },
+    buildBaselineDnsRecords({ domain: agent.domain, emailRecords: setup.records }),
+  );
 
   return NextResponse.json({
     ok: true,
     action: 'email',
     domain: agent.domain,
-    resendDomainId: setup.domainId,
-    dkimRecordsCount: dkimRecords.length,
+    sesIdentityArn: setup.identityArn,
+    recordsCount: setup.records.length,
   });
 }
 
