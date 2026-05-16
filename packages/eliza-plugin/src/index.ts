@@ -158,11 +158,26 @@ export const searchAgentsAction = {
   },
 };
 
+export const listEmailAction = {
+  name: 'LIST_AGENT_EMAIL',
+  description: 'List text-only email messages and extracted verification codes for an AgentDomain identity.',
+  similes: ['CHECK_EMAIL', 'READ_INBOX'],
+  examples: [],
+  validate: async (runtime: IAgentRuntime) => Boolean(runtime.getSetting('AGENT_PRIVATE_KEY')),
+  handler: async (runtime: IAgentRuntime, message: Memory) => {
+    const { ad } = getClients(runtime);
+    const agentId = message.content.text.match(/[0-9a-f-]{36}/i)?.[0];
+    if (!agentId) throw new Error('Agent ID UUID is required to list email');
+    const result = await ad.listEmail(agentId, { limit: 20 });
+    return { text: `Found ${result.messages.length} messages.`, data: result };
+  },
+};
+
 export const agentDomainPlugin = {
   name: 'agentdomain',
   description:
     'Identity infrastructure for AI agents on Base (domain + Basename + DNS + email + SSL).',
-  actions: [registerIdentityAction, searchAgentsAction],
+  actions: [registerIdentityAction, searchAgentsAction, listEmailAction],
   evaluators: [],
   providers: [],
 };
