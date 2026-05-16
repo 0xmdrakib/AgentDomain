@@ -24,7 +24,7 @@ export const dynamic = 'force-dynamic';
  *        - First call: returns 402 + X-Payment-Required.
  *        - With X-Payment header: settles via facilitator, then provisions.
  *   5. Payment settles to backend wallet; domain recovery + service fees sweep to treasury.
- *   6. Provision: LI.FI funding -> ENS -> Spaceship -> Cloudflare -> Resend -> Basenames -> Mint -> DB.
+ *   6. Provision: LI.FI funding -> ENS -> Spaceship DNS -> Cloudflare SaaS -> AWS SES -> Basenames -> Mint -> DB.
  */
 export async function POST(req: NextRequest) {
   return withErrorHandling(
