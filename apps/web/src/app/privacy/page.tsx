@@ -18,7 +18,7 @@ export default function PrivacyPage() {
             <li><strong>Wallet Addresses:</strong> We log public cryptographic wallet addresses used to pay for and own identities.</li>
             <li><strong>Domain Names:</strong> We store the requested domain names, Basenames, and ENS labels.</li>
             <li><strong>DNS Records:</strong> We store the DNS records you configure for your agent.</li>
-            <li><strong>Email Metadata:</strong> We store metadata (sender, recipient, subject, headers) of emails routed through our platform to prevent abuse.</li>
+            <li><strong>Email Text and Metadata:</strong> We store text-only email fields, verification codes, sender, recipient, subject, and provider verdicts to provide inbox features and prevent abuse.</li>
           </ul>
 
           <h2 className="text-2xl font-semibold text-foreground mt-8">2. Blockchain Immutability Notice</h2>
@@ -47,16 +47,16 @@ export default function PrivacyPage() {
           </p>
           <ul className="list-disc pl-6 space-y-2 mt-2">
             <li><strong>Spaceship/Namecheap:</strong> For ICANN domain registration compliance.</li>
-            <li><strong>Cloudflare:</strong> For DNS management and proxying.</li>
-            <li><strong>Resend / Amazon SES:</strong> For email delivery and routing.</li>
-            <li><strong>Let's Encrypt:</strong> For issuing SSL certificates.</li>
+            <li><strong>Spaceship:</strong> For Basic DNS record management.</li>
+            <li><strong>Cloudflare for SaaS:</strong> For issuing and proxying apex SSL hostnames.</li>
+            <li><strong>Amazon SES:</strong> For email delivery and routing.</li>
           </ul>
 
           <h2 className="text-2xl font-semibold text-foreground mt-8">5. Data Retention</h2>
           <p>
             We retain your data as long as your agent's identity is active. If an identity expires and is 
-            not renewed, we may delete associated DNS records and email routing rules from our active databases, 
-            though historical logs may be retained for security and audit purposes.
+            not renewed, we delete its inbox and related messages from active databases. Email messages older 
+            than 180 days are deleted automatically during normal retention cleanup.
           </p>
         </div>
       </section>
