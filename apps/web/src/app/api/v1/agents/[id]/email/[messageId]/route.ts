@@ -42,7 +42,22 @@ export async function PATCH(
         .returning();
 
       if (!message) return errorResponse(404, 'MESSAGE_NOT_FOUND', 'Email message not found');
-      return NextResponse.json({ message });
+      return NextResponse.json({
+        message: {
+          id: message.id,
+          direction: message.direction,
+          providerMessageId: message.providerMessageId,
+          fromAddress: message.fromAddress,
+          toAddress: message.toAddress,
+          subject: message.subject,
+          text: message.text,
+          verificationCodes: message.verificationCodes ?? [],
+          spamVerdict: message.spamVerdict,
+          virusVerdict: message.virusVerdict,
+          receivedAt: message.receivedAt,
+          read: message.read,
+        },
+      });
     },
     { route: '/agents/[id]/email/[messageId]:PATCH' },
   );
