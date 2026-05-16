@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { eq, and, lt, isNotNull, isNull, or } from 'drizzle-orm';
+import { eq, and, lt, isNull } from 'drizzle-orm';
 import { withErrorHandling } from '@/lib/api-helpers';
 import { logger } from '@/lib/logger';
 import { getDb } from '@/db';
-import { registrations, agents, dnsRecords, emailInboxes } from '@/db/schema';
+import { registrations, agents, dnsRecords, sslHostnames } from '@/db/schema';
 import { captureException } from '@/lib/sentry';
+import { cleanupExpiredInfrastructure } from '@/services/cleanup';
+import { getCloudflareSaas } from '@/services/cloudflare-saas';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -22,6 +24,8 @@ interface ReconcileSummary {
   stuckSslAgents: number;
   retriedDnsAgents: number;
   retriedBasenameAgents: number;
+  expiredAgents: number;
+  deletedOldMessages: number;
   errors: string[];
 }
 
@@ -51,6 +55,8 @@ export async function GET(req: NextRequest) {
       stuckSslAgents: 0,
       retriedDnsAgents: 0,
       retriedBasenameAgents: 0,
+      expiredAgents: 0,
+      deletedOldMessages: 0,
       errors: [],
     };
 
@@ -129,10 +135,33 @@ export async function GET(req: NextRequest) {
 
       for (const agent of stuckSsl) {
         try {
-          // Just bump updatedAt — the ssl-provisioner service polls for these.
+          const [ssl] = await db
+            .select()
+            .from(sslHostnames)
+            .where(eq(sslHostnames.agentId, agent.id))
+            .limit(1);
+          if (ssl) {
+            const refreshed = await getCloudflareSaas().getHostname(ssl.cloudflareCustomHostnameId);
+            const ready = refreshed.status === 'active' && refreshed.sslStatus === 'active';
+            await db
+              .update(sslHostnames)
+              .set({
+                hostnameStatus: refreshed.status,
+                sslStatus: refreshed.sslStatus,
+                validationRecords: refreshed.validationRecords,
+                validationErrors: refreshed.validationErrors,
+                updatedAt: new Date(),
+              })
+              .where(eq(sslHostnames.agentId, agent.id));
+            await db
+              .update(agents)
+              .set({ sslStatus: ready ? 'active' : 'provisioning', updatedAt: new Date() })
+              .where(eq(agents.id, agent.id));
+            continue;
+          }
           await db
             .update(agents)
-            .set({ updatedAt: new Date() })
+            .set({ sslStatus: 'failed', updatedAt: new Date() })
             .where(eq(agents.id, agent.id));
         } catch (e) {
           summary.errors.push(`ssl ${agent.id}: ${e instanceof Error ? e.message : 'unknown'}`);
@@ -179,6 +208,15 @@ export async function GET(req: NextRequest) {
       summary.retriedBasenameAgents = missingBasename.length;
     } catch (e) {
       summary.errors.push(`task4 ${e instanceof Error ? e.message : String(e)}`);
+    }
+
+    try {
+      const cleanup = await cleanupExpiredInfrastructure();
+      summary.expiredAgents = cleanup.expiredAgents;
+      summary.deletedOldMessages = cleanup.deletedOldMessages;
+    } catch (e) {
+      summary.errors.push(`cleanup ${e instanceof Error ? e.message : String(e)}`);
+      captureException(e, { task: 'reconcile.cleanup' }).catch(() => {});
     }
 
     summary.completedAt = new Date().toISOString();
