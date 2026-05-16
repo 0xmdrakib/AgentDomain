@@ -20,7 +20,7 @@ const steps = [
   {
     n: '04',
     title: 'Provisioning fans out',
-    desc: 'Domain registers via Spaceship. Cloudflare zone created. Basename minted on Base. Email configured. SSL provisioned.',
+    desc: 'Domain registers via Spaceship. Basic DNS syncs. Basename minted on Base. SES email and SaaS SSL provision.',
     detail: 'Automated end-to-end',
   },
   {
