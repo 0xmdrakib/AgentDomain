@@ -1,26 +1,30 @@
 ---
 title: SSL Automation
-description: 'Issue and renew Let’s Encrypt certificates with DNS-01.'
+description: 'Provision apex SSL with Cloudflare for SaaS custom hostnames.'
 ---
 
 # SSL Automation
 
-The SSL provisioner polls active agents that need first-time certificates or
-renewal.
+AgentDomain provisions SSL through Cloudflare for SaaS custom hostnames. Each
+agent gets exactly one apex hostname such as `example.com`; `www.example.com`
+is not created.
 
 ## How it works
 
-1. Find agents with pending, failed, or expiring certificates.
-2. Create an ACME order through Let’s Encrypt.
-3. Write DNS-01 TXT records through Cloudflare.
-4. Finalize the order and download the certificate chain.
-5. Encrypt the certificate and private key in Postgres.
-6. Mark the agent SSL status as active.
+1. Create a Cloudflare custom hostname for the apex domain.
+2. Store the Cloudflare custom hostname ID, hostname status, SSL status,
+   validation records, and validation errors.
+3. Write any Cloudflare validation TXT records through Spaceship Basic DNS.
+4. Reconcile status from Cloudflare until both hostname and SSL status are
+   `active`.
+5. Delete the custom hostname when the agent is revoked, removed, or expires
+   without renewal.
 
-## Worker command
+## Admin repair
 
-```bash
-pnpm --filter @agentdomain/ssl-provisioner dev
+```http
+POST /api/v1/admin/agents/:id/ssl-reprovision
 ```
 
-The worker reads `apps/web/.env.local` during local development.
+The repair endpoint recreates the apex Cloudflare custom hostname and stores
+the replacement status in `ssl_hostnames`.
