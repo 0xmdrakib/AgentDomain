@@ -1,0 +1,17 @@
+---
+title: SES Inbound Email
+description: Configure AWS SES receive flow for AgentDomain inboxes.
+---
+
+# SES Inbound Email
+
+AgentDomain stores only structured text email. Raw MIME is transient.
+
+## Flow
+
+1. SES receives mail for `agent@domain`.
+2. SES receipt rule writes raw MIME to S3.
+3. S3/Lambda or an AWS-side forwarder posts the SES event to `/api/webhooks/ses/inbound`.
+4. AgentDomain fetches the S3 object, extracts plain text and verification codes, inserts the structured row, then deletes the raw object.
+
+Failed SES spam or virus verdicts are ignored. HTML, attachments, and raw MIME are not persisted.
