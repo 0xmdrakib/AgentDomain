@@ -33,6 +33,7 @@ export const renewalStatusEnum = pgEnum('renewal_status', [
 export const dnsRecordTypeEnum = pgEnum('dns_record_type', [
   'A',
   'AAAA',
+  'ALIAS',
   'CNAME',
   'MX',
   'TXT',
@@ -128,7 +129,10 @@ export const dnsRecords = pgTable(
     value: text('value').notNull(),
     ttl: integer('ttl').notNull().default(3600),
     priority: integer('priority'),
-    cloudflareId: varchar('cloudflare_id', { length: 100 }),
+    providerRecordId: varchar('provider_record_id', { length: 160 }),
+    provider: varchar('provider', { length: 40 }).notNull().default('spaceship'),
+    systemManaged: boolean('system_managed').notNull().default(false),
+    purpose: varchar('purpose', { length: 80 }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -138,34 +142,30 @@ export const dnsRecords = pgTable(
 );
 
 // ============================================================
-// SSL CERTIFICATES - encrypted ACME certificate material
+// SSL HOSTNAMES - Cloudflare for SaaS custom hostname state
 // ============================================================
 
-export const sslCertificates = pgTable(
-  'ssl_certificates',
+export const sslHostnames = pgTable(
+  'ssl_hostnames',
   {
     id: uuid('id').primaryKey().defaultRandom(),
     agentId: uuid('agent_id')
       .notNull()
       .references(() => agents.id, { onDelete: 'cascade' }),
-    domains: jsonb('domains').$type<string[]>().notNull(),
-    certificatePemEncrypted: text('certificate_pem_encrypted').notNull(),
-    privateKeyPemEncrypted: text('private_key_pem_encrypted').notNull(),
-    provider: varchar('provider', { length: 50 }).notNull().default('letsencrypt'),
-    directoryUrl: text('directory_url').notNull(),
-    notBefore: timestamp('not_before', { withTimezone: true }).notNull(),
-    notAfter: timestamp('not_after', { withTimezone: true }).notNull(),
-    renewAfter: timestamp('renew_after', { withTimezone: true }).notNull(),
-    issuedAt: timestamp('issued_at', { withTimezone: true }).notNull().defaultNow(),
-    lastProvisionedAt: timestamp('last_provisioned_at', { withTimezone: true }),
-    lastError: text('last_error'),
+    hostname: varchar('hostname', { length: 253 }).notNull(),
+    cloudflareCustomHostnameId: varchar('cloudflare_custom_hostname_id', { length: 100 }).notNull(),
+    hostnameStatus: varchar('hostname_status', { length: 50 }).notNull().default('pending'),
+    sslStatus: varchar('ssl_status', { length: 50 }).notNull().default('pending'),
+    validationRecords: jsonb('validation_records').$type<Record<string, unknown>[]>(),
+    validationErrors: jsonb('validation_errors').$type<Record<string, unknown>[]>(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    lastError: text('last_error'),
   },
   (t) => ({
-    agentUniq: uniqueIndex('ssl_certificates_agent_uniq').on(t.agentId),
-    renewAfterIdx: index('ssl_certificates_renew_after_idx').on(t.renewAfter),
-    notAfterIdx: index('ssl_certificates_not_after_idx').on(t.notAfter),
+    agentUniq: uniqueIndex('ssl_hostnames_agent_uniq').on(t.agentId),
+    hostnameUniq: uniqueIndex('ssl_hostnames_hostname_uniq').on(t.hostname),
+    statusIdx: index('ssl_hostnames_status_idx').on(t.hostnameStatus, t.sslStatus),
   }),
 );
 
@@ -181,7 +181,9 @@ export const emailInboxes = pgTable(
       .notNull()
       .references(() => agents.id, { onDelete: 'cascade' }),
     emailAddress: varchar('email_address', { length: 255 }).notNull(),
-    resendDomainId: varchar('resend_domain_id', { length: 100 }),
+    sesIdentityArn: varchar('ses_identity_arn', { length: 255 }),
+    sesVerificationStatus: varchar('ses_verification_status', { length: 50 }).notNull().default('pending'),
+    sesMailFromDomain: varchar('ses_mail_from_domain', { length: 255 }),
     dkimConfigured: boolean('dkim_configured').notNull().default(false),
     spfConfigured: boolean('spf_configured').notNull().default(false),
     dmarcConfigured: boolean('dmarc_configured').notNull().default(false),
@@ -205,20 +207,21 @@ export const emailMessages = pgTable(
       .notNull()
       .references(() => emailInboxes.id, { onDelete: 'cascade' }),
     direction: varchar('direction', { length: 10 }).notNull().default('inbound'),
-    resendMessageId: varchar('resend_message_id', { length: 255 }),
+    providerMessageId: varchar('provider_message_id', { length: 255 }),
     fromAddress: varchar('from_address', { length: 255 }).notNull(),
     toAddress: varchar('to_address', { length: 255 }),
     subject: text('subject'),
     text: text('text'),
-    html: text('html'),
-    rawPayload: jsonb('raw_payload'),
+    verificationCodes: jsonb('verification_codes').$type<string[]>(),
+    spamVerdict: varchar('spam_verdict', { length: 20 }),
+    virusVerdict: varchar('virus_verdict', { length: 20 }),
     receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
     read: boolean('read').notNull().default(false),
   },
   (t) => ({
     inboxIdx: index('email_msg_inbox_idx').on(t.inboxId),
     receivedIdx: index('email_msg_received_idx').on(t.receivedAt),
-    resendMessageUniq: uniqueIndex('email_msg_resend_message_uniq').on(t.resendMessageId),
+    providerMessageUniq: uniqueIndex('email_msg_provider_message_uniq').on(t.providerMessageId),
   }),
 );
 
@@ -355,9 +358,9 @@ export const apiKeys = pgTable(
 export const agentsRelations = relations(agents, ({ many, one }) => ({
   registrations: many(registrations),
   dnsRecords: many(dnsRecords),
-  sslCertificate: one(sslCertificates, {
+  sslHostname: one(sslHostnames, {
     fields: [agents.id],
-    references: [sslCertificates.agentId],
+    references: [sslHostnames.agentId],
   }),
   emailInbox: one(emailInboxes, { fields: [agents.id], references: [emailInboxes.agentId] }),
   renewals: many(renewals),
@@ -372,8 +375,8 @@ export const dnsRecordsRelations = relations(dnsRecords, ({ one }) => ({
   agent: one(agents, { fields: [dnsRecords.agentId], references: [agents.id] }),
 }));
 
-export const sslCertificatesRelations = relations(sslCertificates, ({ one }) => ({
-  agent: one(agents, { fields: [sslCertificates.agentId], references: [agents.id] }),
+export const sslHostnamesRelations = relations(sslHostnames, ({ one }) => ({
+  agent: one(agents, { fields: [sslHostnames.agentId], references: [agents.id] }),
 }));
 
 export const emailInboxesRelations = relations(emailInboxes, ({ one, many }) => ({
@@ -405,7 +408,7 @@ export type Registration = typeof registrations.$inferSelect;
 export type NewRegistration = typeof registrations.$inferInsert;
 export type DnsRecordRow = typeof dnsRecords.$inferSelect;
 export type NewDnsRecord = typeof dnsRecords.$inferInsert;
-export type SslCertificateRow = typeof sslCertificates.$inferSelect;
+export type SslHostnameRow = typeof sslHostnames.$inferSelect;
 export type EmailInboxRow = typeof emailInboxes.$inferSelect;
 export type EmailMessageRow = typeof emailMessages.$inferSelect;
 export type Renewal = typeof renewals.$inferSelect;
