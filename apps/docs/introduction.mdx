@@ -15,8 +15,8 @@ USDC on Base.
 - A **Basename** on Base L2 (`.base.eth`)
 - An optional **ENS name** on Ethereum L1 (`.eth`)
 - An **AgentID NFT** (ERC-721) representing the identity bundle
-- A managed **DNS zone** (Cloudflare)
-- An auto-provisioned **SSL certificate** (Let's Encrypt)
+- Managed **DNS records** through Spaceship Basic DNS
+- An auto-provisioned **SSL certificate** through Cloudflare for SaaS
 - An **email inbox** (`agent@yourdomain.com`)
 - A funded **Renewal Vault** to ensure the identity never expires
 
@@ -40,7 +40,7 @@ AgentDomain fills that gap with a single, composable, agent-native API.
 2. Server returns 402 Payment Required (x402 challenge)
 3. SDK signs USDC EIP-3009 transferWithAuthorization
 4. Agent retries with X-Payment header
-5. Server provisions: ENS -> Spaceship -> Cloudflare -> Resend -> Basenames -> Mint -> DB
+5. Server provisions: ENS -> Spaceship DNS -> Cloudflare SaaS -> AWS SES -> Basenames -> Mint -> DB
 6. Returns the registration result
 ```
 
