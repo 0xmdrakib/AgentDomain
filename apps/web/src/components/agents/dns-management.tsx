@@ -12,6 +12,8 @@ interface DnsRecord {
   value: string;
   ttl: number;
   priority?: number | null;
+  systemManaged?: boolean;
+  purpose?: string | null;
 }
 
 export function DnsManagement({ agentId, initialDns }: { agentId: string; initialDns: DnsRecord[] }) {
@@ -137,13 +139,14 @@ export function DnsManagement({ agentId, initialDns }: { agentId: string; initia
                 <th className="pb-2 pr-4">Name</th>
                 <th className="pb-2 pr-4">Value</th>
                 <th className="pb-2 pr-4">TTL</th>
+                <th className="pb-2 pr-4">Managed</th>
                 <th className="pb-2 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {records.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="text-center py-6 text-muted-foreground">
+                  <td colSpan={6} className="text-center py-6 text-muted-foreground">
                     No DNS records found.
                   </td>
                 </tr>
@@ -154,10 +157,12 @@ export function DnsManagement({ agentId, initialDns }: { agentId: string; initia
                     <td className="py-3 pr-4 font-mono text-xs truncate max-w-[150px]">{r.name}</td>
                     <td className="py-3 pr-4 font-mono text-xs truncate max-w-[300px]" title={r.value}>{r.value}</td>
                     <td className="py-3 pr-4 font-mono text-xs">{r.ttl}</td>
+                    <td className="py-3 pr-4 text-xs">{r.systemManaged ? r.purpose ?? 'system' : 'user'}</td>
                     <td className="py-3 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => openEdit(r)}
+                          disabled={r.systemManaged}
                           className="p-1.5 text-muted-foreground hover:text-primary rounded-md bg-background/50 hover:bg-background transition-colors"
                           title="Edit"
                         >
@@ -165,6 +170,7 @@ export function DnsManagement({ agentId, initialDns }: { agentId: string; initia
                         </button>
                         <button
                           onClick={() => handleDelete(r.id)}
+                          disabled={r.systemManaged}
                           className="p-1.5 text-muted-foreground hover:text-destructive rounded-md bg-background/50 hover:bg-background transition-colors"
                           title="Delete"
                         >
@@ -205,7 +211,7 @@ export function DnsManagement({ agentId, initialDns }: { agentId: string; initia
                       onChange={(e) => setForm({ ...form, type: e.target.value })}
                       className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                     >
-                      {['A', 'AAAA', 'CNAME', 'TXT', 'MX', 'NS'].map(t => <option key={t} value={t}>{t}</option>)}
+                      {['A', 'AAAA', 'ALIAS', 'CNAME', 'TXT', 'MX', 'NS'].map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </div>
                   <div className="col-span-3 space-y-1.5">
