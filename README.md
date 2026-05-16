@@ -12,7 +12,7 @@ AgentDomain helps AI agents create a complete internet and onchain identity with
 
 Instead of separately buying a domain, configuring DNS, setting up email, registering onchain names, and handling renewals, the app coordinates the full identity flow through one checkout-style registration process paid in **USDC on Base**.
 
-The project includes a web app, public registry, operator dashboard, API routes, smart contracts, SDK packages, an MCP server, agent framework plugins, and automation services for renewals and SSL provisioning.
+The project includes a web app, public registry, operator dashboard, API routes, smart contracts, SDK packages, an MCP server, agent framework plugins, and automation services for renewals, DNS, SSL status reconciliation, and email retention.
 
 ## Features
 
@@ -23,9 +23,9 @@ The project includes a web app, public registry, operator dashboard, API routes,
 - **AgentID NFT** minted on Base to represent the identity bundle
 - USDC payment flow on Base through x402-style payment handling
 - Live quote calculation before registration
-- Cloudflare DNS zone creation and baseline DNS record setup
-- Optional Resend-powered email inbox for `agent@domain`
-- SSL provisioning and renewal workflow through the SSL provisioner service
+- Spaceship Basic DNS record setup and guarded custom DNS APIs
+- Optional AWS SES-powered text-only inbox for `agent@domain`
+- Cloudflare for SaaS apex SSL provisioning and reconciliation
 - Renewal vault and keeper workflow for autonomous identity renewals
 - Public agent registry with search by name, framework, or capability
 - TypeScript SDK for app and agent integrations
@@ -40,9 +40,9 @@ AgentDomain can provision the following identity components:
 - **Domain:** A traditional domain name registered through the registrar integration
 - **Basename:** A `.base.eth` identity on Base
 - **ENS:** An optional `.eth` name on Ethereum mainnet
-- **DNS:** Managed DNS records through Cloudflare
-- **Email:** Optional `agent@domain` inbox and send API through Resend
-- **SSL:** Certificate provisioning and renewal workflow
+- **DNS:** Managed DNS records through Spaceship Basic DNS
+- **Email:** Optional `agent@domain` inbox and send API through AWS SES
+- **SSL:** Apex-only Cloudflare for SaaS custom hostname provisioning
 - **AgentID NFT:** ERC-721 identity record minted on Base
 - **Renewal vault:** USDC-funded renewal support for long-term identity ownership
 
@@ -73,8 +73,9 @@ After validation and payment, the system can coordinate:
 - ENS registration on Ethereum mainnet, if selected
 - Metadata upload to Pinata/IPFS
 - Domain registration through Spaceship
-- Cloudflare zone creation and DNS setup
-- Resend email domain setup, if enabled
+- Spaceship Basic DNS setup and baseline record sync
+- Cloudflare for SaaS apex hostname setup
+- AWS SES email domain setup, if enabled
 - Basename registration on Base, if selected
 - AgentID NFT minting through the payment router contract
 - Database persistence for agents, registrations, DNS records, and inboxes
@@ -112,7 +113,7 @@ Admin routes support:
 The project includes background services for:
 
 - Renewal checks through the keeper bot
-- SSL certificate provisioning and renewal
+- SSL status reconciliation through Cloudflare for SaaS
 - Cron-based reconciliation for pending or failed registration states
 
 ## Developer tools
@@ -149,7 +150,7 @@ The project includes background services for:
 - Basenames
 - Spaceship
 - Cloudflare
-- Resend
+- AWS SES
 - Pinata
 - LI.FI
 
@@ -176,9 +177,9 @@ Important groups include:
 - x402 facilitator settings
 - Spaceship registrar credentials
 - Cloudflare credentials
-- Resend credentials
+- AWS SES credentials and inbound bucket/rule settings
 - Pinata credentials
-- Turnstile, cron, admin, Sentry, and SSL worker values as needed
+- Turnstile, cron, admin, Sentry, DNS, and email rate-limit values as needed
 
 ### 3. Run database migrations
 
