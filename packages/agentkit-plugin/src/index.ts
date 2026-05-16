@@ -34,6 +34,18 @@ const SearchSchema = z.object({
   limit: z.number().default(20),
 });
 
+const SendEmailSchema = z.object({
+  agentId: z.string(),
+  to: z.union([z.string().email(), z.array(z.string().email()).min(1).max(10)]),
+  subject: z.string().min(1).max(200),
+  text: z.string().min(1).max(20_000),
+});
+
+const ListEmailSchema = z.object({
+  agentId: z.string(),
+  limit: z.number().int().min(1).max(100).default(20),
+});
+
 interface WalletProvider {
   getAddress(): string;
   signTypedData?: (data: unknown) => Promise<string>;
@@ -82,6 +94,18 @@ export class AgentDomainActionProvider {
         description: 'Search the public AgentDomain registry.',
         schema: SearchSchema,
         invoke: this.search.bind(this),
+      },
+      {
+        name: 'send_agent_email',
+        description: 'Send text-only email from an email-enabled agent via AWS SES.',
+        schema: SendEmailSchema,
+        invoke: this.sendEmail.bind(this),
+      },
+      {
+        name: 'list_agent_email',
+        description: 'Query text-only agent email and extracted verification codes.',
+        schema: ListEmailSchema,
+        invoke: this.listEmail.bind(this),
       },
     ];
   }
@@ -158,6 +182,22 @@ export class AgentDomainActionProvider {
     return `Found ${result.total} agents. First ${result.items.length}: ${result.items
       .map((a) => a.domain)
       .join(', ')}`;
+  }
+
+  private async sendEmail(_wp: WalletProvider, args: z.infer<typeof SendEmailSchema>) {
+    const ad = new AgentDomain({ apiUrl: this.apiUrl });
+    const result = await ad.sendEmail(args.agentId, {
+      to: args.to,
+      subject: args.subject,
+      text: args.text,
+    });
+    return `Email sent via SES: ${result.id}`;
+  }
+
+  private async listEmail(_wp: WalletProvider, args: z.infer<typeof ListEmailSchema>) {
+    const ad = new AgentDomain({ apiUrl: this.apiUrl });
+    const result = await ad.listEmail(args.agentId, { limit: args.limit });
+    return JSON.stringify(result, null, 2);
   }
 }
 
