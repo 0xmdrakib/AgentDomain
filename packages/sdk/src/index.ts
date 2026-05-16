@@ -10,7 +10,7 @@ import {
   toHex,
 } from 'viem';
 import { base, baseSepolia } from 'viem/chains';
-import type { RegistrationParams, RegistrationResult } from '@agentdomain/shared';
+import type { DnsRecord, RegistrationParams, RegistrationResult, EmailMessage } from '@agentdomain/shared';
 import {
   USDC_BASE,
   USDC_BASE_SEPOLIA,
@@ -58,6 +58,11 @@ export interface AgentRow {
 export interface EmailResult {
   id: string;
   status: string;
+}
+
+export interface EmailListResult {
+  inbox: unknown;
+  messages: EmailMessage[];
 }
 
 export interface VaultFundResult {
@@ -168,7 +173,7 @@ export class AgentDomain {
 
       const paymentPayload = await this.buildX402Payment(requirement, walletAddress);
 
-      const paymentHeader = Buffer.from(JSON.stringify(paymentPayload)).toString('base64');
+      const paymentHeader = base64Encode(JSON.stringify(paymentPayload));
 
       res = await fetch(url, {
         method: 'POST',
@@ -288,7 +293,7 @@ export class AgentDomain {
 
   async sendEmail(
     agentId: string,
-    args: { to: string; subject: string; text?: string },
+    args: { to: string | string[]; subject: string; text: string; replyTo?: string },
   ): Promise<EmailResult> {
     const url = `${this.apiUrl}/agents/${agentId}/email/send`;
     const res = await fetch(url, {
@@ -296,6 +301,48 @@ export class AgentDomain {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(args),
     });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  }
+
+  async listEmail(agentId: string, args: { limit?: number; unreadOnly?: boolean } = {}): Promise<EmailListResult> {
+    const params = new URLSearchParams();
+    if (args.limit) params.set('limit', String(args.limit));
+    if (args.unreadOnly) params.set('unreadOnly', 'true');
+    const url = `${this.apiUrl}/agents/${agentId}/email?${params.toString()}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  }
+
+  async listDnsRecords(agentId: string): Promise<DnsRecord[]> {
+    const res = await fetch(`${this.apiUrl}/agents/${agentId}/dns`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  }
+
+  async createDnsRecord(agentId: string, record: Omit<DnsRecord, 'id'>): Promise<DnsRecord> {
+    const res = await fetch(`${this.apiUrl}/agents/${agentId}/dns`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(record),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  }
+
+  async updateDnsRecord(agentId: string, recordId: string, record: Partial<DnsRecord>): Promise<DnsRecord> {
+    const res = await fetch(`${this.apiUrl}/agents/${agentId}/dns/${recordId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(record),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  }
+
+  async deleteDnsRecord(agentId: string, recordId: string): Promise<{ success: boolean }> {
+    const res = await fetch(`${this.apiUrl}/agents/${agentId}/dns/${recordId}`, { method: 'DELETE' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
   }
@@ -500,6 +547,12 @@ export async function runAgentDomainTool(
         framework: args.framework as string,
         limit: (args.limit as number) ?? 20,
       });
+    case 'list_dns_records':
+      return ad.listDnsRecords(args.agentId as string);
+    case 'create_dns_record':
+      return ad.createDnsRecord(args.agentId as string, args.record as Omit<DnsRecord, 'id'>);
+    case 'list_agent_email':
+      return ad.listEmail(args.agentId as string, { limit: (args.limit as number) ?? 20 });
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
@@ -507,4 +560,24 @@ export async function runAgentDomainTool(
 
 export function formatAgentDomainToolResult(result: unknown): string {
   return typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+}
+
+function base64Encode(value: string): string {
+  if (typeof btoa === 'function') {
+    return btoa(unescape(encodeURIComponent(value)));
+  }
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+  const bytes = new TextEncoder().encode(value);
+  let output = '';
+  for (let i = 0; i < bytes.length; i += 3) {
+    const a = bytes[i] ?? 0;
+    const b = bytes[i + 1] ?? 0;
+    const c = bytes[i + 2] ?? 0;
+    const triplet = (a << 16) | (b << 8) | c;
+    output += alphabet[(triplet >> 18) & 63];
+    output += alphabet[(triplet >> 12) & 63];
+    output += i + 1 < bytes.length ? alphabet[(triplet >> 6) & 63] : '=';
+    output += i + 2 < bytes.length ? alphabet[triplet & 63] : '=';
+  }
+  return output;
 }
