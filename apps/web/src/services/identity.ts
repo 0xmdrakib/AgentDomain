@@ -16,10 +16,11 @@ import {
   type SupportedTld,
 } from '@agentdomain/shared';
 import { getDb } from '@/db/index';
-import { agents, registrations, dnsRecords as dnsRecordsTable, emailInboxes } from '@/db/schema';
+import { agents, registrations, emailInboxes, sslHostnames } from '@/db/schema';
 import { getSpaceship, getOrCreatePlatformContact } from './spaceship';
-import { getCloudflare } from './cloudflare';
-import { getResend } from './resend';
+import { buildBaselineDnsRecords, getSpaceshipDns, type ManagedDnsRecord } from './dns';
+import { getCloudflareSaas } from './cloudflare-saas';
+import { getSesEmail } from './ses';
 import { getPinata, type AgentMetadataDocument } from './pinata';
 import { getBasenames } from './basenames';
 import { getEns } from './ens';
@@ -32,21 +33,20 @@ import { recordMetric } from '@/lib/metrics';
 const log = logger.child({ service: 'identity' });
 
 /**
- * IdentityService — orchestrator for the entire registration flow.
+ * IdentityService - orchestrator for the entire registration flow.
  *
  * A single registration coordinates these external calls in order:
- *   1. Pinata     — pin agent metadata to IPFS
- *   2. Spaceship  — register the ICANN domain (async; uses contact ID from env)
- *   3. Cloudflare — create DNS zone + baseline records
- *   4. Spaceship  — point the domain at Cloudflare's nameservers
- *   5. Resend     — provision email infrastructure (optional)
- *   6. Cloudflare — write Resend's DKIM/SPF/DMARC records into the zone
- *   7. ENS        — register .eth on Ethereum L1 (optional)
- *   8. Basenames  — register .base.eth on Base L2 (optional)
- *   9. PaymentRouter contract — settle payment, mint AgentID NFT
- *  10. Database   — persist agent + registration audit log
+ *   1. ENS        - register .eth on Ethereum L1 (optional)
+ *   2. Pinata     - pin agent metadata to IPFS
+ *   3. Spaceship  - register the ICANN domain and enable Basic DNS
+ *   4. Cloudflare - create the apex-only SaaS custom hostname
+ *   5. AWS SES    - provision text-only email infrastructure (optional)
+ *   6. Spaceship  - write baseline, SaaS, and SES DNS records
+ *   7. Basenames  - register .base.eth on Base L2 (optional)
+ *   8. PaymentRouter contract - settle payment, mint AgentID NFT
+ *   9. Database   - persist agent + registration audit log
  *
- * No mock paths exist anywhere in this flow — production-only. For local dev
+ * No mock paths exist anywhere in this flow - production-only. For local dev
  * without API keys, the service will fail fast with a readable error message
  * instructing which env var is missing.
  *
@@ -341,44 +341,51 @@ export class IdentityService {
       }
       log.info('domain registered', { domain });
 
-      // ─── Step 4: Create Cloudflare zone + baseline DNS ────────────────
-      const cf = getCloudflare();
-      const existingZone = await cf.getZoneByName(domain);
-      const zone = existingZone ?? (await cf.createZone(domain));
-      log.info('cloudflare zone ready', { domain, zoneId: zone.id });
+      // Step 4: Enable Spaceship Basic DNS.
+      const dns = getSpaceshipDns();
+      await dns.ensureBasicDns(domain);
+      log.info('spaceship basic dns ready', { domain });
 
-      // ─── Step 5: Point Spaceship NS at Cloudflare ─────────────────────
-      if (zone.nameServers.length > 0 && !existingZone) {
-        await ss.setNameservers(domain, zone.nameServers);
-        log.info('nameservers updated at registrar', { domain, ns: zone.nameServers });
+      // Step 5: Create the apex-only Cloudflare for SaaS hostname.
+      let cfHostname:
+        | {
+            id: string;
+            status: string;
+            sslStatus: string;
+            validationRecords: Record<string, unknown>[];
+            dnsValidationRecords: ManagedDnsRecord[];
+            validationErrors: Record<string, unknown>[];
+          }
+        | undefined;
+      try {
+        cfHostname = await getCloudflareSaas().createApexHostname(domain);
+      } catch (e) {
+        log.warn('cloudflare saas hostname setup failed (will retry async)', { err: String(e) });
       }
 
-      // ─── Step 6: Email setup (optional) ───────────────────────────────
-      let emailDkim: { name: string; value: string }[] | undefined;
-      let emailDomainId: string | undefined;
+      // Step 6: Email setup (optional).
+      let sesIdentityArn: string | undefined;
+      let sesVerificationStatus: string | undefined;
+      let emailRecords: ManagedDnsRecord[] = [];
       if (params.emailEnabled) {
         try {
-          const resend = getResend();
-          const setup = await resend.addDomain(domain);
-          emailDomainId = setup.domainId;
-          emailDkim = setup.dnsRecords
-            .filter((r) => r.type === 'TXT' || r.type === 'CNAME')
-            .map((r) => ({ name: r.name, value: r.value }));
+          const setup = await getSesEmail().setupDomain(domain);
+          sesIdentityArn = setup.identityArn;
+          sesVerificationStatus = setup.verificationStatus;
+          emailRecords = setup.records;
         } catch (e) {
-          log.warn('email setup failed (continuing without email)', { err: String(e) });
+          log.warn('ses email setup failed (continuing without email)', { err: String(e) });
         }
       }
 
-      // ─── Step 7: Configure baseline DNS records ───────────────────────
-      const cfRecords = await cf.configureBaselineDns({
-        zoneId: zone.id,
+      // Step 7: Configure baseline DNS records.
+      const baselineRecords = buildBaselineDnsRecords({
         domain,
-        dnsTarget: params.dnsTarget ?? 'agentdomain.xyz',
-        emailEnabled: !!params.emailEnabled,
-        resendDkimRecords: emailDkim,
+        emailRecords,
+        cloudflareValidationRecords: cfHostname?.dnsValidationRecords,
       });
 
-      // ─── Step 8: Register Basename on Base L2 (optional) ──────────────
+      // Step 8: Register Basename on Base L2 (optional).
       let basenameTxHash: Hex | undefined;
       if (basename && params.registerBasename) {
         try {
@@ -440,22 +447,29 @@ export class IdentityService {
 
       // ─── Step 11: Persist DNS records + email inbox ───────────────────
       if (agent) {
-        for (const rec of cfRecords) {
-          await db.insert(dnsRecordsTable).values({
+        await dns.replaceAgentRecords(
+          { id: agent.id, domain },
+          baselineRecords,
+        );
+
+        if (cfHostname) {
+          await db.insert(sslHostnames).values({
             agentId: agent.id,
-            type: rec.type as 'A',
-            name: rec.name,
-            value: rec.content,
-            ttl: rec.ttl,
-            cloudflareId: rec.id,
+            hostname: domain,
+            cloudflareCustomHostnameId: cfHostname.id,
+            hostnameStatus: cfHostname.status,
+            sslStatus: cfHostname.sslStatus,
+            validationRecords: cfHostname.validationRecords,
+            validationErrors: cfHostname.validationErrors,
           });
         }
 
-        if (params.emailEnabled && emailDomainId) {
+        if (params.emailEnabled && sesIdentityArn) {
           await db.insert(emailInboxes).values({
             agentId: agent.id,
             emailAddress: `agent@${domain}`,
-            resendDomainId: emailDomainId,
+            sesIdentityArn,
+            sesVerificationStatus: sesVerificationStatus ?? 'Pending',
           });
         }
       }
