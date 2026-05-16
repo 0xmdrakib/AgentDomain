@@ -1,6 +1,7 @@
 import { retry, usesRenewalPriceForFirstYear } from '@agentdomain/shared';
 import { getServerEnv } from '@/lib/env';
 import { logger } from '@/lib/logger';
+import { rateLimit } from '@/lib/rate-limit';
 
 /**
  * Spaceship registrar integration.
@@ -84,12 +85,25 @@ export interface DomainInfo {
   nameservers: { provider: string; hosts?: string[] };
 }
 
+export type SpaceshipDnsRecordType = 'A' | 'AAAA' | 'ALIAS' | 'CNAME' | 'MX' | 'TXT' | 'NS' | 'SRV';
+
+export interface SpaceshipDnsRecordInput {
+  type: SpaceshipDnsRecordType;
+  name: string;
+  value: string;
+  ttl?: number;
+  priority?: number | null;
+}
+
+type SpaceshipDnsWireRecord = Record<string, string | number | null | undefined>;
+
 let cachedTldPrices: Record<string, { register_price: number; renew_price?: number }> | null = null;
 let cachedTldPricesTime = 0;
 
 export class SpaceshipClient {
   private readonly apiKey: string;
   private readonly apiSecret: string;
+  private readonly apiBase: string;
 
   constructor() {
     const env = getServerEnv();
@@ -101,6 +115,7 @@ export class SpaceshipClient {
     }
     this.apiKey = env.SPACESHIP_API_KEY;
     this.apiSecret = env.SPACESHIP_API_SECRET;
+    this.apiBase = (env.SPACESHIP_API_BASE || SPACESHIP_API_BASE).replace(/\/+$/, '');
   }
 
   private async _getTldPrices() {
@@ -158,7 +173,7 @@ export class SpaceshipClient {
     // --- Try new /availability endpoint first ---
     try {
       const res = await fetch(
-        `${SPACESHIP_API_BASE}/v1/domains/${encodeURIComponent(domain)}/availability`,
+        `${this.apiBase}/v1/domains/${encodeURIComponent(domain)}/availability`,
         { headers: this._headers() },
       );
       if (res.ok) {
@@ -192,7 +207,7 @@ export class SpaceshipClient {
     // --- Fallback to legacy /available endpoint ---
     return retry(async () => {
       const res = await fetch(
-        `${SPACESHIP_API_BASE}/v1/domains/${encodeURIComponent(domain)}/available`,
+        `${this.apiBase}/v1/domains/${encodeURIComponent(domain)}/available`,
         { headers: this._headers() },
       );
       if (!res.ok) {
@@ -241,7 +256,7 @@ export class SpaceshipClient {
 
     // --- Try new /availability endpoint first ---
     try {
-      const res = await fetch(`${SPACESHIP_API_BASE}/v1/domains/availability`, {
+      const res = await fetch(`${this.apiBase}/v1/domains/availability`, {
         method: 'POST',
         headers: { ...this._headers(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ domains }),
@@ -279,7 +294,7 @@ export class SpaceshipClient {
 
     // --- Fallback to legacy /available endpoint ---
     return retry(async () => {
-      const res = await fetch(`${SPACESHIP_API_BASE}/v1/domains/available`, {
+      const res = await fetch(`${this.apiBase}/v1/domains/available`, {
         method: 'POST',
         headers: { ...this._headers(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ domains }),
@@ -329,7 +344,7 @@ export class SpaceshipClient {
    */
   async createContact(input: SpaceshipContactInput): Promise<SpaceshipContact> {
     return retry(async () => {
-      const res = await fetch(`${SPACESHIP_API_BASE}/v1/contacts`, {
+      const res = await fetch(`${this.apiBase}/v1/contacts`, {
         method: 'PUT',
         headers: { ...this._headers(), 'Content-Type': 'application/json' },
         body: JSON.stringify(input),
@@ -362,7 +377,7 @@ export class SpaceshipClient {
     return retry(
       async () => {
         const res = await fetch(
-          `${SPACESHIP_API_BASE}/v1/domains/${encodeURIComponent(opts.domain)}`,
+          `${this.apiBase}/v1/domains/${encodeURIComponent(opts.domain)}`,
           {
             method: 'POST',
             headers: { ...this._headers(), 'Content-Type': 'application/json' },
@@ -423,7 +438,7 @@ export class SpaceshipClient {
 
   async getAsyncOperation(operationId: string): Promise<AsyncOperationStatus> {
     const res = await fetch(
-      `${SPACESHIP_API_BASE}/v1/async-operations/${encodeURIComponent(operationId)}`,
+      `${this.apiBase}/v1/async-operations/${encodeURIComponent(operationId)}`,
       { headers: this._headers() },
     );
     if (!res.ok) {
@@ -442,7 +457,7 @@ export class SpaceshipClient {
   }): Promise<{ operationId: string }> {
     return retry(async () => {
       const res = await fetch(
-        `${SPACESHIP_API_BASE}/v1/domains/${encodeURIComponent(opts.domain)}/renew`,
+        `${this.apiBase}/v1/domains/${encodeURIComponent(opts.domain)}/renew`,
         {
           method: 'POST',
           headers: { ...this._headers(), 'Content-Type': 'application/json' },
@@ -462,12 +477,12 @@ export class SpaceshipClient {
   }
 
   /**
-   * Update the nameservers for a domain (so we can point it at Cloudflare DNS).
+   * Update the nameservers for a domain (legacy custom-provider path).
    */
   async setNameservers(domain: string, nameservers: string[]): Promise<void> {
     return retry(async () => {
       const res = await fetch(
-        `${SPACESHIP_API_BASE}/v1/domains/${encodeURIComponent(domain)}/nameservers`,
+        `${this.apiBase}/v1/domains/${encodeURIComponent(domain)}/nameservers`,
         {
           method: 'PUT',
           headers: { ...this._headers(), 'Content-Type': 'application/json' },
@@ -483,8 +498,90 @@ export class SpaceshipClient {
     });
   }
 
+  /**
+   * Move a domain back onto Spaceship Basic DNS. New registrations use this so
+   * DNS remains authoritative in Spaceship, while Cloudflare only handles SaaS
+   * custom hostname SSL/proxying.
+   */
+  async useBasicNameservers(domain: string): Promise<void> {
+    return retry(async () => {
+      const res = await fetch(
+        `${this.apiBase}/v1/domains/${encodeURIComponent(domain)}/nameservers`,
+        {
+          method: 'PUT',
+          headers: { ...this._headers(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider: 'basic' }),
+        },
+      );
+      if (!res.ok) {
+        throw new Error(`Spaceship useBasicNameservers failed: ${res.status} ${await res.text()}`);
+      }
+    });
+  }
+
+  async listDnsRecords(domain: string): Promise<SpaceshipDnsRecordInput[]> {
+    const url = new URL(
+      `${this.apiBase}/v1/dns/records/${encodeURIComponent(domain)}`,
+    );
+    url.searchParams.set('take', '500');
+    url.searchParams.set('skip', '0');
+
+    const res = await fetch(url, {
+      headers: this._headers(),
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      throw new Error(`Spaceship listDnsRecords failed: ${res.status} ${await res.text()}`);
+    }
+    const json = await res.json();
+    return extractSpaceshipRecords(json).map(fromSpaceshipDnsRecord).filter(Boolean) as SpaceshipDnsRecordInput[];
+  }
+
+  /**
+   * Spaceship DNS updates are destructive for records sharing the same
+   * host/type. To keep the database authoritative, replace the custom resource
+   * record set with the full desired package every time.
+   */
+  async replaceDnsRecords(
+    domain: string,
+    records: SpaceshipDnsRecordInput[],
+  ): Promise<SpaceshipDnsRecordInput[]> {
+    const providerLimit = await rateLimit(`spaceship-dns-provider:${domain}`, 250, 300);
+    if (!providerLimit.allowed) {
+      throw new Error('Spaceship DNS provider limit guard tripped; retry after the window resets');
+    }
+
+    const existing = await this.listDnsRecords(domain);
+    if (existing.length > 0) {
+      const del = await fetch(`${this.apiBase}/v1/dns/records/${encodeURIComponent(domain)}`, {
+        method: 'DELETE',
+        headers: { ...this._headers(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(existing.map((record) => toSpaceshipDnsRecord(record, false))),
+      });
+      if (!del.ok) {
+        throw new Error(`Spaceship deleteDnsRecords failed: ${del.status} ${await del.text()}`);
+      }
+    }
+
+    if (records.length > 0) {
+      const put = await fetch(`${this.apiBase}/v1/dns/records/${encodeURIComponent(domain)}`, {
+        method: 'PUT',
+        headers: { ...this._headers(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          force: true,
+          items: records.map((record) => toSpaceshipDnsRecord(record, true)),
+        }),
+      });
+      if (!put.ok) {
+        throw new Error(`Spaceship replaceDnsRecords failed: ${put.status} ${await put.text()}`);
+      }
+    }
+
+    return this.listDnsRecords(domain);
+  }
+
   async getDomainInfo(domain: string): Promise<DomainInfo> {
-    const res = await fetch(`${SPACESHIP_API_BASE}/v1/domains/${encodeURIComponent(domain)}`, {
+    const res = await fetch(`${this.apiBase}/v1/domains/${encodeURIComponent(domain)}`, {
       headers: this._headers(),
     });
     if (!res.ok) {
@@ -507,6 +604,136 @@ let _instance: SpaceshipClient | null = null;
 export function getSpaceship(): SpaceshipClient {
   if (!_instance) _instance = new SpaceshipClient();
   return _instance;
+}
+
+function extractSpaceshipRecords(value: unknown): SpaceshipDnsWireRecord[] {
+  if (Array.isArray(value)) return value as SpaceshipDnsWireRecord[];
+  if (!value || typeof value !== 'object') return [];
+  const record = value as Record<string, unknown>;
+  const candidates = [record.records, record.items, record.data, record.result];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate as SpaceshipDnsWireRecord[];
+  }
+  return [];
+}
+
+function fromSpaceshipDnsRecord(record: SpaceshipDnsWireRecord): SpaceshipDnsRecordInput | null {
+  const type = String(record.type ?? '').toUpperCase() as SpaceshipDnsRecordType;
+  if (!['A', 'AAAA', 'ALIAS', 'CNAME', 'MX', 'TXT', 'NS', 'SRV'].includes(type)) return null;
+
+  const name = normalizeSpaceshipRecordName(String(record.name ?? '@'));
+
+  if (type === 'SRV') {
+    const service = typeof record.service === 'string' ? record.service : '';
+    const protocol = typeof record.protocol === 'string' ? record.protocol : '';
+    const target = typeof record.target === 'string' ? record.target : '';
+    const priority = typeof record.priority === 'number' ? record.priority : 10;
+    const weight = typeof record.weight === 'number' ? record.weight : 0;
+    const port = typeof record.port === 'number' ? record.port : 0;
+    if (!service || !protocol || !target || port <= 0) return null;
+    return {
+      type,
+      name: [service, protocol, name === '@' ? '' : name].filter(Boolean).join('.'),
+      value: `${priority} ${weight} ${port} ${target}`,
+      ttl: typeof record.ttl === 'number' ? record.ttl : 3600,
+      priority,
+    };
+  }
+
+  const value =
+    record.address ??
+    record.aliasName ??
+    record.alias_name ??
+    record.cname ??
+    record.exchange ??
+    record.nameserver ??
+    record.value ??
+    record.host ??
+    record.target;
+  if (typeof value !== 'string' || value.length === 0) return null;
+  return {
+    type,
+    name,
+    value,
+    ttl: typeof record.ttl === 'number' ? record.ttl : 3600,
+    priority: typeof record.preference === 'number' ? record.preference : null,
+  };
+}
+
+function toSpaceshipDnsRecord(
+  record: SpaceshipDnsRecordInput,
+  includeTtl: boolean,
+): SpaceshipDnsWireRecord {
+  const base: SpaceshipDnsWireRecord = {
+    type: record.type,
+    name: normalizeSpaceshipRecordName(record.name),
+  };
+  if (includeTtl) base.ttl = normalizeSpaceshipTtl(record.ttl);
+
+  switch (record.type) {
+    case 'A':
+    case 'AAAA':
+      return { ...base, address: record.value };
+    case 'ALIAS':
+      return { ...base, aliasName: record.value };
+    case 'CNAME':
+      return { ...base, cname: record.value };
+    case 'MX':
+      return { ...base, exchange: record.value, preference: record.priority ?? 10 };
+    case 'NS':
+      return { ...base, nameserver: record.value };
+    case 'SRV':
+      return { ...base, ...parseSrvRecord(record) };
+    case 'TXT':
+      return { ...base, value: record.value };
+  }
+}
+
+function normalizeSpaceshipRecordName(name: string): string {
+  const trimmed = name.trim().replace(/\.$/, '');
+  return trimmed.length > 0 ? trimmed : '@';
+}
+
+function normalizeSpaceshipTtl(ttl?: number): number {
+  const value = typeof ttl === 'number' && Number.isFinite(ttl) ? Math.trunc(ttl) : 3600;
+  return Math.min(3600, Math.max(60, value));
+}
+
+function parseSrvRecord(record: SpaceshipDnsRecordInput): SpaceshipDnsWireRecord {
+  const nameParts = record.name.split('.').filter(Boolean);
+  const [service, protocol, ...ownerParts] = nameParts;
+  if (!service?.startsWith('_') || !protocol?.startsWith('_')) {
+    throw new Error('SRV record name must be _service._protocol or _service._protocol.host');
+  }
+
+  const valueParts = record.value.trim().split(/\s+/);
+  if (valueParts.length !== 4) {
+    throw new Error('SRV record value must be "priority weight port target"');
+  }
+
+  const [priorityRaw, weightRaw, portRaw, target] = valueParts;
+  const priority = Number.parseInt(priorityRaw ?? '', 10);
+  const weight = Number.parseInt(weightRaw ?? '', 10);
+  const port = Number.parseInt(portRaw ?? '', 10);
+  if (
+    !Number.isInteger(priority) ||
+    !Number.isInteger(weight) ||
+    !Number.isInteger(port) ||
+    port < 1 ||
+    !target
+  ) {
+    throw new Error('SRV record value must contain numeric priority, weight, port, and target');
+  }
+
+  return {
+    name: ownerParts.join('.') || '@',
+    service,
+    protocol,
+    priority,
+    weight,
+    port,
+    target,
+  };
 }
 
 /**
