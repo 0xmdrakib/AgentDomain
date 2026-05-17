@@ -1,7 +1,5 @@
-import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import type { Address } from 'viem';
-import { getDb } from '@/db';
-import { agents, emailBlocklist, emailInboxes } from '@/db/schema';
+import { agentsRepo, emailRepo } from '@/db';
 
 export function normalizeEmailAddress(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -28,47 +26,31 @@ export function senderBlockKeys(fromAddress: string): string[] {
 }
 
 export async function getOwnedEmailInbox(agentId: string, walletAddress: Address) {
-  const db = getDb();
-  const [row] = await db
-    .select({ agent: agents, inbox: emailInboxes })
-    .from(agents)
-    .leftJoin(emailInboxes, eq(emailInboxes.agentId, agents.id))
-    .where(
-      and(
-        eq(agents.id, agentId),
-        or(
-          sql`lower(${agents.ownerAddress}) = ${walletAddress.toLowerCase()}`,
-          sql`lower(${agents.walletAddress}) = ${walletAddress.toLowerCase()}`,
-        ),
-      ),
-    )
-    .limit(1);
-
-  return row ?? null;
+  const agent = await agentsRepo.getById(agentId);
+  if (!agent) return null;
+  const wallet = walletAddress.toLowerCase();
+  if (agent.ownerAddress.toLowerCase() !== wallet && agent.walletAddress.toLowerCase() !== wallet) {
+    return null;
+  }
+  const inbox = await emailRepo.getInboxByAgent(agentId);
+  return { agent, inbox };
 }
 
 export async function findInboxByRecipient(emailAddress: string) {
   const normalized = normalizeEmailAddress(emailAddress);
   if (!normalized) return null;
 
-  const db = getDb();
-  const [row] = await db
-    .select({ agent: agents, inbox: emailInboxes })
-    .from(emailInboxes)
-    .innerJoin(agents, eq(agents.id, emailInboxes.agentId))
-    .where(sql`lower(${emailInboxes.emailAddress}) = ${normalized}`)
-    .limit(1);
-
-  return row ?? null;
+  return emailRepo.getInboxByEmail(normalized);
 }
 
 export async function isSenderBlocked(inboxId: string, fromAddress: string): Promise<boolean> {
   const keys = senderBlockKeys(fromAddress);
-  const db = getDb();
-  const [blocked] = await db
-    .select({ id: emailBlocklist.id })
-    .from(emailBlocklist)
-    .where(and(eq(emailBlocklist.inboxId, inboxId), inArray(emailBlocklist.value, keys)))
-    .limit(1);
-  return Boolean(blocked);
+  const inboxOwner = await findInboxById(inboxId);
+  if (!inboxOwner) return false;
+  return emailRepo.isSenderBlocked(inboxOwner.agentId, inboxId, keys);
+}
+
+async function findInboxById(inboxId: string): Promise<{ agentId: string } | null> {
+  const row = await emailRepo.getInboxById(inboxId);
+  return row ? { agentId: row.agent.id } : null;
 }
