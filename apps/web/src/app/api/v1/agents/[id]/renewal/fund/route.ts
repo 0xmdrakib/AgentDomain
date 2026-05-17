@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
 import { createPublicClient, createWalletClient, http, parseUnits, type Hex } from 'viem';
 import { base, baseSepolia } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
 import { withErrorHandling, errorResponse, parseBody } from '@/lib/api-helpers';
 import { requireAuthOrApiKey } from '@/lib/auth';
-import { getDb } from '@/db';
-import { agents } from '@/db/schema';
+import { agentsRepo } from '@/db';
 import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
@@ -120,8 +118,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         );
       }
 
-      const db = getDb();
-      const [agent] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
+      const agent = await agentsRepo.getById(id);
 
       if (!agent) return errorResponse(404, 'NOT_FOUND', 'Agent not found');
       if (!agent.agentIdNft) {
