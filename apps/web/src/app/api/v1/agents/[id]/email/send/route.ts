@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getDb } from '@/db';
-import { emailMessages } from '@/db/schema';
+import { emailRepo } from '@/db';
 import { applyRateLimit, errorResponse, parseBody, withErrorHandling } from '@/lib/api-helpers';
 import { requireAuthOrApiKey } from '@/lib/auth';
 import { getOwnedEmailInbox } from '@/lib/email-inbox';
 import { getSesEmail } from '@/services/ses';
 import { recordMetric } from '@/lib/metrics';
 import { getServerEnv } from '@/lib/env';
+import { assertWritesAllowed } from '@/lib/maintenance';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -34,6 +34,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const env = getServerEnv();
       const parsed = await parseBody(req, sendSchema);
       if (parsed instanceof NextResponse) return parsed;
+      const frozen = assertWritesAllowed();
+      if (frozen) return frozen;
 
       const to = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
       const hourlyLimit = await applyRateLimit(req, {
@@ -60,20 +62,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         replyTo: parsed.replyTo,
       });
 
-      const db = getDb();
-      const [message] = await db
-        .insert(emailMessages)
-        .values({
-          inboxId: row.inbox.id,
-          direction: 'outbound',
-          providerMessageId: result.id,
-          fromAddress: row.inbox.emailAddress,
-          toAddress: to.join(','),
-          subject: parsed.subject,
-          text: parsed.text,
-          read: true,
-        })
-        .returning();
+      const message = await emailRepo.insertMessage(row.agent.id, {
+        inboxId: row.inbox.id,
+        direction: 'outbound',
+        providerMessageId: result.id,
+        fromAddress: row.inbox.emailAddress,
+        toAddress: to.join(','),
+        subject: parsed.subject,
+        text: parsed.text,
+        verificationCodes: null,
+        spamVerdict: null,
+        virusVerdict: null,
+        read: true,
+      });
 
       recordMetric('email_sent', { agentId: row.agent.id, recipientCount: String(to.length) });
       return NextResponse.json({ id: result.id, message }, { status: 201 });
