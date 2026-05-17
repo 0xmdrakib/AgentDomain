@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { eq, and, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { withErrorHandling, parseBody, errorResponse } from '@/lib/api-helpers';
-import { getDb } from '@/db';
-import { discountCodes } from '@/db/schema';
+import { discountsRepo } from '@/db';
 import { SERVICE_FEE_USDC_ATOMIC, USDC_DECIMALS } from '@agentdomain/shared';
-import { parseUnits, formatUnits } from 'viem';
+import { formatUnits } from 'viem';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -26,18 +24,7 @@ export async function POST(req: NextRequest) {
       const parsed = await parseBody(req, validateSchema);
       if (parsed instanceof Response) return parsed;
 
-      if (!process.env.DATABASE_URL) {
-        return errorResponse(503, 'NO_DB', 'Database not configured');
-      }
-
-      const db = getDb();
-      const [code] = await db
-        .select()
-        .from(discountCodes)
-        .where(
-          and(eq(discountCodes.code, parsed.code.toUpperCase()), eq(discountCodes.isActive, true)),
-        )
-        .limit(1);
+      const code = await discountsRepo.getActiveByCode(parsed.code);
 
       if (!code) {
         return errorResponse(404, 'INVALID_CODE', 'This discount code is not valid or has expired');
