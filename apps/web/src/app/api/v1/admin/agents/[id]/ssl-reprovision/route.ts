@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { eq } from 'drizzle-orm';
 import { withErrorHandling, errorResponse } from '@/lib/api-helpers';
 import { requireAdmin } from '@/lib/auth';
-import { getDb } from '@/db';
-import { agents, sslHostnames } from '@/db/schema';
+import { agentsRepo, sslRepo } from '@/db';
 import { logger } from '@/lib/logger';
 import { getCloudflareSaas } from '@/services/cloudflare-saas';
 
@@ -26,16 +24,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
       const { id } = await params;
 
-      if (!process.env.DATABASE_URL) {
-        return errorResponse(503, 'NO_DB', 'Database not configured');
-      }
-
-      const db = getDb();
-      const [agent] = await db
-        .select({ id: agents.id, domain: agents.domain, sslStatus: agents.sslStatus })
-        .from(agents)
-        .where(eq(agents.id, id))
-        .limit(1);
+      const agent = await agentsRepo.getById(id);
 
       if (!agent) return errorResponse(404, 'NOT_FOUND', 'Agent not found');
       if (agent.domain.startsWith('www.')) {
@@ -43,11 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
 
       const cf = getCloudflareSaas();
-      const [existing] = await db
-        .select()
-        .from(sslHostnames)
-        .where(eq(sslHostnames.agentId, id))
-        .limit(1);
+      const existing = await sslRepo.getByAgent(id);
 
       if (existing?.cloudflareCustomHostnameId) {
         try {
@@ -64,35 +49,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const hostname = await cf.createApexHostname(agent.domain);
       const ready = hostname.status === 'active' && hostname.sslStatus === 'active';
 
-      await db
-        .insert(sslHostnames)
-        .values({
-          agentId: id,
-          hostname: agent.domain,
-          cloudflareCustomHostnameId: hostname.id,
-          hostnameStatus: hostname.status,
-          sslStatus: hostname.sslStatus,
-          validationRecords: hostname.validationRecords,
-          validationErrors: hostname.validationErrors,
-          updatedAt: new Date(),
-        })
-        .onConflictDoUpdate({
-          target: [sslHostnames.agentId],
-          set: {
-            cloudflareCustomHostnameId: hostname.id,
-            hostnameStatus: hostname.status,
-            sslStatus: hostname.sslStatus,
-            validationRecords: hostname.validationRecords,
-            validationErrors: hostname.validationErrors,
-            lastError: null,
-            updatedAt: new Date(),
-          },
-        });
+      await sslRepo.upsert(id, {
+        agentId: id,
+        hostname: agent.domain,
+        cloudflareCustomHostnameId: hostname.id,
+        hostnameStatus: hostname.status,
+        sslStatus: hostname.sslStatus,
+        validationRecords: hostname.validationRecords,
+        validationErrors: hostname.validationErrors,
+        lastError: null,
+      });
 
-      await db
-        .update(agents)
-        .set({ sslStatus: ready ? 'active' : 'provisioning', updatedAt: new Date() })
-        .where(eq(agents.id, id));
+      await agentsRepo.update(id, {
+        sslStatus: ready ? 'active' : 'provisioning',
+        updatedAt: new Date(),
+      });
 
       log.info('ssl reprovision triggered', {
         agentId: id,
