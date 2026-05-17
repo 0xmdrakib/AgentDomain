@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { keccak256, toHex } from 'viem';
-import { eq, and } from 'drizzle-orm';
 import { registrationParamsSchema, parseUsdc } from '@agentdomain/shared';
 import { withX402 } from '@/lib/x402';
 import { withErrorHandling, applyRateLimit, errorResponse } from '@/lib/api-helpers';
 import { getIdentityService, ValidationError } from '@/services/identity';
 import { recordMetric } from '@/lib/metrics';
 import { X402_PAYMENT_HEADER } from '@agentdomain/shared';
+import { discountsRepo } from '@/db';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -107,26 +107,18 @@ export async function POST(req: NextRequest) {
 
       // Validate and apply discount code
       let appliedDiscountCode: string | undefined;
-      let appliedDiscountId: string | undefined;
       let discountAtomic = 0n;
       if (discountCode) {
         try {
-          const { getDb } = await import('@/db');
-          const { discountCodes: dc } = await import('@/db/schema');
-          const db = getDb();
-          const [code] = await db
-            .select()
-            .from(dc)
-            .where(and(eq(dc.code, discountCode.toUpperCase()), eq(dc.isActive, true)))
-            .limit(1);
+          const code = await discountsRepo.getByCode(discountCode);
 
           if (
             code &&
+            code.isActive &&
             code.usedCount < code.usageLimit &&
             (!code.expiresAt || new Date(code.expiresAt) >= new Date())
           ) {
             appliedDiscountCode = code.code;
-            appliedDiscountId = code.id;
             const { SERVICE_FEE_USDC_ATOMIC } = await import('@agentdomain/shared/constants');
             discountAtomic = (SERVICE_FEE_USDC_ATOMIC * BigInt(code.discountPercent)) / 100n;
             totalAtomic = totalAtomic - discountAtomic;
@@ -175,20 +167,8 @@ export async function POST(req: NextRequest) {
           // Mark discount code as used
           if (appliedDiscountCode) {
             try {
-              const { getDb } = await import('@/db');
-              const { discountCodes: dc } = await import('@/db/schema');
-              const db = getDb();
-              const [current] = await db
-                .select()
-                .from(dc)
-                .where(eq(dc.code, appliedDiscountCode))
-                .limit(1);
-              if (current) {
-                await db
-                  .update(dc)
-                  .set({ usedCount: current.usedCount + 1 })
-                  .where(eq(dc.id, current.id));
-              }
+              const current = await discountsRepo.getByCode(appliedDiscountCode);
+              if (current) await discountsRepo.incrementUse(current.id);
             } catch {
               // Non-fatal — discount can be applied next time
             }
