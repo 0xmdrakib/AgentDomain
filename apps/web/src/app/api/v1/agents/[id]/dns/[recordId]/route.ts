@@ -1,13 +1,12 @@
 import { NextRequest } from 'next/server';
-import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { withErrorHandling, errorResponse, applyRateLimit, parseBody } from '@/lib/api-helpers';
-import { getDb } from '@/db/index';
-import { agents, dnsRecords as dnsTable } from '@/db/schema';
+import { agentsRepo, dnsRepo } from '@/db';
 import { requireAuthOrApiKey } from '@/lib/auth';
 import { dnsRecordSchema } from '@agentdomain/shared';
 import { getServerEnv } from '@/lib/env';
 import { getSpaceshipDns, normalizeRecordName } from '@/services/dns';
+import { assertWritesAllowed } from '@/lib/maintenance';
 
 export const runtime = 'nodejs';
 
@@ -30,21 +29,17 @@ export async function DELETE(
       return errorResponse(400, 'BAD_ID', 'Invalid ID format');
     }
 
-    const db = getDb();
-    
-    // Check ownership
-    const [agent] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
+    const frozen = assertWritesAllowed();
+    if (frozen) return frozen;
+
+    const agent = await agentsRepo.getById(id);
     if (!agent) return errorResponse(404, 'NOT_FOUND', 'Agent not found');
     if (!ownsAgent(agent, auth.address)) {
       return errorResponse(403, 'FORBIDDEN', 'Access denied');
     }
 
     // Get the record
-    const [record] = await db
-      .select()
-      .from(dnsTable)
-      .where(and(eq(dnsTable.id, recordId), eq(dnsTable.agentId, id)))
-      .limit(1);
+    const record = await dnsRepo.get(id, recordId);
 
     if (!record) return errorResponse(404, 'NOT_FOUND', 'DNS record not found');
     if (record.systemManaged) {
@@ -54,7 +49,7 @@ export async function DELETE(
     const limited = await enforceDnsRateLimit(req, id, auth.address);
     if (limited) return limited;
 
-    await db.delete(dnsTable).where(eq(dnsTable.id, recordId));
+    await dnsRepo.delete(id, recordId);
     await getSpaceshipDns().syncAgentRecords(agent.id, agent.domain);
 
     return Response.json({ success: true });
@@ -80,22 +75,17 @@ export async function PATCH(
 
     const parsed = await parseBody(req, dnsRecordSchema.partial());
     if (parsed instanceof Response) return parsed;
+    const frozen = assertWritesAllowed();
+    if (frozen) return frozen;
 
-    const db = getDb();
-    
-    // Check ownership
-    const [agent] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
+    const agent = await agentsRepo.getById(id);
     if (!agent) return errorResponse(404, 'NOT_FOUND', 'Agent not found');
     if (!ownsAgent(agent, auth.address)) {
       return errorResponse(403, 'FORBIDDEN', 'Access denied');
     }
 
     // Get the record
-    const [record] = await db
-      .select()
-      .from(dnsTable)
-      .where(and(eq(dnsTable.id, recordId), eq(dnsTable.agentId, id)))
-      .limit(1);
+    const record = await dnsRepo.get(id, recordId);
 
     if (!record) return errorResponse(404, 'NOT_FOUND', 'DNS record not found');
     if (record.systemManaged) {
@@ -105,18 +95,14 @@ export async function PATCH(
     const limited = await enforceDnsRateLimit(req, id, auth.address);
     if (limited) return limited;
 
-    const [updated] = await db
-      .update(dnsTable)
-      .set({
-        type: parsed.type ?? record.type,
-        name: parsed.name ? normalizeRecordName(parsed.name, agent.domain) : record.name,
-        value: parsed.value ?? record.value,
-        ttl: parsed.ttl ?? record.ttl,
-        priority: parsed.priority ?? record.priority,
-        updatedAt: new Date(),
-      })
-      .where(eq(dnsTable.id, recordId))
-      .returning();
+    const updated = await dnsRepo.update(id, recordId, {
+      type: parsed.type ?? record.type,
+      name: parsed.name ? normalizeRecordName(parsed.name, agent.domain) : record.name,
+      value: parsed.value ?? record.value,
+      ttl: parsed.ttl ?? record.ttl,
+      priority: parsed.priority ?? record.priority,
+      updatedAt: new Date(),
+    });
 
     await getSpaceshipDns().syncAgentRecords(agent.id, agent.domain);
 
