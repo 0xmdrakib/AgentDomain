@@ -1,12 +1,10 @@
 import { createPublicClient, createWalletClient, http, type Address } from 'viem';
 import { base, baseSepolia } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
-import postgres from 'postgres';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import { lt, eq, and, sql } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
 import { parseUsdc, RENEWAL_TRIGGER_DAYS_BEFORE, retry } from '@agentdomain/shared';
 import { logger } from './logger';
-import { agents, renewals } from './schema';
+import { KeeperDynamoRepo } from './dynamo';
 
 /**
  * Single keeper tick:
@@ -18,8 +16,13 @@ import { agents, renewals } from './schema';
  */
 export async function runTick(): Promise<void> {
   const env = parseEnv();
-  const sqlClient = postgres(env.DATABASE_URL);
-  const db = drizzle(sqlClient, { schema: { agents, renewals } });
+  const repo = new KeeperDynamoRepo({
+    region: env.AWS_REGION,
+    tableName: env.DYNAMODB_TABLE_NAME,
+    gsiName: env.DYNAMODB_GSI1_NAME,
+    endpoint: env.DYNAMODB_ENDPOINT,
+  });
+  await repo.ping();
 
   const isMainnet = env.BASE_CHAIN_ID === 8453;
   const chain = isMainnet ? base : baseSepolia;
@@ -31,11 +34,7 @@ export async function runTick(): Promise<void> {
 
   // Find candidates
   const cutoff = new Date(Date.now() + RENEWAL_TRIGGER_DAYS_BEFORE * 24 * 60 * 60 * 1000);
-  const candidates = await db
-    .select()
-    .from(agents)
-    .where(and(eq(agents.status, 'active'), lt(agents.expiresAt, cutoff)))
-    .limit(50);
+  const candidates = await repo.listExpiringBefore(cutoff, 50);
 
   logger.info('found renewal candidates', { count: candidates.length });
 
@@ -123,7 +122,8 @@ export async function runTick(): Promise<void> {
       logger.info('spaceship api renewal triggered', { domain: agent.domain });
 
       // 3. Persist
-      await db.insert(renewals).values({
+      await repo.createRenewal({
+        id: randomUUID(),
         agentId: agent.id,
         scheduledFor: new Date(),
         amount: '12',
@@ -136,10 +136,7 @@ export async function runTick(): Promise<void> {
       const newExpiry = new Date(
         (agent.expiresAt?.getTime() ?? Date.now()) + 365 * 24 * 60 * 60 * 1000,
       );
-      await db
-        .update(agents)
-        .set({ expiresAt: newExpiry, updatedAt: new Date() })
-        .where(eq(agents.id, agent.id));
+      await repo.updateAgentExpiry(agent.id, newExpiry);
 
       logger.info('renewal executed', { domain: agent.domain, txHash, newExpiry });
     } catch (e) {
@@ -147,30 +144,37 @@ export async function runTick(): Promise<void> {
         agentId: agent.id,
         err: e instanceof Error ? e.message : String(e),
       });
-      await db.insert(renewals).values({
+      await repo.createRenewal({
+        id: randomUUID(),
         agentId: agent.id,
         scheduledFor: new Date(),
         amount: '12',
         status: 'failed',
+        txHash: null,
         lastError: e instanceof Error ? e.message : String(e),
+        completedAt: null,
       });
     }
   }
-
-  await sqlClient.end();
 }
 
 function parseEnv() {
   const env = process.env;
   const keeperPrivateKey = env.KEEPER_PRIVATE_KEY ?? env.BACKEND_PRIVATE_KEY;
-  if (!env.DATABASE_URL) throw new Error('DATABASE_URL required');
+  if ((env.DATABASE_PROVIDER ?? 'dynamodb') !== 'dynamodb') {
+    throw new Error('DATABASE_PROVIDER must be dynamodb');
+  }
   if (!keeperPrivateKey) throw new Error('KEEPER_PRIVATE_KEY or BACKEND_PRIVATE_KEY required');
   if (!env.RENEWAL_VAULT_ADDRESS) throw new Error('RENEWAL_VAULT_ADDRESS required');
   if (!env.SPACESHIP_API_KEY) throw new Error('SPACESHIP_API_KEY required for domain renewals');
   if (!env.SPACESHIP_API_SECRET) throw new Error('SPACESHIP_API_SECRET required for domain renewals');
+  if (!env.DYNAMODB_TABLE_NAME) throw new Error('DYNAMODB_TABLE_NAME required');
   
   return {
-    DATABASE_URL: env.DATABASE_URL,
+    AWS_REGION: env.AWS_REGION ?? 'us-east-1',
+    DYNAMODB_TABLE_NAME: env.DYNAMODB_TABLE_NAME,
+    DYNAMODB_GSI1_NAME: env.DYNAMODB_GSI1_NAME ?? 'GSI1',
+    DYNAMODB_ENDPOINT: env.DYNAMODB_ENDPOINT || undefined,
     KEEPER_PRIVATE_KEY: keeperPrivateKey,
     RENEWAL_VAULT_ADDRESS: env.RENEWAL_VAULT_ADDRESS as Address,
     BASE_CHAIN_ID: Number(env.BASE_CHAIN_ID ?? 8453),
