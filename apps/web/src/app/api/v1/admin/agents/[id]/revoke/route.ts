@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { withErrorHandling, parseBody, errorResponse } from '@/lib/api-helpers';
 import { requireAdmin } from '@/lib/auth';
-import { getDb } from '@/db';
-import { agents, emailInboxes, sslHostnames } from '@/db/schema';
+import { agentsRepo, emailRepo, sslRepo } from '@/db';
 import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
@@ -37,22 +35,14 @@ export async function POST(
     const parsed = await parseBody(req, schema);
     if (parsed instanceof Response) return parsed;
 
-    if (!process.env.DATABASE_URL) {
-      return errorResponse(503, 'NO_DB', 'Database not configured');
-    }
-
-    const db = getDb();
-    const [agent] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
+    const agent = await agentsRepo.getById(id);
     if (!agent) {
       return errorResponse(404, 'NOT_FOUND', 'Agent not found');
     }
 
-    await db
-      .update(agents)
-      .set({ status: 'revoked', updatedAt: new Date() })
-      .where(eq(agents.id, id));
+    await agentsRepo.update(id, { status: 'revoked', updatedAt: new Date() });
 
-    const [ssl] = await db.select().from(sslHostnames).where(eq(sslHostnames.agentId, id)).limit(1);
+    const ssl = await sslRepo.getByAgent(id);
     if (ssl) {
       try {
         const { getCloudflareSaas } = await import('@/services/cloudflare-saas');
@@ -63,7 +53,7 @@ export async function POST(
           err: String(e),
         });
       }
-      await db.delete(sslHostnames).where(eq(sslHostnames.agentId, id));
+      await sslRepo.delete(id);
     }
 
     try {
@@ -72,7 +62,7 @@ export async function POST(
     } catch (e) {
       log.warn('failed to delete ses identity during revoke', { agentId: id, err: String(e) });
     }
-    await db.delete(emailInboxes).where(eq(emailInboxes.agentId, id));
+    await emailRepo.deleteInbox(id);
 
     log.info('agent revoked', {
       agentId: id,
