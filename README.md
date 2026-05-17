@@ -78,7 +78,7 @@ After validation and payment, the system can coordinate:
 - AWS SES email domain setup, if enabled
 - Basename registration on Base, if selected
 - AgentID NFT minting through the payment router contract
-- Database persistence for agents, registrations, DNS records, and inboxes
+- DynamoDB persistence for agents, registrations, DNS records, inboxes, email messages, and lookup indexes
 
 ## API and automation
 
@@ -132,8 +132,8 @@ The project includes background services for:
 - Tailwind CSS
 - Wagmi
 - viem
-- Drizzle ORM
-- PostgreSQL
+- AWS DynamoDB single-table runtime storage
+- Drizzle/Postgres legacy migration scripts
 - Redis / Upstash
 - QStash
 - Solidity
@@ -166,11 +166,13 @@ pnpm install
 
 ### 2. Configure environment variables
 
-Create `apps/web/.env` file in this location. Then copy the values from [.env.example](./.env.example) and fill them in.
+Create `apps/web/.env.local` in this location and fill in the production values.
 
 Important groups include:
 
-- Database and Redis connection values
+- DynamoDB runtime values: `DATABASE_PROVIDER=dynamodb`, `DYNAMODB_TABLE_NAME`, `DYNAMODB_GSI1_NAME`, `DYNAMODB_CAPACITY_MODE`, `AWS_REGION`
+- Legacy migration-only value: `MIGRATION_DATABASE_URL` pointing at the old Neon/Postgres database during backfill only
+- Redis connection value, if using Redis-backed rate limits
 - Base and Ethereum RPC URLs
 - Contract addresses for the registry, payment router, renewal vault, USDC, and treasury
 - Backend wallet private key
@@ -181,13 +183,22 @@ Important groups include:
 - Pinata credentials
 - Turnstile, cron, admin, Sentry, DNS, and email rate-limit values as needed
 
-### 3. Run database migrations
+### 3. Create DynamoDB table
 
 ```bash
-pnpm --filter @agentdomain/web db:migrate
+pnpm --filter @agentdomain/web db:dynamodb:create
 ```
 
-### 4. Run the development server
+### 4. Backfill old Neon/Postgres data, if needed
+
+```bash
+pnpm --filter @agentdomain/web db:dynamodb:backfill:dry
+pnpm --filter @agentdomain/web db:dynamodb:backfill
+```
+
+Set `WRITE_FREEZE=true` or `MAINTENANCE_MODE=true` during final cutover so no new writes land in Neon while the backfill runs.
+
+### 5. Run the development server
 
 ```bash
 pnpm dev
@@ -195,7 +206,7 @@ pnpm dev
 
 Open `http://localhost:3000` in your browser.
 
-### 5. Run production preflight checks
+### 6. Run production preflight checks
 
 ```bash
 pnpm --filter @agentdomain/web preflight
@@ -207,7 +218,7 @@ To include third-party integration checks:
 pnpm --filter @agentdomain/web preflight -- --external
 ```
 
-### 6. Build the project
+### 7. Build the project
 
 ```bash
 pnpm build
