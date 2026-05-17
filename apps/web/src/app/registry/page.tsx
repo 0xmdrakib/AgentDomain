@@ -3,9 +3,7 @@ import { LandingNav } from '@/components/landing/nav';
 import { Footer } from '@/components/landing/footer';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { getDb } from '@/db';
-import { agents } from '@/db/schema';
-import { eq, sql } from 'drizzle-orm';
+import { agentsRepo } from '@/db';
 import { shortAddress, timeAgo } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -13,21 +11,20 @@ export const revalidate = 30;
 
 async function getRegistry() {
   try {
-    const db = getDb();
-    return db
-      .select({
-        id: agents.id,
-        domain: agents.domain,
-        basename: agents.basename,
-        ensName: agents.ensName,
-        walletAddress: agents.walletAddress,
-        framework: agents.framework,
-        createdAt: agents.createdAt,
-      })
-      .from(agents)
-      .where(eq(agents.status, 'active'))
-      .limit(100)
-      .orderBy(sql`${agents.createdAt} desc`);
+    const result = await agentsRepo.list({
+      publicOnly: true,
+      limit: 100,
+      offset: 0,
+    });
+    return result.items.map((agent) => ({
+      id: agent.id,
+      domain: agent.domain,
+      basename: agent.basename,
+      ensName: agent.ensName,
+      walletAddress: agent.walletAddress,
+      framework: agent.framework,
+      createdAt: agent.createdAt,
+    }));
   } catch (e) {
     return [];
   }
