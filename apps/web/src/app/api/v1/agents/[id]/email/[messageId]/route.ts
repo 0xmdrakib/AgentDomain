@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { getDb } from '@/db';
-import { emailMessages } from '@/db/schema';
+import { emailRepo } from '@/db';
 import { errorResponse, parseBody, withErrorHandling } from '@/lib/api-helpers';
 import { requireAuthOrApiKey } from '@/lib/auth';
 import { getOwnedEmailInbox } from '@/lib/email-inbox';
@@ -34,12 +32,7 @@ export async function PATCH(
       if (!row) return errorResponse(404, 'NOT_FOUND', 'Agent not found');
       if (!row.inbox) return errorResponse(404, 'EMAIL_NOT_ENABLED', 'Email inbox is not enabled');
 
-      const db = getDb();
-      const [message] = await db
-        .update(emailMessages)
-        .set({ read: parsed.read })
-        .where(and(eq(emailMessages.id, messageId), eq(emailMessages.inboxId, row.inbox.id)))
-        .returning();
+      const message = await emailRepo.updateMessageRead(row.agent.id, messageId, parsed.read);
 
       if (!message) return errorResponse(404, 'MESSAGE_NOT_FOUND', 'Email message not found');
       return NextResponse.json({
