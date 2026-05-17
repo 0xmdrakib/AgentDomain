@@ -1,13 +1,12 @@
 import { NextRequest } from 'next/server';
-import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { withErrorHandling, errorResponse, parseBody, applyRateLimit } from '@/lib/api-helpers';
 import { dnsRecordSchema } from '@agentdomain/shared';
-import { getDb } from '@/db/index';
-import { agents, dnsRecords as dnsTable } from '@/db/schema';
+import { agentsRepo, dnsRepo } from '@/db';
 import { requireAuthOrApiKey } from '@/lib/auth';
 import { getServerEnv } from '@/lib/env';
 import { getSpaceshipDns, normalizeRecordName } from '@/services/dns';
+import { assertWritesAllowed } from '@/lib/maintenance';
 
 export const runtime = 'nodejs';
 
@@ -26,16 +25,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     if (!idSchema.safeParse(id).success) {
       return errorResponse(400, 'BAD_ID', 'Invalid agent ID');
     }
-    const db = getDb();
-    
-    // Check ownership
-    const [agent] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
+    const agent = await agentsRepo.getById(id);
     if (!agent) return errorResponse(404, 'NOT_FOUND', 'Agent not found');
     if (!ownsAgent(agent, auth.address)) {
       return errorResponse(403, 'FORBIDDEN', 'Access denied');
     }
 
-    const records = await db.select().from(dnsTable).where(eq(dnsTable.agentId, id));
+    const records = await dnsRepo.list(id);
     return Response.json(records);
   }, { route: '/agents/[id]/dns:GET' });
 }
@@ -55,9 +51,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
     const parsed = await parseBody(req, dnsRecordSchema);
     if (parsed instanceof Response) return parsed;
+    const frozen = assertWritesAllowed();
+    if (frozen) return frozen;
 
-    const db = getDb();
-    const [agent] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
+    const agent = await agentsRepo.getById(id);
     if (!agent) return errorResponse(404, 'NOT_FOUND', 'Agent not found');
     if (!ownsAgent(agent, auth.address)) {
       return errorResponse(403, 'FORBIDDEN', 'Access denied');
@@ -67,19 +64,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (limited) return limited;
 
     const ttl = parsed.ttl ?? 3600;
-    const [stored] = await db
-      .insert(dnsTable)
-      .values({
-        agentId: agent.id,
-        type: parsed.type,
-        name: normalizeRecordName(parsed.name, agent.domain),
-        value: parsed.value,
-        ttl,
-        priority: parsed.priority ?? null,
-        provider: 'spaceship',
-        systemManaged: false,
-      })
-      .returning();
+    const stored = await dnsRepo.create(agent.id, {
+      agentId: agent.id,
+      type: parsed.type,
+      name: normalizeRecordName(parsed.name, agent.domain),
+      value: parsed.value,
+      ttl,
+      priority: parsed.priority ?? null,
+      provider: 'spaceship',
+      providerRecordId: null,
+      systemManaged: false,
+      purpose: null,
+    });
 
     await getSpaceshipDns().syncAgentRecords(agent.id, agent.domain);
 
