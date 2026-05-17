@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { getDb } from '@/db';
-import { emailMessages } from '@/db/schema';
+import { emailRepo } from '@/db';
 import { errorResponse, parseQuery, withErrorHandling } from '@/lib/api-helpers';
 import { requireAuthOrApiKey } from '@/lib/auth';
 import { getOwnedEmailInbox } from '@/lib/email-inbox';
@@ -33,21 +31,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       if (!row) return errorResponse(404, 'NOT_FOUND', 'Agent not found');
       if (!row.inbox) return errorResponse(404, 'EMAIL_NOT_ENABLED', 'Email inbox is not enabled');
 
-      const filters = [eq(emailMessages.inboxId, row.inbox.id)];
-      if (query.unreadOnly === 'true') filters.push(eq(emailMessages.read, false));
-      if (query.direction) filters.push(eq(emailMessages.direction, query.direction));
-
-      const db = getDb();
-      const messages = await db
-        .select()
-        .from(emailMessages)
-        .where(and(...filters))
-        .orderBy(desc(emailMessages.receivedAt))
-        .limit(query.limit);
+      const messages = await emailRepo.listMessages(row.agent.id, {
+        limit: query.limit,
+        unreadOnly: query.unreadOnly === 'true',
+        direction: query.direction,
+      });
 
       return NextResponse.json({
         inbox: row.inbox,
-        messages: messages.map((message) => ({
+        messages: messages.items.map((message) => ({
           id: message.id,
           direction: message.direction,
           providerMessageId: message.providerMessageId,
