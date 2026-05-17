@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { eq } from 'drizzle-orm';
 import { withErrorHandling, errorResponse } from '@/lib/api-helpers';
 import { requireAdmin } from '@/lib/auth';
-import { getDb } from '@/db';
-import { registrations } from '@/db/schema';
+import { registrationsRepo } from '@/db';
 import { getIdentityService } from '@/services/identity';
 import { logger } from '@/lib/logger';
 
@@ -27,12 +25,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
       const { id } = await params;
 
-      if (!process.env.DATABASE_URL) {
-        return errorResponse(503, 'NO_DB', 'Database not configured');
-      }
-
-      const db = getDb();
-      const [reg] = await db.select().from(registrations).where(eq(registrations.id, id)).limit(1);
+      const reg = await registrationsRepo.getById(id);
 
       if (!reg) return errorResponse(404, 'NOT_FOUND', 'Registration not found');
       if (reg.status !== 'failed') {
