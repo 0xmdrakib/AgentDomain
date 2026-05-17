@@ -1,0 +1,22 @@
+{
+  "name": "@agentdomain/storage",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Internal DynamoDB storage layer for AgentDomain",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo ok"
+  },
+  "dependencies": {
+    "@agentdomain/shared": "workspace:*",
+    "@aws-sdk/client-dynamodb": "^3.812.0",
+    "@aws-sdk/lib-dynamodb": "^3.812.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}
