@@ -1,6 +1,5 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { and, eq } from 'drizzle-orm';
 import { formatUnits } from 'viem';
 import { withErrorHandling, parseQuery } from '@/lib/api-helpers';
 import {
@@ -10,6 +9,7 @@ import {
   USDC_DECIMALS,
 } from '@agentdomain/shared';
 import { getIdentityService } from '@/services/identity';
+import { discountsRepo } from '@/db';
 
 const querySchema = z
   .object({
@@ -61,22 +61,11 @@ export async function GET(req: NextRequest) {
 
       if (parsed.discountCode) {
         try {
-          const { getDb } = await import('@/db');
-          const { discountCodes } = await import('@/db/schema');
-          const db = getDb();
-          const [code] = await db
-            .select()
-            .from(discountCodes)
-            .where(
-              and(
-                eq(discountCodes.code, parsed.discountCode.toUpperCase()),
-                eq(discountCodes.isActive, true),
-              ),
-            )
-            .limit(1);
+          const code = await discountsRepo.getByCode(parsed.discountCode);
 
           if (
             code &&
+            code.isActive &&
             code.usedCount < code.usageLimit &&
             (!code.expiresAt || new Date(code.expiresAt) >= new Date())
           ) {
