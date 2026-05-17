@@ -19,13 +19,13 @@ const webRoot = resolve(__dirname, '..');
 loadEnv({ path: resolve(webRoot, '.env.local'), override: true });
 
 async function main() {
-  const url = process.env.DATABASE_URL;
+  const url = process.env.MIGRATION_DATABASE_URL ?? process.env.DATABASE_URL;
   if (!url) {
-    console.error('DATABASE_URL is not set in apps/web/.env.local');
+    console.error('MIGRATION_DATABASE_URL is not set in apps/web/.env.local');
     process.exit(1);
   }
 
-  console.log('Connecting to database...');
+  console.log('Connecting to legacy Postgres database...');
   const client = postgres(url, { max: 1, idle_timeout: 5 });
   const db = drizzle(client);
 
