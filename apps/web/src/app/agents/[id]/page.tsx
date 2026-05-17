@@ -1,6 +1,5 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { eq } from 'drizzle-orm';
 import { LandingNav } from '@/components/landing/nav';
 import { Footer } from '@/components/landing/footer';
 import { Card, CardContent } from '@/components/ui/card';
@@ -9,8 +8,7 @@ import { Button } from '@/components/ui/button';
 import { ExternalLink, Copy } from 'lucide-react';
 import { RenewalManagement } from '@/components/agents/renewal-management';
 import { DnsManagement } from '@/components/agents/dns-management';
-import { getDb } from '@/db';
-import { agents, dnsRecords as dnsTable, emailInboxes } from '@/db/schema';
+import { agentsRepo, dnsRepo, emailRepo } from '@/db';
 import { shortAddress, formatDate, timeAgo } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -21,14 +19,10 @@ interface PageProps {
 
 async function getAgentData(id: string) {
   try {
-    const db = getDb();
-    const [agent] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
+    const agent = await agentsRepo.getById(id);
     if (!agent) return null;
 
-    const [dnsList, [inbox]] = await Promise.all([
-      db.select().from(dnsTable).where(eq(dnsTable.agentId, id)),
-      db.select().from(emailInboxes).where(eq(emailInboxes.agentId, id)).limit(1),
-    ]);
+    const [dnsList, inbox] = await Promise.all([dnsRepo.list(id), emailRepo.getInboxByAgent(id)]);
 
     return { agent, dns: dnsList, inbox: inbox ?? null };
   } catch {
