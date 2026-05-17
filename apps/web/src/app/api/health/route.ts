@@ -36,9 +36,7 @@ export async function GET() {
   checks.app = { ok: true };
 
   // 2. Database
-  if (process.env.DATABASE_URL) {
-    checks.database = await checkDatabase();
-  }
+  checks.database = await checkDatabase();
 
   // 3. Base RPC
   checks.rpc = await checkRpc();
@@ -64,10 +62,8 @@ export async function GET() {
 async function checkDatabase(): Promise<CheckResult> {
   const start = Date.now();
   try {
-    const { getDb } = await import('@/db/index');
-    const { sql } = await import('drizzle-orm');
-    const db = getDb();
-    await db.execute(sql`SELECT 1`);
+    const { platformRepo } = await import('@/db');
+    await platformRepo.ping();
     return { ok: true, latencyMs: Date.now() - start };
   } catch (e) {
     log.warn('database health check failed', { err: String(e) });
