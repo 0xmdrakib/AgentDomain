@@ -397,6 +397,8 @@ export const registrationsRepo = {
         completed: rows.filter((row) => row.status === 'completed').length,
         failed: rows.filter((row) => row.status === 'failed').length,
         pending: rows.filter((row) => row.status === 'pending').length,
+        partial: rows.filter((row) => row.progress?.overall === 'partial').length,
+        paymentSettled: rows.filter((row) => Boolean(row.paymentTxHash || row.txHash)).length,
         last24h: rows.filter((row) => now - row.createdAt.getTime() < 24 * 60 * 60 * 1000).length,
         last7d: rows.filter((row) => now - row.createdAt.getTime() < 7 * 24 * 60 * 60 * 1000).length,
       },

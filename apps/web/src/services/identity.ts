@@ -27,6 +27,7 @@ import { getBackendWalletClient, getPublicClient, getContractAddresses } from '@
 import { PAYMENT_ROUTER_ABI } from '@/lib/abis';
 import { logger } from '@/lib/logger';
 import { recordMetric } from '@/lib/metrics';
+import { createProgress } from '@/db/dynamo/mapper';
 
 const log = logger.child({ service: 'identity' });
 
@@ -231,7 +232,11 @@ export class IdentityService {
    * Idempotency: callers should hash (wallet, name, nonce) into idempotencyKey
    * to safely retry without double-processing.
    */
-  async register(params: RegistrationParams, idempotencyKey: string): Promise<RegistrationResult> {
+  async register(
+    params: RegistrationParams,
+    idempotencyKey: string,
+    opts: { paymentTxHash?: string | null } = {},
+  ): Promise<RegistrationResult> {
     const tld = (params.tld ?? 'xyz') as SupportedTld;
     const basenameLabel = params.basenameLabel ?? params.preferredName;
     const ensLabel = params.ensLabel ?? params.preferredName;
@@ -261,6 +266,7 @@ export class IdentityService {
     const reg = await registrationsRepo.upsertPending({
       agentId: null,
       idempotencyKey,
+      paymentTxHash: opts.paymentTxHash ?? null,
       txHash: null,
       payerAddress: params.wallet,
       paymentAmount: pricing.totalUsdc,
@@ -272,6 +278,15 @@ export class IdentityService {
       registrarOrderId: null,
       errorMessage: null,
       requestParams: params as unknown as Record<string, unknown>,
+      progress: createProgress('pending', 'payment', {
+        payment: {
+          status: 'pending',
+          updatedAt: new Date().toISOString(),
+          error: null,
+          txHash: null,
+          note: 'Awaiting x402 payment settlement',
+        },
+      }),
       completedAt: null,
     });
 
@@ -419,6 +434,25 @@ export class IdentityService {
       });
       const tokenId = mintResult.tokenId;
 
+      await registrationsRepo.update(reg.id, {
+        paymentTxHash: opts.paymentTxHash ?? reg.paymentTxHash ?? null,
+        txHash: mintResult.txHash,
+        progress: {
+          overall: 'running',
+          currentStep: 'persist',
+          steps: {
+            ...(reg.progress?.steps ?? {}),
+            mint: {
+              status: 'success',
+              updatedAt: new Date().toISOString(),
+              error: null,
+              txHash: mintResult.txHash,
+              note: 'AgentID NFT minted',
+            },
+          },
+        },
+      });
+
       // ─── Step 10: Persist agent row ───────────────────────────────────
       const agent = await agentsRepo.create({
         walletAddress: params.wallet,
@@ -470,6 +504,22 @@ export class IdentityService {
         status: 'completed',
         agentId: agent?.id ?? null,
         completedAt: new Date(),
+        paymentTxHash: opts.paymentTxHash ?? reg.paymentTxHash ?? null,
+        txHash: mintResult.txHash,
+        progress: {
+          overall: 'completed',
+          currentStep: null,
+          steps: {
+            ...(reg.progress?.steps ?? {}),
+            payment: {
+              status: 'success',
+              updatedAt: new Date().toISOString(),
+              error: null,
+              txHash: opts.paymentTxHash ?? reg.paymentTxHash ?? null,
+              note: 'Payment settled and identity completed',
+            },
+          },
+        },
       });
 
       log.info('registration completed', { domain, tokenId: tokenId.toString() });
@@ -500,6 +550,29 @@ export class IdentityService {
       await registrationsRepo.update(reg.id, {
         status: 'failed',
         errorMessage: err instanceof Error ? err.message : String(err),
+        paymentTxHash: opts.paymentTxHash ?? reg.paymentTxHash ?? null,
+        progress: {
+          overall: opts.paymentTxHash || reg.paymentTxHash ? 'partial' : 'failed',
+          currentStep: null,
+          steps: {
+            ...(reg.progress?.steps ?? {}),
+            payment: opts.paymentTxHash || reg.paymentTxHash
+              ? {
+                  status: 'success',
+                  updatedAt: new Date().toISOString(),
+                  error: null,
+                  txHash: opts.paymentTxHash ?? reg.paymentTxHash ?? null,
+                  note: 'Payment settled before failure',
+                }
+              : {
+                  status: 'failed',
+                  updatedAt: new Date().toISOString(),
+                  error: err instanceof Error ? err.message : String(err),
+                  txHash: null,
+                  note: 'Registration failed before or during settlement',
+                },
+          },
+        },
       });
       throw err;
     }

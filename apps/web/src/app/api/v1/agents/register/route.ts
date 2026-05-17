@@ -162,6 +162,7 @@ export async function POST(req: NextRequest) {
           const result = await svc.register(
             { ...params, wallet: settlement.payer },
             idempotencyKey,
+            { paymentTxHash: settlement.txHash ?? null },
           );
 
           // Mark discount code as used

@@ -21,6 +21,8 @@ import {
   Wrench,
   Globe,
   Mail,
+  ChevronRight,
+  ClipboardList,
 } from 'lucide-react';
 import { useSiwe } from '@/hooks/use-siwe';
 import { AuthButton } from '@/components/wallet/auth-button';
@@ -82,6 +84,64 @@ interface AdminRegistration {
   createdAt: string;
   completedAt: string | null;
   txHash: string | null;
+  paymentTxHash?: string | null;
+  progress?: {
+    overall: 'pending' | 'running' | 'partial' | 'completed' | 'failed';
+    currentStep: string | null;
+    steps: Record<
+      string,
+      {
+        status: 'pending' | 'running' | 'success' | 'failed' | 'skipped';
+        updatedAt: string;
+        error: string | null;
+        txHash: string | null;
+        note: string | null;
+      }
+    >;
+  } | null;
+}
+
+interface AdminRegistrationCaseDetail {
+  registration: AdminRegistration;
+  agent: AdminAgent | null;
+  dnsRecords: Array<{
+    id: string;
+    type: string;
+    name: string;
+    value: string;
+    systemManaged: boolean;
+    purpose: string | null;
+  }>;
+  ssl: {
+    sslStatus: string;
+    hostnameStatus: string;
+    cloudflareCustomHostnameId: string;
+  } | null;
+  email: null | {
+    inbox: {
+      emailAddress: string;
+      sesVerificationStatus: string;
+    };
+    messages: Array<{
+      id: string;
+      subject: string | null;
+      fromAddress: string;
+      receivedAt: string;
+      read: boolean;
+      verificationCodes?: string[] | null;
+    }>;
+  };
+  caseSummary: {
+    paymentSettled: boolean;
+    identityComplete: boolean;
+    partial: boolean;
+    paymentTxHash: string | null;
+    agentReady: boolean;
+    sslReady: boolean;
+    emailReady: boolean;
+    messageCount: number;
+    currentState: string;
+  };
 }
 
 interface AdminRenewal {
@@ -553,6 +613,7 @@ function RegistrationsPanel() {
   const [status, setStatus] = useState<RegStatusFilter>('all');
   const [offset, setOffset] = useState(0);
   const [actionState, setActionState] = useState<Record<string, 'idle' | 'loading' | 'done'>>({});
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -671,10 +732,18 @@ function RegistrationsPanel() {
                         <td className="py-3.5 pr-3 text-muted-foreground whitespace-nowrap">
                           {formatDate(reg.createdAt)}
                         </td>
-                        <td className="py-3.5 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {reg.status === 'failed' && (
-                              <>
+                      <td className="py-3.5 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSelectedId(key)}
+                          >
+                            <ClipboardList className="h-3 w-3" />
+                            <span className="ml-1 hidden sm:inline">Inspect</span>
+                          </Button>
+                          {reg.status === 'failed' && (
+                            <>
                                 <Button
                                   variant="outline"
                                   size="sm"
@@ -741,6 +810,13 @@ function RegistrationsPanel() {
           </div>
         )}
       </CardContent>
+      {selectedId && (
+        <RegistrationCaseDrawer
+          registrationId={selectedId}
+          onClose={() => setSelectedId(null)}
+          onRefresh={fetchData}
+        />
+      )}
     </Card>
   );
 }
@@ -1358,6 +1434,239 @@ function RenewalStatusBadge({
   return (
     <Badge variant={variant as 'success' | 'warning' | 'destructive' | 'outline'}>{status}</Badge>
   );
+}
+
+function RegistrationCaseDrawer({
+  registrationId,
+  onClose,
+  onRefresh,
+}: {
+  registrationId: string;
+  onClose: () => void;
+  onRefresh: () => void;
+}) {
+  const [data, setData] = useState<AdminRegistrationCaseDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setData(null);
+    fetch(`/api/v1/admin/registrations/${registrationId}`, { credentials: 'include' })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((json) => {
+        if (!cancelled) setData(json);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [registrationId]);
+
+  async function runAction(endpoint: string, label: string) {
+    setBusy(label);
+    try {
+      const body =
+        label === 'repair'
+          ? { action: 'dns' }
+          : { reason: 'Admin case recovery' };
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await res.json().catch(() => null);
+      onRefresh();
+      setLoading(true);
+      const ref = await fetch(`/api/v1/admin/registrations/${registrationId}`, { credentials: 'include' });
+      if (!ref.ok) throw new Error(`HTTP ${ref.status}`);
+      setData((await ref.json()) as AdminRegistrationCaseDetail);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Action failed');
+    } finally {
+      setBusy(null);
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm">
+      <div className="absolute right-0 top-0 h-full w-full max-w-3xl overflow-y-auto border-l border-border/60 bg-background shadow-2xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border/60 bg-background/95 px-5 py-4 backdrop-blur">
+          <div>
+            <div className="text-sm text-muted-foreground">Registration case</div>
+            <div className="font-mono text-sm">{registrationId}</div>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            <XCircle className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="space-y-4 p-5">
+          {loading && (
+            <div className="py-10 text-center">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mx-auto" />
+            </div>
+          )}
+          {error && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+          {data && (
+            <>
+              <div className="grid gap-3 md:grid-cols-2">
+                <InfoTile label="Payment" value={data.caseSummary.paymentSettled ? 'Settled' : 'Pending'} />
+                <InfoTile label="Case state" value={data.caseSummary.currentState} />
+                <InfoTile label="Domain" value={data.agent?.domain ?? 'No agent yet'} />
+                <InfoTile label="Payment tx" value={data.caseSummary.paymentTxHash ?? 'None'} mono />
+              </div>
+
+              <Card>
+                <CardContent className="p-4 space-y-3">
+                  <div className="text-sm font-medium">Progress</div>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    {Object.entries(data.registration.progress?.steps ?? {}).map(([step, s]) => (
+                      <div key={step} className="rounded-lg border border-border/50 p-3 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium capitalize">{step}</span>
+                          <Badge variant={stepBadgeVariant(s.status)}>{s.status}</Badge>
+                        </div>
+                        <div className="mt-1 text-xs text-muted-foreground">{s.note ?? '—'}</div>
+                        {s.txHash && <div className="mt-1 font-mono text-[11px]">{s.txHash}</div>}
+                        {s.error && <div className="mt-1 text-xs text-destructive">{s.error}</div>}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="p-4 space-y-3">
+                  <div className="text-sm font-medium">Recovery actions</div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={busy !== null || !data.agent}
+                      onClick={() =>
+                        runAction(`/api/v1/admin/agents/${data.agent?.id ?? ''}/repair`, 'repair')
+                      }
+                    >
+                      <Wrench className="h-3 w-3" />
+                      Repair bundle
+                    </Button>
+                    {data.agent && data.agent.sslStatus !== 'active' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={busy !== null}
+                        onClick={() =>
+                          runAction(
+                            `/api/v1/admin/agents/${data.agent?.id ?? ''}/ssl-reprovision`,
+                            'ssl',
+                          )
+                        }
+                      >
+                        <ShieldCheck className="h-3 w-3" />
+                        Reprovision SSL
+                      </Button>
+                    )}
+                    {data.registration.status === 'failed' && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={busy !== null}
+                          onClick={() => runAction(`/api/v1/admin/registrations/${registrationId}/retry`, 'retry')}
+                        >
+                          <RotateCcw className="h-3 w-3" />
+                          Retry registration
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={busy !== null}
+                          onClick={() => runAction(`/api/v1/admin/registrations/${registrationId}/refund`, 'refund')}
+                        >
+                          <XCircle className="h-3 w-3" />
+                          Record refund
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="p-4 space-y-3">
+                  <div className="text-sm font-medium">Provisioning detail</div>
+                  <div className="grid gap-2 text-sm md:grid-cols-2">
+                    <InfoTile label="Agent" value={data.agent?.status ?? 'none'} />
+                    <InfoTile label="SSL" value={data.ssl?.sslStatus ?? 'none'} />
+                    <InfoTile label="Email" value={data.email ? 'Ready' : 'None'} />
+                    <InfoTile label="Messages" value={String(data.caseSummary.messageCount)} />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {data.dnsRecords?.length > 0 && (
+                <Card>
+                  <CardContent className="p-4 space-y-3">
+                    <div className="text-sm font-medium">DNS records</div>
+                    <div className="space-y-2">
+                      {data.dnsRecords.map((record) => (
+                        <div key={record.id} className="rounded-lg border border-border/50 p-3 text-xs">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="font-mono">
+                              {record.type} {record.name}
+                            </div>
+                            <Badge variant={record.systemManaged ? 'outline' : 'secondary'}>
+                              {record.systemManaged ? 'system' : 'user'}
+                            </Badge>
+                          </div>
+                          <div className="mt-1 break-all text-muted-foreground">{record.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InfoTile({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="rounded-lg border border-border/50 p-3">
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className={cn('mt-1 text-sm', mono && 'font-mono break-all')}>{value}</div>
+    </div>
+  );
+}
+
+function stepBadgeVariant(status: 'pending' | 'running' | 'success' | 'failed' | 'skipped') {
+  if (status === 'success') return 'success';
+  if (status === 'failed') return 'destructive';
+  if (status === 'running') return 'warning';
+  return 'outline';
 }
 
 function RepairMenu({

@@ -84,6 +84,7 @@ async function main() {
         id: str(row.id),
         agentId: nullableString(row.agent_id),
         idempotencyKey: str(row.idempotency_key),
+        paymentTxHash: nullableString(row.payment_tx_hash),
         txHash: nullableString(row.tx_hash),
         payerAddress: str(row.payer_address),
         paymentAmount: str(row.payment_amount),
@@ -95,6 +96,7 @@ async function main() {
         registrarOrderId: nullableString(row.registrar_order_id),
         errorMessage: nullableString(row.error_message),
         requestParams: json(row.request_params),
+        progress: json(row.progress) as never,
         createdAt: date(row.created_at),
         completedAt: dateOrNull(row.completed_at),
       });

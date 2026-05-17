@@ -30,6 +30,9 @@ import type {
   EmailBlocklistRow,
   EmailInboxRow,
   EmailMessageRow,
+  RegistrationFlowStep,
+  RegistrationProgress,
+  RegistrationStepState,
   NewAgent,
   NewDnsRecord,
   NewEmailInbox,
@@ -164,6 +167,7 @@ export function registrationToItem(value: NewRegistration): RegistrationItem {
     id,
     agentId: value.agentId ?? null,
     idempotencyKey: value.idempotencyKey,
+    paymentTxHash: value.paymentTxHash ?? null,
     txHash: value.txHash ?? null,
     payerAddress: value.payerAddress,
     paymentAmount: String(value.paymentAmount),
@@ -175,6 +179,7 @@ export function registrationToItem(value: NewRegistration): RegistrationItem {
     registrarOrderId: value.registrarOrderId ?? null,
     errorMessage: value.errorMessage ?? null,
     requestParams: value.requestParams ?? null,
+    progress: value.progress ?? null,
     createdAt,
     completedAt: isoDate(value.completedAt),
   });
@@ -186,6 +191,14 @@ export function itemToRegistration(item: RegistrationItem): Registration {
     createdAt: toDate(item.createdAt) ?? new Date(0),
     completedAt: toDate(item.completedAt),
   };
+}
+
+export function createProgress(
+  overall: RegistrationProgress['overall'],
+  currentStep: RegistrationFlowStep | null,
+  steps: Partial<Record<RegistrationFlowStep, RegistrationStepState>> = {},
+): RegistrationProgress {
+  return { overall, currentStep, steps };
 }
 
 export function dnsRecordToItem(agentId: string, value: NewDnsRecord): DnsRecordItem {

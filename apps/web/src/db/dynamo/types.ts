@@ -3,6 +3,32 @@ export type RegistrationStatus = 'pending' | 'completed' | 'failed';
 export type RenewalStatus = 'scheduled' | 'in_progress' | 'completed' | 'failed';
 export type DnsRecordType = 'A' | 'AAAA' | 'ALIAS' | 'CNAME' | 'MX' | 'TXT' | 'NS' | 'SRV';
 export type SslStatus = 'pending' | 'provisioning' | 'active' | 'failed' | 'expired';
+export type RegistrationFlowStep =
+  | 'payment'
+  | 'ens'
+  | 'metadata'
+  | 'domain'
+  | 'dns'
+  | 'ssl'
+  | 'email'
+  | 'basename'
+  | 'mint'
+  | 'persist';
+export type RegistrationFlowStatus = 'pending' | 'running' | 'success' | 'failed' | 'skipped';
+
+export interface RegistrationStepState {
+  status: RegistrationFlowStatus;
+  updatedAt: string;
+  error: string | null;
+  txHash: string | null;
+  note: string | null;
+}
+
+export interface RegistrationProgress {
+  overall: 'pending' | 'running' | 'partial' | 'completed' | 'failed';
+  currentStep: RegistrationFlowStep | null;
+  steps: Partial<Record<RegistrationFlowStep, RegistrationStepState>>;
+}
 
 export interface Agent {
   id: string;
@@ -30,6 +56,7 @@ export interface Registration {
   id: string;
   agentId: string | null;
   idempotencyKey: string;
+  paymentTxHash: string | null;
   txHash: string | null;
   payerAddress: string;
   paymentAmount: string;
@@ -41,12 +68,13 @@ export interface Registration {
   registrarOrderId: string | null;
   errorMessage: string | null;
   requestParams: Record<string, unknown> | null;
+  progress: RegistrationProgress | null;
   createdAt: Date;
   completedAt: Date | null;
 }
 
 export type NewRegistration = Omit<Registration, 'id' | 'createdAt'> &
-  Partial<Pick<Registration, 'id' | 'createdAt'>>;
+  Partial<Pick<Registration, 'id' | 'createdAt' | 'paymentTxHash' | 'progress'>>;
 
 export interface DnsRecordRow {
   id: string;
@@ -186,6 +214,8 @@ export interface PlatformStats {
     completed: number;
     failed: number;
     pending: number;
+    partial: number;
+    paymentSettled: number;
     last24h: number;
     last7d: number;
   };
