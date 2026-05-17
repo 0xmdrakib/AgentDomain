@@ -2,7 +2,7 @@
 
 AgentDomain is an autonomous identity stack for AI agents that bundles a domain, Basename, DNS, email, SSL, and an AgentID NFT into one registration flow on Base.
 
-**Live app:** https://agentdomain.vercel.app
+**Live app:** https://agentdomain.app
 
 ---
 
