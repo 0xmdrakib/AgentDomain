@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { getDb } from '@/db';
-import { emailBlocklist } from '@/db/schema';
+import { emailRepo } from '@/db';
 import { errorResponse, withErrorHandling } from '@/lib/api-helpers';
 import { requireAuthOrApiKey } from '@/lib/auth';
 import { getOwnedEmailInbox } from '@/lib/email-inbox';
+import { assertWritesAllowed } from '@/lib/maintenance';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -30,11 +29,10 @@ export async function DELETE(
       if (!row) return errorResponse(404, 'NOT_FOUND', 'Agent not found');
       if (!row.inbox) return errorResponse(404, 'EMAIL_NOT_ENABLED', 'Email inbox is not enabled');
 
-      const db = getDb();
-      const [deleted] = await db
-        .delete(emailBlocklist)
-        .where(and(eq(emailBlocklist.id, blockId), eq(emailBlocklist.inboxId, row.inbox.id)))
-        .returning();
+      const frozen = assertWritesAllowed();
+      if (frozen) return frozen;
+
+      const deleted = await emailRepo.deleteBlocklist(row.agent.id, blockId);
 
       if (!deleted)
         return errorResponse(404, 'BLOCKLIST_ENTRY_NOT_FOUND', 'Blocklist entry not found');
