@@ -1,7 +1,6 @@
-import { sql } from 'drizzle-orm';
 import { getAddress, isAddress, type Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { getDb } from '@/db';
+import { platformRepo } from '@/db';
 import { getEthereumPublicClient, getPublicClient } from '@/lib/chain';
 import { AGENT_IDENTITY_REGISTRY_ABI, PAYMENT_ROUTER_ABI, RENEWAL_VAULT_ABI } from '@/lib/abis';
 import { ENS_MAINNET, ETHEREUM_MAINNET_CHAIN_ID } from '@agentdomain/shared';
@@ -29,7 +28,11 @@ const BASE_MAINNET_CHAIN_ID = 8453;
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 const REQUIRED_WEB_ENV = [
-  'DATABASE_URL',
+  'DATABASE_PROVIDER',
+  'DYNAMODB_TABLE_NAME',
+  'DYNAMODB_GSI1_NAME',
+  'DYNAMODB_CAPACITY_MODE',
+  'AWS_REGION',
   'BASE_RPC_URL',
   'BASE_CHAIN_ID',
   'ETHEREUM_RPC_URL',
@@ -55,7 +58,6 @@ const REQUIRED_WEB_ENV = [
   'CLOUDFLARE_API_TOKEN',
   'CLOUDFLARE_SAAS_ZONE_ID',
   'CLOUDFLARE_SAAS_FALLBACK_HOSTNAME',
-  'AWS_REGION',
   'AWS_SES_REGION',
   'AWS_SES_INBOUND_BUCKET',
   'AWS_SES_RULE_SET',
@@ -69,17 +71,6 @@ const REQUIRED_WEB_ENV = [
 ] as const;
 
 const REQUIRED_OPERATION_ENV = ['ADMIN_ADDRESSES', 'CRON_SECRET'] as const;
-
-const REQUIRED_TABLES = [
-  'agents',
-  'registrations',
-  'dns_records',
-  'email_inboxes',
-  'email_messages',
-  'email_blocklist',
-  'renewals',
-  'ssl_hostnames',
-] as const;
 
 export async function runProductionPreflight(
   opts: PreflightOptions = {},
@@ -185,29 +176,18 @@ function checkEnvironment(): PreflightCheck {
 }
 
 async function checkDatabase(): Promise<PreflightCheck> {
-  if (!hasEnv('DATABASE_URL')) return fail('DATABASE_URL is not configured');
-
-  const db = getDb();
-  await db.execute(sql`select 1`);
-
-  const tableRows = (await db.execute(sql`
-    select table_name
-    from information_schema.tables
-    where table_schema = 'public'
-      and table_name in (${sql.join(
-        REQUIRED_TABLES.map((table) => sql`${table}`),
-        sql`,`,
-      )})
-  `)) as unknown as { table_name: string }[];
-
-  const found = new Set(tableRows.map((row) => row.table_name));
-  const missing = REQUIRED_TABLES.filter((table) => !found.has(table));
-  if (missing.length > 0) {
-    return fail('Database is reachable, but required tables are missing', { missing });
+  if (process.env.DATABASE_PROVIDER !== 'dynamodb') {
+    return fail('DATABASE_PROVIDER must be dynamodb for runtime cutover');
   }
+  if (!hasEnv('DYNAMODB_TABLE_NAME')) return fail('DYNAMODB_TABLE_NAME is not configured');
+  if (!hasEnv('DYNAMODB_GSI1_NAME')) return fail('DYNAMODB_GSI1_NAME is not configured');
 
-  return pass('Database is reachable and migrations appear applied', {
-    checkedTables: REQUIRED_TABLES.length,
+  await platformRepo.ping();
+  const counts = await platformRepo.countsByEntity();
+
+  return pass('DynamoDB table is reachable', {
+    tableName: process.env.DYNAMODB_TABLE_NAME ?? '',
+    entitiesSeen: Object.keys(counts).length,
   });
 }
 
