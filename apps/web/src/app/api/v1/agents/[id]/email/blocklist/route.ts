@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { getDb } from '@/db';
-import { emailBlocklist } from '@/db/schema';
+import { emailRepo } from '@/db';
 import { errorResponse, parseBody, withErrorHandling } from '@/lib/api-helpers';
 import { requireAuthOrApiKey } from '@/lib/auth';
 import { getOwnedEmailInbox, normalizeBlocklistValue } from '@/lib/email-inbox';
+import { assertWritesAllowed } from '@/lib/maintenance';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -29,11 +28,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       if (!row) return errorResponse(404, 'NOT_FOUND', 'Agent not found');
       if (!row.inbox) return errorResponse(404, 'EMAIL_NOT_ENABLED', 'Email inbox is not enabled');
 
-      const db = getDb();
-      const entries = await db
-        .select()
-        .from(emailBlocklist)
-        .where(eq(emailBlocklist.inboxId, row.inbox.id));
+      const entries = await emailRepo.listBlocklist(row.agent.id);
       return NextResponse.json({ entries });
     },
     { route: '/agents/[id]/email/blocklist:GET' },
@@ -51,6 +46,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
       const parsed = await parseBody(req, createSchema);
       if (parsed instanceof NextResponse) return parsed;
+      const frozen = assertWritesAllowed();
+      if (frozen) return frozen;
 
       const value = normalizeBlocklistValue(parsed.value);
       if (!value || !value.includes('.')) {
@@ -61,17 +58,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (!row) return errorResponse(404, 'NOT_FOUND', 'Agent not found');
       if (!row.inbox) return errorResponse(404, 'EMAIL_NOT_ENABLED', 'Email inbox is not enabled');
 
-      const db = getDb();
-      await db
-        .insert(emailBlocklist)
-        .values({ inboxId: row.inbox.id, value, reason: parsed.reason })
-        .onConflictDoNothing({ target: [emailBlocklist.inboxId, emailBlocklist.value] });
-
-      const [entry] = await db
-        .select()
-        .from(emailBlocklist)
-        .where(and(eq(emailBlocklist.inboxId, row.inbox.id), eq(emailBlocklist.value, value)))
-        .limit(1);
+      const entry = await emailRepo.addBlocklist(row.agent.id, {
+        inboxId: row.inbox.id,
+        value,
+        reason: parsed.reason,
+      });
 
       return NextResponse.json({ entry }, { status: 201 });
     },
