@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { parseUnits, type Address } from 'viem';
 import { withErrorHandling, parseBody, errorResponse } from '@/lib/api-helpers';
 import { requireAdmin } from '@/lib/auth';
-import { getDb } from '@/db';
-import { registrations } from '@/db/schema';
+import { registrationsRepo } from '@/db';
 import { getBackendWalletClient, getContractAddresses } from '@/lib/chain';
 import { logger } from '@/lib/logger';
 import { USDC_DECIMALS } from '@agentdomain/shared';
@@ -60,12 +58,7 @@ export async function POST(
     const parsed = await parseBody(req, schema);
     if (parsed instanceof Response) return parsed;
 
-    if (!process.env.DATABASE_URL) {
-      return errorResponse(503, 'NO_DB', 'Database not configured');
-    }
-
-    const db = getDb();
-    const [reg] = await db.select().from(registrations).where(eq(registrations.id, id)).limit(1);
+    const reg = await registrationsRepo.getById(id);
     if (!reg) return errorResponse(404, 'NOT_FOUND', 'Registration not found');
 
     if (reg.status !== 'failed') {
@@ -109,14 +102,9 @@ export async function POST(
     const auditNote = `[REFUNDED by ${auth.address} at ${new Date().toISOString()}: ${parsed.reason}]${
       onChainTxHash ? ` tx=${onChainTxHash}` : ''
     }`;
-    await db
-      .update(registrations)
-      .set({
-        errorMessage: reg.errorMessage
-          ? `${reg.errorMessage}\n${auditNote}`
-          : auditNote,
-      })
-      .where(eq(registrations.id, id));
+    await registrationsRepo.update(id, {
+      errorMessage: reg.errorMessage ? `${reg.errorMessage}\n${auditNote}` : auditNote,
+    });
 
     return NextResponse.json({
       ok: true,
