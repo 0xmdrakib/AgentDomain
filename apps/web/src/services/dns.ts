@@ -1,6 +1,4 @@
-import { eq } from 'drizzle-orm';
-import { getDb } from '@/db';
-import { dnsRecords, type Agent, type DnsRecordRow, type NewDnsRecord } from '@/db/schema';
+import { dnsRepo, type Agent, type DnsRecordRow, type NewDnsRecord } from '@/db';
 import { getServerEnv } from '@/lib/env';
 import { logger } from '@/lib/logger';
 import { getSpaceship, type SpaceshipDnsRecordInput } from './spaceship';
@@ -29,6 +27,8 @@ export function buildBaselineDnsRecords(opts: {
       name: '@',
       value: env.CLOUDFLARE_SAAS_FALLBACK_HOSTNAME,
       ttl: 3600,
+      priority: null,
+      providerRecordId: null,
       provider: 'spaceship',
       systemManaged: true,
       purpose: 'apex_saas_origin',
@@ -53,8 +53,7 @@ export class SpaceshipDnsService {
   }
 
   async syncAgentRecords(agentId: string, domain: string): Promise<DnsRecordRow[]> {
-    const db = getDb();
-    const records = await db.select().from(dnsRecords).where(eq(dnsRecords.agentId, agentId));
+    const records = await dnsRepo.list(agentId);
     await this.pushRecords(domain, records);
     return records;
   }
@@ -63,11 +62,7 @@ export class SpaceshipDnsService {
     agent: Pick<Agent, 'id' | 'domain'>,
     records: ManagedDnsRecord[],
   ): Promise<DnsRecordRow[]> {
-    const db = getDb();
-    await db.delete(dnsRecords).where(eq(dnsRecords.agentId, agent.id));
-    if (records.length > 0) {
-      await db.insert(dnsRecords).values(records.map((record) => ({ ...record, agentId: agent.id })));
-    }
+    await dnsRepo.replace(agent.id, records.map((record) => ({ ...record, agentId: agent.id })));
     return this.syncAgentRecords(agent.id, agent.domain);
   }
 
