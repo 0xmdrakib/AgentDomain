@@ -122,6 +122,8 @@ function normalizeValidationRecords(records: Record<string, unknown>[]): Managed
         name: rawName,
         value: rawValue,
         ttl: 3600,
+        priority: null,
+        providerRecordId: null,
         provider: 'spaceship',
         systemManaged: true,
         purpose: 'cloudflare_saas_validation',
