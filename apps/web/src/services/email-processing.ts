@@ -1,6 +1,5 @@
 import { DeleteObjectCommand, GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import { getDb } from '@/db';
-import { emailMessages } from '@/db/schema';
+import { emailRepo } from '@/db';
 import { getServerEnv } from '@/lib/env';
 import {
   findInboxByRecipient,
@@ -60,22 +59,19 @@ export async function processSesInbound(payload: SesInboundPayload): Promise<{ s
   const subject = mail?.commonHeaders?.subject ?? extractHeader(raw, 'subject') ?? '';
   const verificationCodes = extractVerificationCodes(`${subject}\n${text}`);
 
-  const db = getDb();
-  await db
-    .insert(emailMessages)
-    .values({
-      inboxId: inboxRow.inbox.id,
-      direction: 'inbound',
-      providerMessageId: messageId,
-      fromAddress: from,
-      toAddress: recipient,
-      subject,
-      text,
-      verificationCodes,
-      spamVerdict,
-      virusVerdict,
-    })
-    .onConflictDoNothing({ target: emailMessages.providerMessageId });
+  await emailRepo.insertMessage(inboxRow.agent.id, {
+    inboxId: inboxRow.inbox.id,
+    direction: 'inbound',
+    providerMessageId: messageId,
+    fromAddress: from,
+    toAddress: recipient,
+    subject,
+    text,
+    verificationCodes,
+    spamVerdict,
+    virusVerdict,
+    read: false,
+  });
 
   await deleteRawMessage(receipt).catch((err) =>
     log.warn('failed to delete transient raw email', { err: String(err), messageId }),
