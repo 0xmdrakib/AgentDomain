@@ -3,10 +3,8 @@ import { Receiver } from '@upstash/qstash';
 import { createPublicClient, createWalletClient, http } from 'viem';
 import { base, baseSepolia } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
-import { getDb } from '@/db';
-import { agents, renewals } from '@/db/schema';
-import { lt, eq, and } from 'drizzle-orm';
-import { parseUsdc, RENEWAL_TRIGGER_DAYS_BEFORE, retry } from '@agentdomain/shared';
+import { agentsRepo, renewalsRepo } from '@/db';
+import { RENEWAL_TRIGGER_DAYS_BEFORE, retry } from '@agentdomain/shared';
 import { logger } from '@/lib/logger';
 
 // Standard ERC20 / Vault ABI fragment
@@ -73,7 +71,6 @@ export async function POST(req: NextRequest) {
 
     logger.info('QStash keeper tick triggered');
 
-    const db = getDb();
     const isMainnet = process.env.NEXT_PUBLIC_BASE_CHAIN_ID === '8453';
     const chain = isMainnet ? base : baseSepolia;
     const rpc = isMainnet
@@ -92,11 +89,7 @@ export async function POST(req: NextRequest) {
 
     // Find candidates
     const cutoff = new Date(Date.now() + RENEWAL_TRIGGER_DAYS_BEFORE * 24 * 60 * 60 * 1000);
-    const candidates = await db
-      .select()
-      .from(agents)
-      .where(and(eq(agents.status, 'active'), lt(agents.expiresAt, cutoff)))
-      .limit(50);
+    const candidates = await agentsRepo.listExpiringBefore(cutoff, 50);
 
     logger.info('found renewal candidates', { count: candidates.length });
 
@@ -276,12 +269,14 @@ export async function POST(req: NextRequest) {
 
         // 3. Persist renewal record
         const totalCostString = (Number(totalRenewalCost) / 1_000_000).toFixed(2);
-        await db.insert(renewals).values({
+        await renewalsRepo.create({
           agentId: agent.id,
           scheduledFor: new Date(),
           amount: totalCostString,
           status: 'completed',
           txHash,
+          attemptCount: 1,
+          lastError: null,
           completedAt: new Date(),
         });
 
@@ -289,10 +284,7 @@ export async function POST(req: NextRequest) {
         const newExpiry = new Date(
           (agent.expiresAt?.getTime() ?? Date.now()) + 365 * 24 * 60 * 60 * 1000,
         );
-        await db
-          .update(agents)
-          .set({ expiresAt: newExpiry, updatedAt: new Date() })
-          .where(eq(agents.id, agent.id));
+        await agentsRepo.update(agent.id, { expiresAt: newExpiry, updatedAt: new Date() });
 
         logger.info('full renewal completed', {
           domain: agent.domain,
@@ -307,13 +299,15 @@ export async function POST(req: NextRequest) {
           agentId: agent.id,
           err: e instanceof Error ? e.message : String(e),
         });
-        await db.insert(renewals).values({
+        await renewalsRepo.create({
           agentId: agent.id,
           scheduledFor: new Date(),
           amount: (Number(totalRenewalCost) / 1_000_000).toFixed(2),
           status: 'failed',
           txHash: null,
+          attemptCount: 1,
           lastError: e instanceof Error ? e.message : String(e),
+          completedAt: null,
         });
       }
     }
