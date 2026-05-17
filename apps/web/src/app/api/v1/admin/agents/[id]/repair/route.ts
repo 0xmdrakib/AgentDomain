@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { withErrorHandling, parseBody, errorResponse } from '@/lib/api-helpers';
 import { requireAdmin } from '@/lib/auth';
-import { getDb } from '@/db';
-import { agents, emailInboxes, sslHostnames } from '@/db/schema';
+import { agentsRepo, emailRepo, sslRepo, type Agent } from '@/db';
 import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
@@ -36,8 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const parsed = await parseBody(req, repairSchema);
       if (parsed instanceof Response) return parsed;
 
-      const db = getDb();
-      const [agent] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
+      const agent = await agentsRepo.getById(id);
 
       if (!agent) return errorResponse(404, 'NOT_FOUND', 'Agent not found');
 
@@ -50,13 +47,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
       switch (parsed.action) {
         case 'dns':
-          return repairDns(db, agent);
+          return repairDns(agent);
         case 'email':
-          return repairEmail(db, agent);
+          return repairEmail(agent);
         case 'basename':
-          return repairBasename(db, agent);
+          return repairBasename(agent);
         case 'ens':
-          return repairEns(db, agent);
+          return repairEns(agent);
       }
     },
     { route: '/admin/agents/repair' },
@@ -64,8 +61,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 async function repairDns(
-  db: ReturnType<typeof getDb>,
-  agent: { id: string; domain: string; dnsTarget: string | null },
+  agent: Pick<Agent, 'id' | 'domain' | 'dnsTarget'>,
 ) {
   const { buildBaselineDnsRecords, getSpaceshipDns } = await import('@/services/dns');
   const { getCloudflareSaas } = await import('@/services/cloudflare-saas');
@@ -75,28 +71,15 @@ async function repairDns(
   let cfHostname;
   try {
     cfHostname = await getCloudflareSaas().createApexHostname(agent.domain);
-    await db
-      .insert(sslHostnames)
-      .values({
-        agentId: agent.id,
-        hostname: agent.domain,
-        cloudflareCustomHostnameId: cfHostname.id,
-        hostnameStatus: cfHostname.status,
-        sslStatus: cfHostname.sslStatus,
-        validationRecords: cfHostname.validationRecords,
-        validationErrors: cfHostname.validationErrors,
-      })
-      .onConflictDoUpdate({
-        target: [sslHostnames.agentId],
-        set: {
-          cloudflareCustomHostnameId: cfHostname.id,
-          hostnameStatus: cfHostname.status,
-          sslStatus: cfHostname.sslStatus,
-          validationRecords: cfHostname.validationRecords,
-          validationErrors: cfHostname.validationErrors,
-          updatedAt: new Date(),
-        },
-      });
+    await sslRepo.upsert(agent.id, {
+      agentId: agent.id,
+      hostname: agent.domain,
+      cloudflareCustomHostnameId: cfHostname.id,
+      hostnameStatus: cfHostname.status,
+      sslStatus: cfHostname.sslStatus,
+      validationRecords: cfHostname.validationRecords,
+      validationErrors: cfHostname.validationErrors,
+    });
   } catch (e) {
     log.warn('cloudflare saas repair failed', { domain: agent.domain, err: String(e) });
   }
@@ -118,28 +101,21 @@ async function repairDns(
 }
 
 async function repairEmail(
-  db: ReturnType<typeof getDb>,
-  agent: { id: string; domain: string; dnsTarget: string | null },
+  agent: Pick<Agent, 'id' | 'domain' | 'dnsTarget'>,
 ) {
   const { getSesEmail } = await import('@/services/ses');
   const { buildBaselineDnsRecords, getSpaceshipDns } = await import('@/services/dns');
   const setup = await getSesEmail().setupDomain(agent.domain);
 
-  await db
-    .insert(emailInboxes)
-    .values({
-      agentId: agent.id,
-      emailAddress: `agent@${agent.domain}`,
-      sesIdentityArn: setup.identityArn,
-      sesVerificationStatus: setup.verificationStatus,
-      dkimConfigured: false,
-      spfConfigured: false,
-      dmarcConfigured: false,
-    })
-    .onConflictDoUpdate({
-      target: [emailInboxes.agentId],
-      set: { sesIdentityArn: setup.identityArn, sesVerificationStatus: setup.verificationStatus },
-    });
+  await emailRepo.upsertInbox(agent.id, {
+    agentId: agent.id,
+    emailAddress: `agent@${agent.domain}`,
+    sesIdentityArn: setup.identityArn,
+    sesVerificationStatus: setup.verificationStatus,
+    dkimConfigured: false,
+    spfConfigured: false,
+    dmarcConfigured: false,
+  });
 
   const dns = getSpaceshipDns();
   await dns.ensureBasicDns(agent.domain);
@@ -158,8 +134,7 @@ async function repairEmail(
 }
 
 async function repairBasename(
-  _db: ReturnType<typeof getDb>,
-  agent: { id: string; domain: string; basename: string | null; walletAddress: string },
+  agent: Pick<Agent, 'id' | 'domain' | 'basename' | 'walletAddress'>,
 ) {
   if (!agent.basename) {
     return errorResponse(400, 'NO_BASENAME', 'Agent does not have a basename configured');
@@ -208,8 +183,7 @@ async function repairBasename(
 }
 
 async function repairEns(
-  _db: ReturnType<typeof getDb>,
-  agent: { id: string; domain: string; ensName: string | null; walletAddress: string },
+  agent: Pick<Agent, 'id' | 'domain' | 'ensName' | 'walletAddress'>,
 ) {
   if (!agent.ensName) {
     return errorResponse(400, 'NO_ENS', 'Agent does not have an ENS name configured');
