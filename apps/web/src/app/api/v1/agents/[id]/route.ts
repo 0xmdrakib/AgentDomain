@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { eq } from 'drizzle-orm';
 import { withErrorHandling, errorResponse } from '@/lib/api-helpers';
 import { requireAuthOrApiKey } from '@/lib/auth';
-import { getDb } from '@/db';
-import { agents } from '@/db/schema';
+import { agentsRepo } from '@/db';
 
 export const runtime = 'nodejs';
 
@@ -20,8 +18,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
       const { id } = await params;
 
-      const db = getDb();
-      const [agent] = await db.select().from(agents).where(eq(agents.id, id)).limit(1);
+      const agent = await agentsRepo.getById(id);
 
       if (!agent) return errorResponse(404, 'NOT_FOUND', 'Agent not found');
 
