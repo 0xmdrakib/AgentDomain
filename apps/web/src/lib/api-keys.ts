@@ -1,7 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { eq, and, isNull } from 'drizzle-orm';
-import { getDb } from '@/db';
-import { apiKeys, users } from '@/db/schema';
+import { apiKeysRepo, usersRepo } from '@/db';
 import { logger } from './logger';
 
 /**
@@ -56,18 +54,12 @@ export async function createApiKey(opts: {
   const fullKey = `${KEY_PREFIX}${prefix}_${secret}`;
   const keyHash = hashKey(secret);
 
-  const db = getDb();
-  const [row] = await db
-    .insert(apiKeys)
-    .values({
-      userId: opts.userId,
-      keyHash,
-      keyPrefix: prefix,
-      name: opts.name,
-    })
-    .returning();
-
-  if (!row) throw new Error('Failed to insert API key');
+  const row = await apiKeysRepo.create({
+    userId: opts.userId,
+    keyHash,
+    keyPrefix: prefix,
+    name: opts.name,
+  });
 
   log.info('api key created', { userId: opts.userId, prefix, name: opts.name });
 
@@ -83,32 +75,22 @@ export async function createApiKey(opts: {
  * List all API keys for a user (without secrets).
  */
 export async function listApiKeys(userId: string) {
-  const db = getDb();
-  return db
-    .select({
-      id: apiKeys.id,
-      name: apiKeys.name,
-      prefix: apiKeys.keyPrefix,
-      lastUsedAt: apiKeys.lastUsedAt,
-      revokedAt: apiKeys.revokedAt,
-      createdAt: apiKeys.createdAt,
-    })
-    .from(apiKeys)
-    .where(eq(apiKeys.userId, userId))
-    .orderBy(apiKeys.createdAt);
+  const rows = await apiKeysRepo.listForUser(userId);
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    prefix: row.keyPrefix,
+    lastUsedAt: row.lastUsedAt,
+    revokedAt: row.revokedAt,
+    createdAt: row.createdAt,
+  }));
 }
 
 /**
  * Revoke (soft-delete) an API key.
  */
 export async function revokeApiKey(keyId: string, userId: string): Promise<boolean> {
-  const db = getDb();
-  const result = await db
-    .update(apiKeys)
-    .set({ revokedAt: new Date() })
-    .where(and(eq(apiKeys.id, keyId), eq(apiKeys.userId, userId)))
-    .returning();
-  return result.length > 0;
+  return apiKeysRepo.revoke(keyId, userId);
 }
 
 /**
@@ -128,19 +110,19 @@ export async function verifyApiKey(rawKey: string): Promise<ApiKeyAuthResult | n
 
   let row;
   try {
-    const db = getDb();
-    [row] = await db
-      .select({
-        id: apiKeys.id,
-        userId: apiKeys.userId,
-        keyHash: apiKeys.keyHash,
-        revokedAt: apiKeys.revokedAt,
-        userWallet: users.walletAddress,
-      })
-      .from(apiKeys)
-      .leftJoin(users, eq(users.id, apiKeys.userId))
-      .where(and(eq(apiKeys.keyPrefix, prefix), isNull(apiKeys.revokedAt)))
-      .limit(1);
+    const keyRow = await apiKeysRepo.getByPrefix(prefix);
+    if (keyRow && !keyRow.revokedAt) {
+      const user = await usersRepo.getById(keyRow.userId);
+      if (user) {
+        row = {
+          id: keyRow.id,
+          userId: keyRow.userId,
+          keyHash: keyRow.keyHash,
+          revokedAt: keyRow.revokedAt,
+          userWallet: user.walletAddress,
+        };
+      }
+    }
   } catch (e) {
     log.warn('api key lookup failed', { err: String(e) });
     return null;
@@ -167,8 +149,7 @@ export async function verifyApiKey(rawKey: string): Promise<ApiKeyAuthResult | n
 }
 
 async function updateLastUsed(keyId: string) {
-  const db = getDb();
-  await db.update(apiKeys).set({ lastUsedAt: new Date() }).where(eq(apiKeys.id, keyId));
+  await apiKeysRepo.updateLastUsed(keyId);
 }
 
 function hashKey(secret: string): string {
@@ -180,17 +161,5 @@ function hashKey(secret: string): string {
  * for a never-seen-before wallet wants to create their first API key.
  */
 export async function findOrCreateUser(walletAddress: string): Promise<{ id: string }> {
-  const db = getDb();
-  const wallet = walletAddress.toLowerCase();
-
-  const [existing] = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.walletAddress, wallet))
-    .limit(1);
-  if (existing) return existing;
-
-  const [created] = await db.insert(users).values({ walletAddress: wallet }).returning({ id: users.id });
-  if (!created) throw new Error('Failed to create user');
-  return created;
+  return usersRepo.findOrCreate(walletAddress);
 }
