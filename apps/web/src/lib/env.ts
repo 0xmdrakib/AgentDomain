@@ -26,7 +26,18 @@ const optionalPrivateKey = z.preprocess(
 const serverSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 
+  DATABASE_PROVIDER: z.enum(['postgres', 'dynamodb']).default('dynamodb'),
   DATABASE_URL: optionalUrl,
+  MIGRATION_DATABASE_URL: optionalUrl,
+  DYNAMODB_TABLE_NAME: z.string().default('agentdomain-prod'),
+  DYNAMODB_GSI1_NAME: z.string().default('GSI1'),
+  DYNAMODB_CAPACITY_MODE: z.enum(['PROVISIONED', 'PAY_PER_REQUEST']).default('PROVISIONED'),
+  DYNAMODB_ENDPOINT: optionalUrl,
+  MAINTENANCE_MODE: z.enum(['true', 'false']).default('false'),
+  WRITE_FREEZE: z.enum(['true', 'false']).default('false'),
+  AWS_ACCESS_KEY_ID: optionalString,
+  AWS_SECRET_ACCESS_KEY: optionalString,
+  AWS_SESSION_TOKEN: optionalString,
   REDIS_URL: optionalUrl,
 
   BASE_RPC_URL: z.string().url().default('https://mainnet.base.org'),
