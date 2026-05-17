@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { eq, desc } from 'drizzle-orm';
 import { withErrorHandling, parseBody, errorResponse } from '@/lib/api-helpers';
 import { requireAdmin } from '@/lib/auth';
-import { getDb } from '@/db';
-import { agents } from '@/db/schema';
+import { agentsRepo } from '@/db';
 import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
@@ -37,22 +35,10 @@ export async function POST(req: NextRequest) {
       const auth = await requireAdmin();
       if (auth instanceof NextResponse) return auth;
 
-      if (!process.env.DATABASE_URL) {
-        return errorResponse(503, 'NO_DB', 'Database not configured');
-      }
-
       const parsed = await parseBody(req, manualCreateSchema);
       if (parsed instanceof Response) return parsed;
 
-      const db = getDb();
-
-      // Check domain uniqueness
-      const [existing] = await db
-        .select({ id: agents.id })
-        .from(agents)
-        .where(eq(agents.domain, parsed.domain.toLowerCase()))
-        .limit(1);
-
+      const existing = await agentsRepo.getByDomain(parsed.domain.toLowerCase());
       if (existing) {
         return errorResponse(409, 'DUPLICATE', `Domain ${parsed.domain} is already registered`);
       }
@@ -60,35 +46,29 @@ export async function POST(req: NextRequest) {
       // Resolve token ID: use provided or find next available
       let tokenId = parsed.agentIdNft;
       if (!tokenId) {
-        const rows = await db
-          .select({ max: agents.agentIdNft })
-          .from(agents)
-          .orderBy(desc(agents.agentIdNft))
-          .limit(1);
-        tokenId = Math.max((rows[0]?.max ?? 0) + 1, 1);
+        tokenId = (await agentsRepo.maxTokenId()) + 1;
       }
 
       const now = new Date();
       const expiresAt = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
 
-      const [agent] = await db
-        .insert(agents)
-        .values({
-          walletAddress: parsed.walletAddress.toLowerCase(),
-          ownerAddress: parsed.walletAddress.toLowerCase(),
-          agentIdNft: tokenId,
-          domain: parsed.domain.toLowerCase(),
-          basename: parsed.basename?.toLowerCase() ?? null,
-          ensName: parsed.ensName?.toLowerCase() ?? null,
-          status: parsed.status,
-          sslStatus: parsed.sslStatus,
-          framework: parsed.framework ?? null,
-          dnsTarget: parsed.dnsTarget ?? null,
-          createdAt: now,
-          updatedAt: now,
-          expiresAt,
-        })
-        .returning();
+      const agent = await agentsRepo.create({
+        walletAddress: parsed.walletAddress.toLowerCase(),
+        ownerAddress: parsed.walletAddress.toLowerCase(),
+        agentIdNft: tokenId,
+        domain: parsed.domain.toLowerCase(),
+        basename: parsed.basename?.toLowerCase() ?? null,
+        ensName: parsed.ensName?.toLowerCase() ?? null,
+        status: parsed.status ?? 'active',
+        sslStatus: parsed.sslStatus ?? 'pending',
+        framework: parsed.framework ?? null,
+        dnsTarget: parsed.dnsTarget ?? null,
+        createdAt: now,
+        updatedAt: now,
+        expiresAt,
+        metadataUri: null,
+        metadataJson: null,
+      });
 
       log.info('agent manually created', {
         agentId: agent!.id,
