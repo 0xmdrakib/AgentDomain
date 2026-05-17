@@ -12,6 +12,7 @@ import {
 } from '@agentdomain/shared';
 import { withErrorHandling, parseQuery } from '@/lib/api-helpers';
 import { logger } from '@/lib/logger';
+import { agentsRepo } from '@/db';
 
 const log = logger.child({ route: '/domains/availability' });
 
@@ -141,33 +142,27 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      // 6. DB check (skip gracefully if DB not configured)
-      if (process.env.DATABASE_URL) {
-        try {
-          const { getDb } = await import('@/db/index');
-          const { agents } = await import('@/db/schema');
-          const { eq } = await import('drizzle-orm');
-          const db = getDb();
-          const existing = await db.select().from(agents).where(eq(agents.domain, domain)).limit(1);
-          if (existing.length > 0) {
-            return Response.json({
-              domain,
-              available: false,
-              reason: 'taken',
-              basename,
-              basenameAvailable,
-              basenameReason,
-              basenameCostUsdc,
-              ensName,
-              ensAvailable,
-              ensReason,
-              ensCostUsdc,
-              alternatives,
-            });
-          }
-        } catch (e) {
-          log.warn('db check failed (non-fatal)', { err: String(e), domain });
+      // 6. DynamoDB check (skip gracefully if storage is temporarily unavailable)
+      try {
+        const existing = await agentsRepo.getByDomain(domain);
+        if (existing) {
+          return Response.json({
+            domain,
+            available: false,
+            reason: 'taken',
+            basename,
+            basenameAvailable,
+            basenameReason,
+            basenameCostUsdc,
+            ensName,
+            ensAvailable,
+            ensReason,
+            ensCostUsdc,
+            alternatives,
+          });
         }
+      } catch (e) {
+        log.warn('db check failed (non-fatal)', { err: String(e), domain });
       }
 
       const priceUsd = domainPriceUsd(selectedResult.priceUsd, parsed.tld);
@@ -211,19 +206,11 @@ async function getDomainAlternatives(
   if (alternativeDomains.length === 0) return [];
 
   let taken = new Set<string>();
-  if (process.env.DATABASE_URL) {
-    try {
-      const { getDb } = await import('@/db/index');
-      const { agents } = await import('@/db/schema');
-      const { inArray } = await import('drizzle-orm');
-      const rows = await getDb()
-        .select({ domain: agents.domain })
-        .from(agents)
-        .where(inArray(agents.domain, alternativeDomains));
-      taken = new Set(rows.map((row) => row.domain.toLowerCase()));
-    } catch (e) {
-      log.warn('alternative DB check failed (non-fatal)', { err: String(e) });
-    }
+  try {
+    const rows = await agentsRepo.getManyByDomains(alternativeDomains);
+    taken = new Set(rows.map((row) => row.domain.toLowerCase()));
+  } catch (e) {
+    log.warn('alternative DB check failed (non-fatal)', { err: String(e) });
   }
 
   try {
