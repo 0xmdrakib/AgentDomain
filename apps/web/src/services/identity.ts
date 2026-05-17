@@ -1,4 +1,3 @@
-import { eq } from 'drizzle-orm';
 import { keccak256, toHex, type Address, type Hex } from 'viem';
 import {
   buildDomain,
@@ -15,8 +14,7 @@ import {
   type PricingBreakdown,
   type SupportedTld,
 } from '@agentdomain/shared';
-import { getDb } from '@/db/index';
-import { agents, registrations, emailInboxes, sslHostnames } from '@/db/schema';
+import { agentsRepo, emailRepo, registrationsRepo, sslRepo } from '@/db';
 import { getSpaceship, getOrCreatePlatformContact } from './spaceship';
 import { buildBaselineDnsRecords, getSpaceshipDns, type ManagedDnsRecord } from './dns';
 import { getCloudflareSaas } from './cloudflare-saas';
@@ -170,9 +168,8 @@ export class IdentityService {
 
     // 1. Local DB check — already registered with us?
     try {
-      const db = getDb();
-      const existing = await db.select().from(agents).where(eq(agents.domain, domain)).limit(1);
-      if (existing.length > 0) {
+      const existing = await agentsRepo.getByDomain(domain);
+      if (existing) {
         throw new ValidationError('DOMAIN_TAKEN', `${domain} is already registered`);
       }
     } catch (e) {
@@ -235,7 +232,6 @@ export class IdentityService {
    * to safely retry without double-processing.
    */
   async register(params: RegistrationParams, idempotencyKey: string): Promise<RegistrationResult> {
-    const db = getDb();
     const tld = (params.tld ?? 'xyz') as SupportedTld;
     const basenameLabel = params.basenameLabel ?? params.preferredName;
     const ensLabel = params.ensLabel ?? params.preferredName;
@@ -262,24 +258,22 @@ export class IdentityService {
     const totalAtomic = parseUsdc(pricing.totalUsdc);
 
     // Insert pending registration row (idempotency-safe via unique key)
-    const [reg] = await db
-      .insert(registrations)
-      .values({
-        idempotencyKey,
-        payerAddress: params.wallet,
-        paymentAmount: pricing.totalUsdc,
-        domainCost: pricing.domainCostUsdc,
-        basenameCost: pricing.basenameCostUsdc,
-        ensCost: pricing.ensCostUsdc,
-        serviceFee: pricing.serviceFeeUsdc,
-        status: 'pending',
-        requestParams: params as unknown as Record<string, unknown>,
-      })
-      .onConflictDoUpdate({
-        target: registrations.idempotencyKey,
-        set: { status: 'pending' },
-      })
-      .returning();
+    const reg = await registrationsRepo.upsertPending({
+      agentId: null,
+      idempotencyKey,
+      txHash: null,
+      payerAddress: params.wallet,
+      paymentAmount: pricing.totalUsdc,
+      domainCost: pricing.domainCostUsdc,
+      basenameCost: pricing.basenameCostUsdc,
+      ensCost: pricing.ensCostUsdc,
+      serviceFee: pricing.serviceFeeUsdc,
+      status: 'pending',
+      registrarOrderId: null,
+      errorMessage: null,
+      requestParams: params as unknown as Record<string, unknown>,
+      completedAt: null,
+    });
 
     if (!reg) throw new Error('Failed to create registration record');
 
@@ -426,24 +420,21 @@ export class IdentityService {
       const tokenId = mintResult.tokenId;
 
       // ─── Step 10: Persist agent row ───────────────────────────────────
-      const [agent] = await db
-        .insert(agents)
-        .values({
-          walletAddress: params.wallet,
-          ownerAddress: ownerAddress,
-          agentIdNft: Number(tokenId),
-          domain,
-          basename,
-          ensName,
-          status: 'active',
-          metadataUri: pinned.ipfsUri,
-          metadataJson: metadataDoc as unknown as Record<string, unknown>,
-          dnsTarget: params.dnsTarget ?? null,
-          framework: params.metadata?.framework ?? null,
-          sslStatus: 'provisioning',
-          expiresAt: new Date(Date.now() + years * 365 * 24 * 60 * 60 * 1000),
-        })
-        .returning();
+      const agent = await agentsRepo.create({
+        walletAddress: params.wallet,
+        ownerAddress: ownerAddress,
+        agentIdNft: Number(tokenId),
+        domain,
+        basename,
+        ensName,
+        status: 'active',
+        metadataUri: pinned.ipfsUri,
+        metadataJson: metadataDoc as unknown as Record<string, unknown>,
+        dnsTarget: params.dnsTarget ?? null,
+        framework: params.metadata?.framework ?? null,
+        sslStatus: 'provisioning',
+        expiresAt: new Date(Date.now() + years * 365 * 24 * 60 * 60 * 1000),
+      });
 
       // ─── Step 11: Persist DNS records + email inbox ───────────────────
       if (agent) {
@@ -453,7 +444,7 @@ export class IdentityService {
         );
 
         if (cfHostname) {
-          await db.insert(sslHostnames).values({
+          await sslRepo.upsert(agent.id, {
             agentId: agent.id,
             hostname: domain,
             cloudflareCustomHostnameId: cfHostname.id,
@@ -465,7 +456,7 @@ export class IdentityService {
         }
 
         if (params.emailEnabled && sesIdentityArn) {
-          await db.insert(emailInboxes).values({
+          await emailRepo.upsertInbox(agent.id, {
             agentId: agent.id,
             emailAddress: `agent@${domain}`,
             sesIdentityArn,
@@ -475,10 +466,11 @@ export class IdentityService {
       }
 
       // ─── Step 12: Mark registration completed ─────────────────────────
-      await db
-        .update(registrations)
-        .set({ status: 'completed', agentId: agent?.id ?? null, completedAt: new Date() })
-        .where(eq(registrations.id, reg.id));
+      await registrationsRepo.update(reg.id, {
+        status: 'completed',
+        agentId: agent?.id ?? null,
+        completedAt: new Date(),
+      });
 
       log.info('registration completed', { domain, tokenId: tokenId.toString() });
       recordMetric('registration_completed', {
@@ -505,13 +497,10 @@ export class IdentityService {
         registrationId: reg.id,
         reason: err instanceof Error ? err.message : String(err),
       });
-      await db
-        .update(registrations)
-        .set({
-          status: 'failed',
-          errorMessage: err instanceof Error ? err.message : String(err),
-        })
-        .where(eq(registrations.id, reg.id));
+      await registrationsRepo.update(reg.id, {
+        status: 'failed',
+        errorMessage: err instanceof Error ? err.message : String(err),
+      });
       throw err;
     }
   }
