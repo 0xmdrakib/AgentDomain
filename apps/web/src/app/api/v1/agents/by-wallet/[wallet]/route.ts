@@ -1,9 +1,7 @@
 import { NextRequest } from 'next/server';
-import { eq } from 'drizzle-orm';
 import { withErrorHandling, errorResponse } from '@/lib/api-helpers';
 import { addressSchema } from '@agentdomain/shared';
-import { getDb } from '@/db';
-import { agents } from '@/db/schema';
+import { agentsRepo } from '@/db';
 
 export const runtime = 'nodejs';
 
@@ -24,12 +22,9 @@ export async function GET(
       return errorResponse(400, 'INVALID_ADDRESS', 'Wallet must be a valid 0x address');
     }
 
-    const db = getDb();
-    const rows = await db
-      .select()
-      .from(agents)
-      .where(eq(agents.ownerAddress, parsed.data.toLowerCase()))
-      .orderBy(agents.createdAt);
+    const rows = (await agentsRepo.listByWallet(parsed.data.toLowerCase())).filter(
+      (agent) => agent.ownerAddress.toLowerCase() === parsed.data.toLowerCase(),
+    );
 
     // Return array (wallet can own multiple agents)
     return Response.json(rows);
