@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, count, eq, ilike, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { withErrorHandling, parseQuery, errorResponse } from '@/lib/api-helpers';
 import { requireAdmin } from '@/lib/auth';
-import { getDb } from '@/db';
-import { agents } from '@/db/schema';
+import { agentsRepo } from '@/db';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -25,62 +23,33 @@ export async function GET(req: NextRequest) {
     const auth = await requireAdmin();
     if (auth instanceof NextResponse) return auth;
 
-    if (!process.env.DATABASE_URL) {
-      return errorResponse(503, 'NO_DB', 'Database not configured');
-    }
-
     const parsed = parseQuery(req, adminAgentsQuerySchema);
     if (parsed instanceof Response) return parsed;
 
-    const conditions = [];
-    if (parsed.status) {
-      conditions.push(eq(agents.status, parsed.status));
-    }
-    if (parsed.q) {
-      const q = `%${parsed.q.trim()}%`;
-      conditions.push(
-        or(
-          ilike(agents.domain, q),
-          ilike(agents.basename, q),
-          ilike(agents.ensName, q),
-          ilike(agents.walletAddress, q),
-          sql`${agents.agentIdNft}::text ILIKE ${q}`,
-        )!,
-      );
-    }
-
-    const where = conditions.length > 0 ? and(...conditions) : undefined;
-    const db = getDb();
-
-    const [items, totalRows] = await Promise.all([
-      db
-        .select({
-          id: agents.id,
-          walletAddress: agents.walletAddress,
-          agentIdNft: agents.agentIdNft,
-          domain: agents.domain,
-          basename: agents.basename,
-          ensName: agents.ensName,
-          status: agents.status,
-          sslStatus: agents.sslStatus,
-          framework: agents.framework,
-          createdAt: agents.createdAt,
-          updatedAt: agents.updatedAt,
-          expiresAt: agents.expiresAt,
-        })
-        .from(agents)
-        .where(where)
-        .limit(parsed.limit)
-        .offset(parsed.offset)
-        .orderBy(sql`${agents.createdAt} desc`),
-      db.select({ count: count() }).from(agents).where(where),
-    ]);
-
-    const total = Number(totalRows[0]?.count ?? 0);
+    const result = await agentsRepo.list({
+      q: parsed.q,
+      status: parsed.status,
+      limit: parsed.limit,
+      offset: parsed.offset,
+    });
+    const items = result.items.map((agent) => ({
+      id: agent.id,
+      walletAddress: agent.walletAddress,
+      agentIdNft: agent.agentIdNft,
+      domain: agent.domain,
+      basename: agent.basename,
+      ensName: agent.ensName,
+      status: agent.status,
+      sslStatus: agent.sslStatus,
+      framework: agent.framework,
+      createdAt: agent.createdAt,
+      updatedAt: agent.updatedAt,
+      expiresAt: agent.expiresAt,
+    }));
     return NextResponse.json({
       items,
-      total,
-      hasMore: parsed.offset + items.length < total,
+      total: result.total,
+      hasMore: result.hasMore,
       limit: parsed.limit,
       offset: parsed.offset,
       generatedAt: new Date().toISOString(),
