@@ -63,6 +63,7 @@ interface QuoteResult {
   basenameCostUsdc: string;
   ensCostUsdc: string;
   serviceFeeUsdc: string;
+  emailFeeUsdc: string;
   totalUsdc: string;
   discountApplied?: boolean;
   discountPercent?: number;
@@ -157,6 +158,7 @@ export function RegisterFlow() {
       basenameLabel: registerBasename ? (basenameLabel || searchedName) : searchedName,
       registerEns: String(registerEns),
       ensLabel: registerEns ? (ensLabel || searchedName) : searchedName,
+      emailEnabled: String(emailEnabled),
       years: String(years),
     });
     if (discountCode) query.set('discountCode', discountCode);
@@ -175,6 +177,7 @@ export function RegisterFlow() {
     tld,
     registerBasename,
     registerEns,
+    emailEnabled,
     basenameLabel,
     ensLabel,
     years,
@@ -602,6 +605,7 @@ export function RegisterFlow() {
               />
               {registerBasename && <Line label="Basename" value={`$${quote.basenameCostUsdc}`} />}
               {registerEns && <Line label="ENS" value={`$${quote.ensCostUsdc}`} />}
+              {emailEnabled && <Line label="Email inbox" value={`$${quote.emailFeeUsdc}`} />}
               <Line label="Service fee" value={`$${quote.serviceFeeUsdc}`} />
               <div className="border-t border-border/40 pt-3 mt-3">
                 <Line
@@ -628,7 +632,7 @@ export function RegisterFlow() {
                     </button>
                   </div>
                   <div className="text-muted-foreground">
-                    Service fee: <span className="line-through">$2.00</span> →{' '}
+                    Service fee after discount:{' '}
                     <span className="text-emerald-300">${quote.serviceFeeUsdc}</span>
                   </div>
                 </div>
