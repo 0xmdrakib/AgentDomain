@@ -56,9 +56,17 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: 'rlig' 1, 'calt' 1, 'ss01' 1;
+    overflow-x: clip;
   }
   html {
     scroll-behavior: smooth;
+    overflow-x: clip;
+  }
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
   }
 }
 
@@ -83,5 +91,30 @@
     box-shadow:
       0 0 0 1px rgba(59, 130, 246, 0.1),
       0 0 30px rgba(59, 130, 246, 0.2);
+  }
+  .safe-x {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .mobile-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .wrap-anywhere {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  .touch-target {
+    min-height: 44px;
+  }
+  .table-mobile-stack {
+    display: grid;
+    gap: 0.75rem;
   }
 }
