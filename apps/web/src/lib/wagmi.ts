@@ -5,10 +5,10 @@ import { coinbaseWallet, injected, walletConnect } from 'wagmi/connectors';
 const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? '';
 
 type InjectedProvider = {
-  isBackpack?: true;
-  isBraveWallet?: true;
   isMetaMask?: true;
   isRabby?: true;
+  isCoinbaseWallet?: true;
+  isBaseWallet?: true;
   providers?: InjectedProvider[];
 };
 
@@ -32,7 +32,7 @@ export function getWagmiConfig() {
         appName: 'AgentDomain',
         preference: 'all',
       }),
-      // Injected: MetaMask, Rabby, Backpack, etc.
+      // Injected: MetaMask, Rabby, Base App, etc.
       injected({ shimDisconnect: true }),
       injected({
         shimDisconnect: true,
@@ -45,8 +45,8 @@ export function getWagmiConfig() {
               (provider) =>
                 Boolean(provider.isMetaMask) &&
                 !provider.isRabby &&
-                !provider.isBraveWallet &&
-                !provider.isBackpack,
+                !provider.isCoinbaseWallet &&
+                !provider.isBaseWallet,
             ),
         },
       }),
@@ -61,18 +61,13 @@ export function getWagmiConfig() {
       injected({
         shimDisconnect: true,
         target: {
-          id: 'brave',
-          name: 'Brave Wallet',
+          id: 'baseApp',
+          name: 'Base App',
           provider: (window) =>
-            getInjectedProvider(window, (provider) => Boolean(provider.isBraveWallet)),
-        },
-      }),
-      injected({
-        shimDisconnect: true,
-        target: {
-          id: 'backpack',
-          name: 'Backpack',
-          provider: (window) => getInjectedProvider(window, (provider) => Boolean(provider.isBackpack)),
+            getInjectedProvider(
+              window,
+              (provider) => Boolean(provider.isCoinbaseWallet || provider.isBaseWallet),
+            ),
         },
       }),
       // WalletConnect: 300+ mobile wallets
