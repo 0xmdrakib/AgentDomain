@@ -73,14 +73,14 @@ export function DashboardClient() {
   }).length;
 
   return (
-    <section className="container py-12">
-      <div className="flex items-end justify-between mb-10 flex-wrap gap-4">
+    <section className="container py-10 sm:py-12">
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground mt-1">Manage your agent fleet.</p>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Dashboard</h1>
+          <p className="mt-1 text-muted-foreground">Manage your agent fleet.</p>
         </div>
-        <Link href="/register">
-          <Button variant="gradient">
+        <Link href="/register" className="w-full sm:w-auto">
+          <Button variant="gradient" className="w-full sm:w-auto">
             <Plus className="h-4 w-4" />
             Register agent
           </Button>
@@ -88,7 +88,7 @@ export function DashboardClient() {
       </div>
 
       {/* Stats grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-10">
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label="Total agents" value={String(agents.length)} loading={loading} />
         <Stat
           label="Active identities"
@@ -106,13 +106,13 @@ export function DashboardClient() {
       {/* Wallet not connected */}
       {!isConnected ? (
         <Card>
-          <CardContent className="py-16 text-center">
+          <CardContent className="py-12 text-center sm:py-16">
             <Wallet className="h-10 w-10 text-muted-foreground mx-auto mb-4" />
             <h2 className="font-semibold mb-2">Connect your wallet</h2>
             <p className="text-sm text-muted-foreground mb-6">
               See your agents and manage renewals.
             </p>
-            <ConnectWalletButton variant="gradient" />
+            <ConnectWalletButton variant="gradient" className="w-full sm:w-auto" />
           </CardContent>
         </Card>
       ) : (
@@ -142,8 +142,8 @@ export function DashboardClient() {
               <div className="divide-y divide-border/40">
                 {agents.map((agent) => (
                   <Link key={agent.id} href={`/agents/${agent.id}`}>
-                    <div className="flex items-center justify-between gap-4 py-4 hover:bg-accent/30 -mx-6 px-6 transition-colors">
-                      <div className="flex items-center gap-4 min-w-0">
+                    <div className="flex flex-col gap-3 py-4 transition-colors hover:bg-accent/30 sm:-mx-6 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                      <div className="flex min-w-0 items-center gap-4">
                         <div
                           className="h-10 w-10 rounded-full flex-shrink-0"
                           style={avatarGradient(agent.domain)}
@@ -151,17 +151,20 @@ export function DashboardClient() {
                         <div className="min-w-0">
                           <div className="font-semibold truncate">{agent.domain}</div>
                           {agent.basename && (
-                            <div className="text-xs font-mono text-muted-foreground truncate">
+                            <div className="wrap-anywhere text-xs font-mono text-muted-foreground">
                               {agent.basename}
                             </div>
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="flex flex-wrap items-center gap-2 sm:flex-shrink-0 sm:justify-end">
                         <Badge variant={agent.status === 'active' ? 'success' : 'secondary'}>
                           {agent.status}
                         </Badge>
-                        <span className="text-xs text-muted-foreground hidden md:inline">
+                        <span className="text-xs text-muted-foreground sm:hidden">
+                          {formatDate(agent.createdAt)}
+                        </span>
+                        <span className="hidden text-xs text-muted-foreground md:inline">
                           {formatDate(agent.createdAt)}
                         </span>
                       </div>
@@ -175,7 +178,7 @@ export function DashboardClient() {
       )}
 
       {/* Quick links */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-10">
+      <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <ResourceCard
           title="API Documentation"
           desc="Integrate AgentDomain into your agent."
@@ -199,7 +202,7 @@ export function DashboardClient() {
 function Stat({ label, value, loading }: { label: string; value: string; loading?: boolean }) {
   return (
     <Card className="border-border/40">
-      <CardContent className="p-6">
+      <CardContent className="p-4 sm:p-6">
         <div className="text-sm text-muted-foreground">{label}</div>
         <div className="text-3xl font-bold mt-2 tabular-nums">
           {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : value}
@@ -213,7 +216,7 @@ function ResourceCard({ title, desc, href }: { title: string; desc: string; href
   return (
     <Link href={href}>
       <Card className="h-full border-border/40 transition-all hover:border-primary/50">
-        <CardContent className="p-6">
+        <CardContent className="p-4 sm:p-6">
           <div className="flex items-start justify-between">
             <div>
               <h3 className="font-semibold">{title}</h3>
