@@ -33,31 +33,31 @@ const steps = [
 
 export function HowItWorks() {
   return (
-    <section id="how-it-works" className="py-24 border-t border-border/40">
+    <section id="how-it-works" className="border-t border-border/40 py-16 sm:py-24">
       <div className="container">
-        <div className="text-center max-w-2xl mx-auto mb-16">
-          <h2 className="text-balance text-4xl md:text-5xl font-bold tracking-tight">
+        <div className="mx-auto mb-12 max-w-2xl text-center sm:mb-16">
+          <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
             From request to identity in <span className="gradient-text">one flow</span>
           </h2>
-          <p className="mt-4 text-muted-foreground">
+          <p className="mt-4 text-sm text-muted-foreground sm:text-base">
             One API call, zero human intervention, full identity stack.
           </p>
         </div>
 
-        <ol className="relative max-w-3xl mx-auto space-y-6">
+        <ol className="relative mx-auto max-w-3xl space-y-6">
           {steps.map((step, i) => (
-            <li key={step.n} className="relative flex gap-6 group">
+            <li key={step.n} className="group relative flex gap-4 sm:gap-6">
               {i < steps.length - 1 && (
-                <div className="absolute left-8 top-16 h-full w-px bg-gradient-to-b from-border to-transparent" />
+                <div className="absolute left-7 top-14 h-full w-px bg-gradient-to-b from-border to-transparent sm:left-8 sm:top-16" />
               )}
               <div className="flex-shrink-0">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full border border-border/60 bg-card font-mono text-sm transition-all group-hover:border-primary group-hover:bg-primary/10 group-hover:text-primary">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border/60 bg-card font-mono text-xs transition-all group-hover:border-primary group-hover:bg-primary/10 group-hover:text-primary sm:h-16 sm:w-16 sm:text-sm">
                   {step.n}
                 </div>
               </div>
-              <div className="pb-6 flex-1">
-                <h3 className="text-lg font-semibold">{step.title}</h3>
-                <p className="mt-1 text-muted-foreground">{step.desc}</p>
+              <div className="flex-1 pb-6">
+                <h3 className="text-base font-semibold sm:text-lg">{step.title}</h3>
+                <p className="mt-1 text-sm text-muted-foreground sm:text-base">{step.desc}</p>
                 <code className="mt-2 inline-block px-2 py-0.5 rounded text-xs font-mono bg-muted text-muted-foreground">
                   {step.detail}
                 </code>
