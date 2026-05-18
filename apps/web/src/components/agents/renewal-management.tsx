@@ -141,8 +141,8 @@ export function RenewalManagement({ tokenId }: RenewalManagementProps) {
 
   return (
     <Card className="mb-6 border-border/50 bg-accent/10">
-      <CardHeader>
-        <div className="flex items-center gap-2">
+      <CardHeader className="p-4 sm:p-6">
+        <div className="flex items-start gap-2">
           <ShieldCheck className="h-5 w-5 text-primary" />
           <CardTitle>Autonomous Renewals (RenewalVault)</CardTitle>
         </div>
@@ -150,20 +150,20 @@ export function RenewalManagement({ tokenId }: RenewalManagementProps) {
           Fund your domain's individual vault to allow our keeper bots to automatically renew your identity before it expires.
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8">
           
           {/* Status Column */}
           <div className="space-y-6">
             <div>
               <div className="text-sm text-muted-foreground mb-1">Vault Balance</div>
-              <div className="text-3xl font-bold flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 text-2xl font-bold sm:text-3xl">
                 <Coins className="h-6 w-6 text-muted-foreground" />
                 ${Number(balanceFormatted).toFixed(2)} <span className="text-sm font-normal text-muted-foreground">USDC</span>
               </div>
             </div>
 
-            <div className="flex items-center space-x-2 bg-background p-4 rounded-lg border border-border/50">
+            <div className="flex items-start gap-3 rounded-lg border border-border/50 bg-background p-4">
               <Switch 
                 id="auto-renew" 
                 checked={isAutoRenewEnabled || false} 
@@ -178,11 +178,11 @@ export function RenewalManagement({ tokenId }: RenewalManagementProps) {
           </div>
 
           {/* Action Column */}
-          <div className="space-y-6 border-l border-border/40 pl-0 md:pl-8">
+          <div className="space-y-6 border-border/40 md:border-l md:pl-8">
             
             <div className="space-y-3">
               <div className="text-sm font-medium">Deposit Funds</div>
-              <div className="flex items-center gap-2">
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
                 <Input 
                   type="number" 
                   placeholder="0.00" 
@@ -190,7 +190,7 @@ export function RenewalManagement({ tokenId }: RenewalManagementProps) {
                   onChange={(e) => setDepositAmount(e.target.value)}
                   className="bg-background"
                 />
-                <Button onClick={handleDeposit} disabled={isPending || !depositAmount} variant="secondary">
+                <Button onClick={handleDeposit} disabled={isPending || !depositAmount} variant="secondary" className="w-full sm:w-auto">
                   {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
                   Deposit
                 </Button>
@@ -199,7 +199,7 @@ export function RenewalManagement({ tokenId }: RenewalManagementProps) {
 
             <div className="space-y-3">
               <div className="text-sm font-medium text-muted-foreground">Withdraw Funds</div>
-              <div className="flex items-center gap-2">
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
                 <Input 
                   type="number" 
                   placeholder="0.00" 
@@ -207,7 +207,7 @@ export function RenewalManagement({ tokenId }: RenewalManagementProps) {
                   onChange={(e) => setWithdrawAmount(e.target.value)}
                   className="bg-background"
                 />
-                <Button onClick={handleWithdraw} disabled={isPending || !withdrawAmount || Number(balanceFormatted) === 0} variant="outline">
+                <Button onClick={handleWithdraw} disabled={isPending || !withdrawAmount || Number(balanceFormatted) === 0} variant="outline" className="w-full sm:w-auto">
                   Withdraw
                 </Button>
               </div>
