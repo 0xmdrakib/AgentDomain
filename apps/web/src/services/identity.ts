@@ -7,6 +7,7 @@ import {
   parseUsdc,
   isReservedName,
   SERVICE_FEE_USDC_ATOMIC,
+  EMAIL_FEE_USDC_ATOMIC,
   MIN_REGISTRATION_DURATION_SECONDS,
   type RegistrationParams,
   type RegistrationResult,
@@ -67,6 +68,7 @@ export class IdentityService {
     tld: string;
     registerBasename: boolean;
     registerEns: boolean;
+    emailEnabled?: boolean;
     preferredName?: string;
     basenameLabel?: string;
     ensLabel?: string;
@@ -105,7 +107,10 @@ export class IdentityService {
       tld: opts.tld,
       registerBasename: opts.registerBasename,
       registerEns: opts.registerEns,
+      emailEnabled: opts.emailEnabled,
+      years,
       serviceFee: SERVICE_FEE_USDC_ATOMIC,
+      emailFee: EMAIL_FEE_USDC_ATOMIC,
       domainMarkup: 0n,
       domainCost,
       basenameFee: 0n,
@@ -117,6 +122,8 @@ export class IdentityService {
       domainCostAtomic: cost.domainCost,
       basenameCostAtomic: cost.basenameCost,
       ensCostAtomic: cost.ensCost,
+      serviceFeeAtomic: cost.serviceFee,
+      emailFeeAtomic: cost.emailFee,
       registerBasename: opts.registerBasename,
       registerEns: opts.registerEns,
     });
@@ -127,6 +134,7 @@ export class IdentityService {
       basenameCostUsdc: this._formatUsdc(cost.basenameCost),
       ensCostUsdc: this._formatUsdc(cost.ensCost),
       serviceFeeUsdc: this._formatUsdc(cost.serviceFee),
+      emailFeeUsdc: this._formatUsdc(cost.emailFee),
       providerCostUsdc: this._formatUsdc(providerCost),
       treasuryFeeUsdc: this._formatUsdc(treasuryFee),
       totalUsdc: this._formatUsdc(cost.total),
@@ -137,6 +145,8 @@ export class IdentityService {
     domainCostAtomic: bigint;
     basenameCostAtomic?: bigint;
     ensCostAtomic?: bigint;
+    serviceFeeAtomic?: bigint;
+    emailFeeAtomic?: bigint;
     registerBasename?: boolean;
     registerEns?: boolean;
   }): bigint {
@@ -144,7 +154,7 @@ export class IdentityService {
     void opts.ensCostAtomic;
     void opts.registerBasename;
     void opts.registerEns;
-    return opts.domainCostAtomic + SERVICE_FEE_USDC_ATOMIC;
+    return opts.domainCostAtomic + (opts.serviceFeeAtomic ?? SERVICE_FEE_USDC_ATOMIC) + (opts.emailFeeAtomic ?? 0n);
   }
 
   /**
@@ -235,7 +245,7 @@ export class IdentityService {
   async register(
     params: RegistrationParams,
     idempotencyKey: string,
-    opts: { paymentTxHash?: string | null } = {},
+    opts: { paymentTxHash?: string | null; paymentAmountUsdc?: string } = {},
   ): Promise<RegistrationResult> {
     const tld = (params.tld ?? 'xyz') as SupportedTld;
     const basenameLabel = params.basenameLabel ?? params.preferredName;
@@ -254,13 +264,14 @@ export class IdentityService {
       tld,
       registerBasename: !!params.registerBasename,
       registerEns: !!params.registerEns,
+      emailEnabled: !!params.emailEnabled,
       preferredName: params.preferredName,
       basenameLabel,
       ensLabel,
       years,
     });
 
-    const totalAtomic = parseUsdc(pricing.totalUsdc);
+    const totalAtomic = parseUsdc(opts.paymentAmountUsdc ?? pricing.totalUsdc);
 
     // Insert pending registration row (idempotency-safe via unique key)
     const reg = await registrationsRepo.upsertPending({
@@ -269,7 +280,7 @@ export class IdentityService {
       paymentTxHash: opts.paymentTxHash ?? null,
       txHash: null,
       payerAddress: params.wallet,
-      paymentAmount: pricing.totalUsdc,
+      paymentAmount: opts.paymentAmountUsdc ?? pricing.totalUsdc,
       domainCost: pricing.domainCostUsdc,
       basenameCost: pricing.basenameCostUsdc,
       ensCost: pricing.ensCostUsdc,
