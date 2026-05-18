@@ -73,7 +73,10 @@ export interface ComputeRegistrationCostOptions {
   tld: string;
   registerBasename: boolean;
   registerEns: boolean;
+  emailEnabled?: boolean;
+  years?: number;
   serviceFee: bigint;
+  emailFee?: bigint;
   domainMarkup: bigint;
   domainCost: bigint;
   basenameFee: bigint;
@@ -87,16 +90,22 @@ export interface ComputeRegistrationCostResult {
   basenameCost: bigint;
   ensCost: bigint;
   serviceFee: bigint;
+  emailFee: bigint;
   total: bigint;
 }
 
 export function computeRegistrationCost(opts: ComputeRegistrationCostOptions): ComputeRegistrationCostResult {
-  let total = opts.domainCost + opts.domainMarkup + opts.serviceFee;
+  const years = Math.max(1, opts.years ?? 1);
+  const yearlyServiceFee = opts.serviceFee;
+  const serviceFee = yearlyServiceFee * BigInt(years);
+  const emailFee = opts.emailEnabled ? (opts.emailFee ?? 0n) * BigInt(years) : 0n;
+  let total = opts.domainCost + opts.domainMarkup + serviceFee + emailFee;
   const result: ComputeRegistrationCostResult = {
     domainCost: opts.domainCost,
     basenameCost: 0n,
     ensCost: 0n,
-    serviceFee: opts.serviceFee,
+    serviceFee,
+    emailFee,
     total: 0n,
   };
   if (opts.registerBasename) {
