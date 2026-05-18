@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { keccak256, toHex } from 'viem';
-import { registrationParamsSchema, parseUsdc } from '@agentdomain/shared';
+import { formatUnits, keccak256, toHex } from 'viem';
+import {
+  registrationParamsSchema,
+  parseUsdc,
+  SERVICE_FEE_USDC_ATOMIC,
+  USDC_DECIMALS,
+} from '@agentdomain/shared';
 import { withX402 } from '@/lib/x402';
 import { withErrorHandling, applyRateLimit, errorResponse } from '@/lib/api-helpers';
 import { getIdentityService, ValidationError } from '@/services/identity';
@@ -23,13 +28,12 @@ export const dynamic = 'force-dynamic';
  *   4. Run x402 payment flow:
  *        - First call: returns 402 + X-Payment-Required.
  *        - With X-Payment header: settles via facilitator, then provisions.
- *   5. Payment settles to backend wallet; domain recovery + service fees sweep to treasury.
+ *   5. Payment settles to backend wallet; the treasury split is swept separately.
  *   6. Provision: LI.FI funding -> ENS -> Spaceship DNS -> Cloudflare SaaS -> AWS SES -> Basenames -> Mint -> DB.
  */
 export async function POST(req: NextRequest) {
   return withErrorHandling(
     async () => {
-      // Rate limit
       const rl = await applyRateLimit(req, {
         max: 10,
         windowSeconds: 3600,
@@ -43,7 +47,6 @@ export async function POST(req: NextRequest) {
         return rl;
       }
 
-      // Parse a "preview" of the body to compute price / validate before requesting payment.
       let bodyJson: unknown;
       try {
         const cloned = req.clone();
@@ -52,10 +55,8 @@ export async function POST(req: NextRequest) {
         return errorResponse(400, 'BAD_JSON', 'Request body is not valid JSON');
       }
 
-      // Extract discount code before schema strips it
       const rawBody = bodyJson as Record<string, unknown>;
-      const discountCode =
-        typeof rawBody.discountCode === 'string' ? rawBody.discountCode : undefined;
+      const discountCode = typeof rawBody.discountCode === 'string' ? rawBody.discountCode : undefined;
 
       const validation = registrationParamsSchema.safeParse(bodyJson);
       if (!validation.success) {
@@ -78,7 +79,6 @@ export async function POST(req: NextRequest) {
 
       const svc = getIdentityService();
 
-      // Pre-validate (reserved name, domain availability, etc.)
       try {
         await svc.validate(params);
         recordMetric('registration_validated', { domain: `${params.preferredName}.${params.tld}` });
@@ -97,15 +97,17 @@ export async function POST(req: NextRequest) {
         tld: params.tld,
         registerBasename: params.registerBasename,
         registerEns: params.registerEns,
+        emailEnabled: params.emailEnabled,
         preferredName: params.preferredName,
         basenameLabel: params.basenameLabel,
         ensLabel: params.ensLabel,
         years: params.years,
       });
+
+      const years = params.years ?? 1;
       let totalAtomic = parseUsdc(pricing.totalUsdc);
       let treasuryFeeAtomic = parseUsdc(pricing.treasuryFeeUsdc);
 
-      // Validate and apply discount code
       let appliedDiscountCode: string | undefined;
       let discountAtomic = 0n;
       if (discountCode) {
@@ -119,14 +121,12 @@ export async function POST(req: NextRequest) {
             (!code.expiresAt || new Date(code.expiresAt) >= new Date())
           ) {
             appliedDiscountCode = code.code;
-            const { SERVICE_FEE_USDC_ATOMIC } = await import('@agentdomain/shared/constants');
-            discountAtomic = (SERVICE_FEE_USDC_ATOMIC * BigInt(code.discountPercent)) / 100n;
-            totalAtomic = totalAtomic - discountAtomic;
-            // Treasury fee must also be reduced — the discount lowers the service fee portion
-            treasuryFeeAtomic = treasuryFeeAtomic - discountAtomic;
+            discountAtomic = (SERVICE_FEE_USDC_ATOMIC * BigInt(years) * BigInt(code.discountPercent)) / 100n;
+            totalAtomic -= discountAtomic;
+            treasuryFeeAtomic -= discountAtomic;
           }
         } catch {
-          // DB may not be available; skip discount
+          // DB may not be available; skip discount.
         }
       }
 
@@ -137,12 +137,12 @@ export async function POST(req: NextRequest) {
         discountCode: appliedDiscountCode ?? 'none',
         discountAtomic: discountAtomic.toString(),
         serviceFee: pricing.serviceFeeUsdc,
+        emailFee: pricing.emailFeeUsdc,
         domainCost: pricing.domainCostUsdc,
         basenameCost: pricing.basenameCostUsdc,
         ensCost: pricing.ensCostUsdc,
       });
 
-      // x402 payment flow
       return withX402(
         req,
         {
@@ -152,7 +152,6 @@ export async function POST(req: NextRequest) {
           resource: req.nextUrl.toString(),
         },
         async (settlement, _body) => {
-          // Build idempotency key from payer + name + nonce so retries are safe.
           const idempotencyKey = keccak256(
             toHex(
               `${settlement.payer}:${params.preferredName}:${params.tld}:${settlement.txHash ?? Date.now()}`,
@@ -162,16 +161,18 @@ export async function POST(req: NextRequest) {
           const result = await svc.register(
             { ...params, wallet: settlement.payer },
             idempotencyKey,
-            { paymentTxHash: settlement.txHash ?? null },
+            {
+              paymentTxHash: settlement.txHash ?? null,
+              paymentAmountUsdc: formatUnits(totalAtomic, USDC_DECIMALS),
+            },
           );
 
-          // Mark discount code as used
           if (appliedDiscountCode) {
             try {
               const current = await discountsRepo.getByCode(appliedDiscountCode);
               if (current) await discountsRepo.incrementUse(current.id);
             } catch {
-              // Non-fatal — discount can be applied next time
+              // Non-fatal.
             }
           }
 
