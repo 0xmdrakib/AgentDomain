@@ -278,26 +278,27 @@ export function RegisterFlow() {
       {/* Wallet connection banner */}
       {!isConnected && (
         <Card className="border-primary/40 bg-primary/5">
-          <CardContent className="p-6 flex items-center justify-between">
-            <div>
+          <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+            <div className="min-w-0">
               <div className="font-semibold flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-primary" />
                 Connect your wallet to begin
               </div>
-              <div className="text-sm text-muted-foreground mt-1">
+              <div className="mt-1 text-sm text-muted-foreground">
                 Your agent identity will be linked to the connected address.
               </div>
             </div>
-            <ConnectWalletButton variant="gradient" />
+            <ConnectWalletButton variant="gradient" className="w-full sm:w-auto" />
           </CardContent>
         </Card>
       )}
 
       {isConnected && address && (
-        <div className="flex items-center justify-between text-sm px-1">
-          <div className="flex items-center gap-2 text-muted-foreground">
+        <div className="flex flex-col gap-2 px-1 text-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
             <div className="h-2 w-2 rounded-full bg-emerald-400" />
-            Connected: <span className="font-mono text-foreground">{shortAddress(address)}</span>
+            <span className="shrink-0">Connected:</span>
+            <span className="min-w-0 break-all font-mono text-foreground">{shortAddress(address)}</span>
           </div>
           <div className="text-muted-foreground">
             Balance:{' '}
@@ -310,10 +311,10 @@ export function RegisterFlow() {
 
       {/* Step 1: Name */}
       <Card className="border-border/40">
-        <CardContent className="p-6">
+        <CardContent className="p-4 sm:p-6">
           <label className="block text-sm font-semibold mb-3">1. Choose your name</label>
-          <div className="flex gap-2">
-            <div className="flex-1 flex items-center bg-background border rounded-lg focus-within:ring-2 focus-within:ring-primary">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="flex min-w-0 flex-1 items-stretch overflow-hidden rounded-lg border bg-background focus-within:ring-2 focus-within:ring-primary">
               <input
                 value={name}
                 onChange={(e) => {
@@ -327,7 +328,7 @@ export function RegisterFlow() {
                   }
                 }}
                 placeholder="myagent"
-                className="flex-1 bg-transparent px-4 py-3 outline-none font-mono rounded-l-lg"
+                className="min-w-0 flex-1 bg-transparent px-4 py-3 outline-none font-mono"
                 autoFocus
                 disabled={regState.phase !== 'idle' && regState.phase !== 'error'}
               />
@@ -342,13 +343,13 @@ export function RegisterFlow() {
                 if (name.length >= 3) setSearchedName(name);
               }}
               disabled={regState.phase !== 'idle' && regState.phase !== 'error' || name.length < 3 || checking}
-              className="py-3 px-6 h-auto bg-primary text-primary-foreground hover:bg-primary/90"
+              className="h-11 px-6 bg-primary text-primary-foreground hover:bg-primary/90 sm:h-auto sm:py-3"
             >
               Search
             </Button>
           </div>
           {name && searchedName && name === searchedName && (
-            <div className="mt-3 flex items-center gap-2 text-sm">
+            <div className="mt-3 flex items-start gap-2 text-sm">
               {checking ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -362,7 +363,7 @@ export function RegisterFlow() {
               ) : availability?.available ? (
                 <>
                   <Check className="h-4 w-4 text-emerald-400" />
-                  <span className="text-emerald-400">
+                  <span className="wrap-anywhere text-emerald-400">
                     {name}.{tld} is available
                     {availability.priceUsd && Number(availability.priceUsd) > 0
                       ? ` ($${availability.priceUsd})`
@@ -374,7 +375,7 @@ export function RegisterFlow() {
                 <div>
                   <div className="flex items-center gap-2">
                     <X className="h-4 w-4 text-destructive" />
-                    <span className="text-destructive">
+                    <span className="wrap-anywhere text-destructive">
                       {name}.{tld} is unavailable — try an alternative below
                     </span>
                   </div>
@@ -383,11 +384,11 @@ export function RegisterFlow() {
             </div>
           )}
           {name && validName && registerBasename && availability?.basename && (
-            <div className="mt-2 flex items-center gap-2 text-sm">
+            <div className="mt-2 flex items-start gap-2 text-sm">
               {availability.basenameAvailable === false ? (
                 <>
                   <X className="h-4 w-4 text-destructive" />
-                  <span className="text-destructive">
+                  <span className="wrap-anywhere text-destructive">
                     {availability.basename} is unavailable
                     {availability.basenameReason ? ` (${availability.basenameReason})` : ''}
                   </span>
@@ -395,7 +396,7 @@ export function RegisterFlow() {
               ) : availability.basenameAvailable === true ? (
                 <>
                   <Check className="h-4 w-4 text-emerald-400" />
-                  <span className="text-emerald-400">
+                  <span className="wrap-anywhere text-emerald-400">
                     {availability.basename} is available
                     {availability.basenameCostUsdc ? ` ($${availability.basenameCostUsdc})` : ''}
                   </span>
@@ -404,11 +405,11 @@ export function RegisterFlow() {
             </div>
           )}
           {name && validName && registerEns && availability?.ensName && (
-            <div className="mt-2 flex items-center gap-2 text-sm">
+            <div className="mt-2 flex items-start gap-2 text-sm">
               {availability.ensAvailable === false ? (
                 <>
                   <X className="h-4 w-4 text-destructive" />
-                  <span className="text-destructive">
+                  <span className="wrap-anywhere text-destructive">
                     {availability.ensName} is unavailable
                     {availability.ensReason ? ` (${availability.ensReason})` : ''}
                   </span>
@@ -416,7 +417,7 @@ export function RegisterFlow() {
               ) : availability.ensAvailable === true ? (
                 <>
                   <Check className="h-4 w-4 text-emerald-400" />
-                  <span className="text-emerald-400">
+                  <span className="wrap-anywhere text-emerald-400">
                     {availability.ensName} is available
                     {availability.ensCostUsdc ? ` ($${availability.ensCostUsdc})` : ''}
                   </span>
@@ -430,7 +431,7 @@ export function RegisterFlow() {
                 <span>Available alternatives</span>
                 <span>Cheapest first</span>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
                 {suggestedAlternatives.map((alt, index) => (
                   <button
                     key={alt.domain}
@@ -463,7 +464,7 @@ export function RegisterFlow() {
 
       {/* Step 2: Add-ons */}
       <Card className="border-border/40">
-        <CardContent className="p-6">
+        <CardContent className="p-4 sm:p-6">
           <label className="block text-sm font-semibold mb-4">2. Choose your stack</label>
           <div className="space-y-8">
             <div className="space-y-3">
@@ -472,7 +473,7 @@ export function RegisterFlow() {
               </h4>
               <div
                 className={cn(
-                  'w-full flex items-center justify-between gap-4 rounded-lg border px-4 py-3 text-left transition-all',
+                  'w-full flex flex-col gap-3 rounded-lg border px-4 py-3 text-left transition-all sm:flex-row sm:items-center sm:justify-between',
                   years > 1
                     ? 'border-primary/50 bg-primary/10'
                     : 'border-border/40 hover:border-border bg-card/40',
@@ -489,12 +490,12 @@ export function RegisterFlow() {
                     Select how many years to register upfront
                   </div>
                 </div>
-                <div className="flex-shrink-0">
+                <div className="w-full flex-shrink-0 sm:w-auto">
                   <select
                     value={years}
                     onChange={(e) => setYears(Number(e.target.value))}
                     disabled={regState.phase !== 'idle' && regState.phase !== 'error'}
-                    className="bg-background/50 border border-border/40 rounded-md px-3 py-1.5 text-sm font-medium text-foreground outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer"
+                    className="w-full bg-background/50 border border-border/40 rounded-md px-3 py-2 text-sm font-medium text-foreground outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer sm:w-auto sm:py-1.5"
                   >
                     {[1, 2, 3, 5, 10].map((y) => (
                       <option key={y} value={y} className="bg-background text-foreground">
@@ -590,7 +591,7 @@ export function RegisterFlow() {
       {/* Step 3: Quote */}
       {quote && validName && (
         <Card className="border-primary/40 bg-primary/5">
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <label className="block text-sm font-semibold mb-4">3. Pricing</label>
             <div className="space-y-2 text-sm">
               <Line
@@ -611,7 +612,7 @@ export function RegisterFlow() {
               </div>
               {quote.discountApplied && (
                 <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2 text-xs space-y-1">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <span className="text-emerald-400 font-medium">
                       Code applied — {quote.discountPercent}% off service fee
                     </span>
@@ -621,7 +622,7 @@ export function RegisterFlow() {
                         setDiscountDraft('');
                         setDiscountError(null);
                       }}
-                      className="text-muted-foreground hover:text-foreground ml-2"
+                      className="self-start text-muted-foreground hover:text-foreground sm:ml-2"
                     >
                       ✕
                     </button>
@@ -634,7 +635,7 @@ export function RegisterFlow() {
               )}
               <div className="pt-2">
                 {!quote.discountApplied && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <input
                       value={discountDraft}
                       onChange={(e) => {
@@ -642,7 +643,7 @@ export function RegisterFlow() {
                         setDiscountError(null);
                       }}
                       placeholder="Discount code"
-                      className="flex-1 h-9 rounded-md border border-border/40 bg-background/50 px-3 text-sm font-mono outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 placeholder:text-xs"
+                      className="h-10 flex-1 rounded-md border border-border/40 bg-background/50 px-3 text-sm font-mono outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 placeholder:text-xs"
                     />
                     <Button
                       variant="outline"
@@ -652,7 +653,7 @@ export function RegisterFlow() {
                         setDiscountCode(discountDraft.trim());
                       }}
                       disabled={!discountDraft.trim()}
-                      className="h-9"
+                      className="h-10 w-full sm:w-auto"
                     >
                       Apply
                     </Button>
@@ -670,7 +671,7 @@ export function RegisterFlow() {
       {/* Insufficient balance warning */}
       {insufficientBalance && (
         <Card className="border-destructive/40 bg-destructive/5">
-          <CardContent className="p-4 text-sm flex items-start gap-2">
+          <CardContent className="flex items-start gap-2 p-4 text-sm">
             <X className="h-4 w-4 text-destructive flex-shrink-0" />
             <div className="space-y-2">
               <div>
@@ -681,7 +682,7 @@ export function RegisterFlow() {
                   <div className="text-muted-foreground">
                     Add USDC to this wallet on Base mainnet, then refresh your balance.
                   </div>
-                  <div className="flex flex-wrap gap-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                     <ExternalFundingLink href={COINBASE_BUY_USDC_URL}>
                       Buy USDC on Coinbase
                     </ExternalFundingLink>
@@ -703,7 +704,7 @@ export function RegisterFlow() {
       {/* Status indicator during registration */}
       {regState.phase !== 'idle' && regState.phase !== 'error' && regState.phase !== 'success' && (
         <Card className="border-primary/60 bg-primary/10">
-          <CardContent className="p-4 flex items-center gap-3">
+          <CardContent className="flex items-center gap-3 p-4">
             <Loader2 className="h-5 w-5 animate-spin text-primary" />
             <div className="text-sm font-medium">{regState.message ?? 'Working...'}</div>
           </CardContent>
@@ -720,9 +721,9 @@ export function RegisterFlow() {
       )}
 
       {/* Step 4: Submit */}
-      <div className="flex flex-wrap items-end justify-end gap-4">
+      <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-end">
         {turnstileSiteKey && isConnected && (
-          <div className="mr-auto max-w-sm">
+          <div className="w-full max-w-sm sm:mr-auto">
             <TurnstileWidget
               siteKey={turnstileSiteKey}
               disabled={regState.phase !== 'idle' && regState.phase !== 'error'}
@@ -731,14 +732,14 @@ export function RegisterFlow() {
           </div>
         )}
         {!isConnected ? (
-          <ConnectWalletButton variant="gradient" size="xl" />
+          <ConnectWalletButton variant="gradient" size="xl" className="w-full sm:w-auto" />
         ) : (
           <Button
             variant="gradient"
             size="xl"
             disabled={!canSubmit}
             onClick={handleRegister}
-            className="group"
+            className="group w-full sm:w-auto"
           >
             {regState.phase !== 'idle' && regState.phase !== 'error' ? (
               <>
@@ -798,12 +799,12 @@ function TldSelector({
   }, [open]);
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative flex-shrink-0">
       <button
         type="button"
         disabled={disabled}
         onClick={() => setOpen((next) => !next)}
-        className="flex min-w-24 items-center justify-between gap-2 bg-card/70 px-3 py-3 font-mono text-sm text-foreground outline-none transition hover:bg-primary/10 focus:bg-primary/10 disabled:pointer-events-none disabled:opacity-60 rounded-r-lg"
+        className="flex h-full min-w-24 items-center justify-between gap-2 bg-card/70 px-3 py-3 font-mono text-sm text-foreground outline-none transition hover:bg-primary/10 focus:bg-primary/10 disabled:pointer-events-none disabled:opacity-60"
         aria-haspopup="listbox"
         aria-expanded={open}
       >
@@ -813,7 +814,7 @@ function TldSelector({
       {open && (
         <div
           role="listbox"
-          className="absolute right-0 z-30 mt-2 w-40 overflow-hidden rounded-xl border border-primary/30 bg-[#080b14] p-1 shadow-2xl shadow-blue-500/20 backdrop-blur"
+          className="absolute right-0 z-30 mt-2 w-[min(76vw,10rem)] overflow-hidden rounded-xl border border-primary/30 bg-[#080b14] p-1 shadow-2xl shadow-blue-500/20 backdrop-blur sm:w-40"
         >
           <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             Popular
@@ -869,7 +870,7 @@ function NameOverrideInput({
 }) {
   return (
     <div className="rounded-lg border border-border/30 bg-background/50 p-3">
-      <div className="mb-2 flex items-center justify-between gap-3">
+      <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <span className="text-xs font-semibold text-muted-foreground">{label}</span>
         <button
           type="button"
@@ -882,7 +883,7 @@ function NameOverrideInput({
       </div>
       <div
         className={cn(
-          'flex items-center overflow-hidden rounded-md border bg-card/60 focus-within:ring-2 focus-within:ring-primary',
+          'flex min-w-0 items-stretch overflow-hidden rounded-md border bg-card/60 focus-within:ring-2 focus-within:ring-primary',
           value && !valid && 'border-destructive/70',
         )}
       >
@@ -893,7 +894,7 @@ function NameOverrideInput({
           className="min-w-0 flex-1 bg-transparent px-3 py-2 font-mono text-sm outline-none"
           disabled={disabled}
         />
-        <span className="border-l border-border/40 bg-muted/40 px-3 py-2 font-mono text-sm text-muted-foreground">
+        <span className="flex items-center border-l border-border/40 bg-muted/40 px-3 py-2 font-mono text-sm text-muted-foreground">
           {suffix}
         </span>
       </div>
@@ -921,8 +922,8 @@ function AddressOverrideInput({
 }) {
   return (
     <div className="rounded-lg border border-border/30 bg-background/50 p-3">
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <div>
+      <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <span className="text-xs font-semibold text-muted-foreground">Deliver identity to</span>
           <div className="mt-0.5 text-xs text-muted-foreground">
             Leave empty to use connected wallet
@@ -967,7 +968,7 @@ function ExternalFundingLink({ href, children }: { href: string; children: React
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="text-primary hover:underline inline-flex items-center gap-1"
+      className="inline-flex items-center gap-1 text-primary hover:underline"
     >
       {children}
       <ExternalLink className="h-3 w-3" />
@@ -986,7 +987,7 @@ function SuccessScreen({
 }) {
   return (
     <Card className="border-emerald-500/40 bg-gradient-to-b from-emerald-500/10 to-transparent">
-      <CardContent className="p-8 text-center">
+      <CardContent className="p-4 text-center sm:p-8">
         <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20 mb-6">
           <Check className="h-8 w-8 text-emerald-400" />
         </div>
@@ -995,7 +996,7 @@ function SuccessScreen({
           Your agent now has a complete onchain identity.
         </p>
 
-        <div className="bg-card/40 border border-border/40 rounded-lg p-6 text-left space-y-3 max-w-md mx-auto">
+        <div className="mx-auto max-w-md space-y-3 rounded-lg border border-border/40 bg-card/40 p-4 text-left sm:p-6">
           <Detail label="Domain" value={result.domain} />
           {result.basename && <Detail label="Basename" value={result.basename} />}
           {result.ensName && <Detail label="ENS" value={result.ensName} />}
@@ -1003,18 +1004,18 @@ function SuccessScreen({
           <Detail label="Status" value={result.sslStatus} badge />
         </div>
 
-        <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+        <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
           <a
             href={`https://basescan.org/tx/${result.txHash}`}
             target="_blank"
             rel="noopener noreferrer"
           >
-            <Button variant="outline">
+            <Button variant="outline" className="w-full sm:w-auto">
               View on BaseScan
               <ExternalLink className="h-4 w-4" />
             </Button>
           </a>
-          <Button variant="gradient" onClick={onReset}>
+          <Button variant="gradient" onClick={onReset} className="w-full sm:w-auto">
             Register another
           </Button>
         </div>
@@ -1039,14 +1040,14 @@ function SuccessScreen({
 
 function Detail({ label, value, badge }: { label: string; value: string; badge?: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-4">
+    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
       <span className="text-sm text-muted-foreground">{label}</span>
       {badge ? (
         <Badge variant="success" className="font-mono text-xs">
           {value}
         </Badge>
       ) : (
-        <span className="font-mono text-sm">{value}</span>
+        <span className="wrap-anywhere font-mono text-sm">{value}</span>
       )}
     </div>
   );
@@ -1075,21 +1076,21 @@ function Toggle({
       onClick={() => !disabled && onChange(!checked)}
       disabled={disabled}
       className={cn(
-        'w-full flex items-center justify-between gap-4 rounded-lg border px-4 py-3 text-left transition-all',
+        'w-full flex items-start justify-between gap-4 rounded-lg border px-4 py-3 text-left transition-all',
         checked
           ? 'border-primary/50 bg-primary/10'
           : 'border-border/40 hover:border-border bg-card/40',
         disabled && 'opacity-60 cursor-not-allowed',
       )}
     >
-      <div>
-        <div className="flex items-center gap-2 font-medium text-sm">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2 font-medium text-sm">
           {label}
           {recommended && <Badge variant="success">Recommended</Badge>}
           {badge && <Badge variant="secondary">{badge}</Badge>}
         </div>
         {sublabel && (
-          <div className="text-xs text-muted-foreground font-mono mt-0.5">{sublabel}</div>
+          <div className="wrap-anywhere mt-0.5 text-xs font-mono text-muted-foreground">{sublabel}</div>
         )}
       </div>
       <div
@@ -1111,11 +1112,11 @@ function Toggle({
 
 function Line({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
   return (
-    <div className="flex items-center justify-between">
+    <div className="flex items-center justify-between gap-4">
       <span className={cn('text-muted-foreground', bold && 'text-foreground font-semibold')}>
         {label}
       </span>
-      <span className={cn('font-mono', bold && 'text-lg font-semibold')}>{value}</span>
+      <span className={cn('shrink-0 font-mono', bold && 'text-lg font-semibold')}>{value}</span>
     </div>
   );
 }
