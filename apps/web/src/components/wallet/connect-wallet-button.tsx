@@ -22,13 +22,13 @@ const CONNECTOR_LABELS: Record<string, string> = {
 };
 
 const CONNECTOR_DESCRIPTIONS: Record<string, string> = {
-  injected: 'MetaMask, Rabby, Brave, Backpack',
-  walletConnect: 'Scan QR or open mobile wallet',
-  coinbaseWalletSDK: 'Coinbase app or Smart Wallet',
+  injected: 'MetaMask, Rabby, Base',
+  walletConnect: 'Open the WalletConnect picker or your mobile wallet',
+  coinbaseWalletSDK: 'Coinbase Wallet or Base App',
 };
 
 const CONNECTOR_ORDER = ['injected', 'walletConnect', 'coinbaseWalletSDK'];
-const INJECTED_WALLET_ORDER = ['metaMask', 'rabby', 'brave', 'backpack'];
+const INJECTED_WALLET_ORDER = ['metaMask', 'rabby', 'baseApp'];
 const CONNECT_TIMEOUT_MS = 20_000;
 
 type InjectedWalletId = string;
@@ -47,10 +47,10 @@ type InjectedWalletOption = {
 };
 
 type InjectedProvider = {
-  isBackpack?: true;
-  isBraveWallet?: true;
   isMetaMask?: true;
   isRabby?: true;
+  isCoinbaseWallet?: true;
+  isBaseWallet?: true;
   providers?: InjectedProvider[];
 };
 
@@ -83,20 +83,12 @@ const INJECTED_WALLETS: Record<string, Omit<InjectedWalletOption, 'connector' | 
     fallback: 'R',
     accent: 'from-sky-400 to-blue-500',
   },
-  brave: {
-    id: 'brave',
-    name: 'Brave Wallet',
-    description: 'Built into Brave browser',
-    iconUrl: 'https://brave.com/static-assets/images/brave-logo-sans-text.svg',
+  baseApp: {
+    id: 'baseApp',
+    name: 'Base App',
+    description: 'Coinbase Wallet or Base App',
     fallback: 'B',
-    accent: 'from-orange-500 to-red-500',
-  },
-  backpack: {
-    id: 'backpack',
-    name: 'Backpack',
-    description: 'Backpack browser wallet',
-    fallback: 'BP',
-    accent: 'from-violet-500 to-fuchsia-500',
+    accent: 'from-blue-500 to-cyan-500',
   },
 };
 
@@ -393,7 +385,7 @@ function InjectedWalletSelector({
             ))
           ) : (
             <div className="rounded-xl border border-border/40 bg-card/50 p-4 text-sm text-muted-foreground">
-              No injected wallet found. Install MetaMask, Rabby, Brave Wallet, or Backpack and try again.
+              No injected wallet found. Install MetaMask, Rabby, or Coinbase Wallet/Base App and try again.
             </div>
           )}
         </div>
@@ -427,8 +419,7 @@ function normalizeInjectedWalletId(rdns: string, name: string): string {
   const key = `${rdns} ${name}`.toLowerCase();
   if (key.includes('metamask')) return 'metaMask';
   if (key.includes('rabby')) return 'rabby';
-  if (key.includes('brave')) return 'brave';
-  if (key.includes('backpack')) return 'backpack';
+  if (key.includes('base') || key.includes('coinbase')) return 'baseApp';
   return rdns || name.toLowerCase().replace(/\s+/g, '-');
 }
 
@@ -462,14 +453,13 @@ function isInjectedWalletAvailable(id: string) {
     if (id === 'metaMask') {
       return Boolean(
         provider.isMetaMask &&
-          !provider.isRabby &&
-          !provider.isBraveWallet &&
-          !provider.isBackpack,
+        !provider.isRabby &&
+          !provider.isCoinbaseWallet &&
+          !provider.isBaseWallet,
       );
     }
     if (id === 'rabby') return Boolean(provider.isRabby);
-    if (id === 'brave') return Boolean(provider.isBraveWallet);
-    if (id === 'backpack') return Boolean(provider.isBackpack);
+    if (id === 'baseApp') return Boolean(provider.isCoinbaseWallet || provider.isBaseWallet);
     return false;
   });
 }
