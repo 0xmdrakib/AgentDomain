@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
         return errorResponse(410, 'EXHAUSTED', 'This discount code has reached its usage limit');
       }
 
-      // 90% off the $2.00 service fee = $0.20 saved
+      // 90% off the $2.39 service fee = $2.15 saved
       const feeAtomic = SERVICE_FEE_USDC_ATOMIC;
       const discountAtomic = (feeAtomic * BigInt(code.discountPercent)) / 100n;
       const discountedFeeAtomic = feeAtomic - discountAtomic;
