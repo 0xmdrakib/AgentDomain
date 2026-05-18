@@ -39,11 +39,11 @@ export function AuthButton({ className }: { className?: string }) {
     <div className={cn('relative inline-flex', className)}>
       <button
         type="button"
-        className="flex h-10 items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 text-sm shadow-lg shadow-emerald-500/10 transition-colors hover:bg-emerald-500/15"
+        className="flex h-10 max-w-full items-center justify-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 text-sm shadow-lg shadow-emerald-500/10 transition-colors hover:bg-emerald-500/15"
         onClick={() => setShowMenu(!showMenu)}
       >
         <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/60" />
-        <span className="font-medium text-emerald-300">Connected</span>
+        <span className="hidden font-medium text-emerald-300 sm:inline">Connected</span>
         <span className="font-mono text-xs text-muted-foreground">{shortAddress(address)}</span>
         <ChevronDown className="h-4 w-4 text-muted-foreground" />
       </button>
