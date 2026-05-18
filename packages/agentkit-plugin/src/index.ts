@@ -15,9 +15,11 @@ const RegisterSchema = z.object({
   tld: z.enum(SUPPORTED_TLDS).default('xyz'),
   registerBasename: z.boolean().default(true),
   registerEns: z.boolean().default(false),
+  emailEnabled: z.boolean().default(false),
   dnsTarget: z.string().url().optional(),
   years: z.number().int().min(1).max(10).default(1),
   autoRenew: z.boolean().default(false),
+  discountCode: z.string().max(50).optional(),
 });
 
 const QuoteSchema = z.object({
@@ -25,7 +27,9 @@ const QuoteSchema = z.object({
   tld: z.enum(SUPPORTED_TLDS).default('xyz'),
   registerBasename: z.boolean().default(true),
   registerEns: z.boolean().default(false),
+  emailEnabled: z.boolean().default(false),
   years: z.number().int().min(1).max(10).default(1),
+  discountCode: z.string().max(50).optional(),
 });
 
 const SearchSchema = z.object({
@@ -173,7 +177,8 @@ export class AgentDomainActionProvider {
   private async quote(_wp: WalletProvider, args: z.infer<typeof QuoteSchema>) {
     const ad = new AgentDomain({ apiUrl: this.apiUrl });
     const q = await ad.quote(args);
-    return `Total: $${q.totalUsdc} USDC (domain $${q.domainCostUsdc} + service $${q.serviceFeeUsdc})`;
+    const emailPart = Number(q.emailFeeUsdc) > 0 ? ` + email $${q.emailFeeUsdc}` : '';
+    return `Total: $${q.totalUsdc} USDC (domain $${q.domainCostUsdc} + service $${q.serviceFeeUsdc}${emailPart})`;
   }
 
   private async search(_wp: WalletProvider, args: z.infer<typeof SearchSchema>) {
