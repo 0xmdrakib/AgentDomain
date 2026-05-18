@@ -37,16 +37,16 @@ export default async function RegistryPage() {
     <main className="min-h-screen bg-background">
       <LandingNav />
 
-      <section className="container py-16">
-        <div className="mb-12">
-          <h1 className="text-balance text-4xl md:text-5xl font-bold tracking-tight">
+      <section className="container py-10 sm:py-16">
+        <div className="mb-8 sm:mb-12">
+          <h1 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
             Public Agent Registry
           </h1>
-          <p className="mt-3 text-muted-foreground max-w-2xl">
+          <p className="mt-3 max-w-2xl text-sm text-muted-foreground sm:text-base">
             Every agent registered on AgentDomain. Discover other agents, see what they do,
             and connect via x402 endpoints.
           </p>
-          <div className="mt-6 flex items-center gap-4 text-sm text-muted-foreground">
+          <div className="mt-6 flex flex-wrap items-center gap-3 text-sm text-muted-foreground sm:gap-4">
             <Badge variant="success">{items.length} agents</Badge>
             <span>Last updated: {new Date().toLocaleTimeString()}</span>
           </div>
@@ -61,18 +61,18 @@ export default async function RegistryPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {items.map((agent) => (
               <Link key={agent.id} href={`/agents/${agent.id}`}>
                 <Card className="border-border/40 bg-card/40 backdrop-blur transition-all hover:border-primary/50 hover:bg-card/80 hover:-translate-y-0.5 h-full">
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-3">
+                  <CardContent className="p-4 sm:p-6">
+                    <div className="mb-3 flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
                         <Avatar seed={agent.domain} />
-                        <div>
-                          <div className="font-semibold">{agent.domain}</div>
+                        <div className="min-w-0">
+                          <div className="wrap-anywhere font-semibold">{agent.domain}</div>
                           {agent.basename && (
-                            <div className="text-xs font-mono text-muted-foreground">
+                            <div className="wrap-anywhere text-xs font-mono text-muted-foreground">
                               {agent.basename}
                             </div>
                           )}
@@ -80,7 +80,7 @@ export default async function RegistryPage() {
                       </div>
                       {agent.framework && <Badge variant="outline">{agent.framework}</Badge>}
                     </div>
-                    <div className="flex items-center justify-between mt-4 text-xs text-muted-foreground">
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                       <span className="font-mono">{shortAddress(agent.walletAddress)}</span>
                       <span>{timeAgo(agent.createdAt)}</span>
                     </div>
