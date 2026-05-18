@@ -212,20 +212,20 @@ export function AdminDashboardClient() {
 
   if (!session.authenticated) {
     return (
-      <section className="container py-16 text-center">
+      <section className="container py-12 text-center sm:py-16">
         <ShieldAlert className="h-10 w-10 text-muted-foreground mx-auto mb-4" />
         <h1 className="text-2xl font-bold mb-2">Admin Access</h1>
         <p className="text-muted-foreground mb-6">
           Sign in with your admin wallet to access the console.
         </p>
         <div className="flex flex-col items-center gap-4">
-          <AuthButton className="inline-flex mx-auto" />
+          <AuthButton className="mx-auto inline-flex" />
           {siweError && (
             <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive max-w-md">
               {siweError}
             </div>
           )}
-          <Button variant="gradient" size="lg" onClick={signIn} disabled={siweLoading}>
+          <Button variant="gradient" size="lg" onClick={signIn} disabled={siweLoading} className="w-full sm:w-auto">
             {siweLoading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -242,7 +242,7 @@ export function AdminDashboardClient() {
 
   if (accessDenied) {
     return (
-      <section className="container py-16 text-center">
+      <section className="container py-12 text-center sm:py-16">
         <ShieldAlert className="h-10 w-10 text-destructive mx-auto mb-4" />
         <h1 className="text-2xl font-bold mb-2">Access Denied</h1>
         <p className="text-muted-foreground">
@@ -253,21 +253,21 @@ export function AdminDashboardClient() {
   }
 
   return (
-    <section className="container py-12">
+    <section className="container py-10 sm:py-12">
       {/* Header */}
-      <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Admin Console</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Admin Console</h1>
+          <p className="mt-1 text-sm text-muted-foreground sm:text-base">
             Platform-wide stats and operations.{' '}
             {stats?.generatedAt && (
-              <span className="text-xs">
+              <span className="block text-xs sm:inline">
                 Updated: {new Date(stats.generatedAt).toLocaleTimeString()}
               </span>
             )}
           </p>
         </div>
-        <Button variant="outline" onClick={fetchStats} disabled={loading}>
+        <Button variant="outline" onClick={fetchStats} disabled={loading} className="w-full sm:w-auto">
           {loading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
@@ -292,7 +292,7 @@ export function AdminDashboardClient() {
       {stats && (
         <>
           {/* Top stat cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
               label="Total agents"
               value={stats.agents.total}
@@ -319,7 +319,7 @@ export function AdminDashboardClient() {
           </div>
 
           {/* Tab bar */}
-          <div className="flex gap-1 mb-6 border-b border-border/40 pb-0">
+          <div className="mb-6 flex gap-1 overflow-x-auto border-b border-border/40 pb-0">
             {(
               [
                 ['agents', 'Agents'],
@@ -333,7 +333,7 @@ export function AdminDashboardClient() {
                 key={k}
                 onClick={() => setTab(k)}
                 className={cn(
-                  'px-4 py-2.5 text-sm font-medium rounded-t-lg border border-b-0 transition-colors -mb-px',
+                  'whitespace-nowrap px-4 py-2.5 text-sm font-medium rounded-t-lg border border-b-0 transition-colors -mb-px',
                   tab === k
                     ? 'bg-card border-border/40 text-foreground'
                     : 'text-muted-foreground hover:text-foreground border-transparent',
@@ -420,7 +420,7 @@ function AgentsPanel() {
           <p className="text-sm text-muted-foreground mt-1">Search, revoke, re-provision SSL.</p>
         </div>
         <form
-          className="flex flex-col sm:flex-row gap-2"
+          className="flex flex-col gap-2 sm:flex-row"
           onSubmit={(e) => {
             e.preventDefault();
             setQuery(search.trim());
@@ -433,7 +433,7 @@ function AgentsPanel() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search agents"
-              className="h-10 w-full sm:w-64 rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-64"
             />
           </div>
           <select
@@ -442,7 +442,7 @@ function AgentsPanel() {
               setStatus(e.target.value as AgentStatusFilter);
               setOffset(0);
             }}
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-auto"
           >
             <option value="all">All</option>
             <option value="pending">Pending</option>
@@ -450,7 +450,7 @@ function AgentsPanel() {
             <option value="expired">Expired</option>
             <option value="revoked">Revoked</option>
           </select>
-          <Button type="submit" variant="secondary">
+          <Button type="submit" variant="secondary" className="w-full sm:w-auto">
             Search
           </Button>
         </form>
@@ -467,7 +467,7 @@ function AgentsPanel() {
           </div>
         ) : data && data.items.length > 0 ? (
           <>
-            <div className="overflow-x-auto">
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <tr className="border-b border-border/40">
@@ -583,6 +583,106 @@ function AgentsPanel() {
                 </tbody>
               </table>
             </div>
+            <div className="space-y-3 md:hidden">
+              {data.items.map((agent) => (
+                <div key={agent.id} className="rounded-lg border border-border/50 bg-background/40 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="wrap-anywhere font-medium">{agent.domain}</div>
+                      <div className="wrap-anywhere mt-1 font-mono text-xs text-muted-foreground">
+                        #{agent.agentIdNft} {agent.basename ?? agent.ensName ?? ''}
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <StatusBadge status={agent.status} />
+                        <SslBadge status={agent.sslStatus} />
+                        {agent.framework && <Badge variant="outline">{agent.framework}</Badge>}
+                      </div>
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        Owner {shortAddress(agent.walletAddress)}
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        Created {formatDate(agent.createdAt)}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 flex-col gap-2">
+                      <Button asChild variant="ghost" size="sm" className="w-full">
+                        <Link href={`/agents/${agent.id}`}>View</Link>
+                      </Button>
+                      <RepairMenu
+                        agentId={agent.id}
+                        domain={agent.domain}
+                        hasBasename={!!agent.basename}
+                        hasEns={!!agent.ensName}
+                        loading={actionState[agent.id + 'repair'] === 'loading'}
+                        onAction={async (action) => {
+                          setActionState((s) => ({ ...s, [agent.id + 'repair']: 'loading' }));
+                          try {
+                            const res = await fetch(`/api/v1/admin/agents/${agent.id}/repair`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ action }),
+                              credentials: 'include',
+                            });
+                            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                            setActionState((s) => ({ ...s, [agent.id + 'repair']: 'done' }));
+                            fetchData();
+                          } catch (e) {
+                            setActionState((s) => ({ ...s, [agent.id + 'repair']: 'idle' }));
+                            setError(e instanceof Error ? e.message : 'Repair failed');
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {agent.sslStatus !== 'active' && agent.sslStatus !== 'pending' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full sm:w-auto"
+                        disabled={actionState[agent.id + 'ssl'] === 'loading'}
+                        onClick={() =>
+                          doAction(
+                            agent.id,
+                            `/api/v1/admin/agents/${agent.id}/ssl-reprovision`,
+                            'POST',
+                          )
+                        }
+                      >
+                        {actionState[agent.id + 'ssl'] === 'loading' ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <ShieldCheck className="h-3 w-3" />
+                        )}
+                        SSL
+                      </Button>
+                    )}
+                    {agent.status !== 'revoked' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full sm:w-auto"
+                        disabled={actionState[agent.id + 'rev'] === 'loading'}
+                        onClick={() =>
+                          doAction(
+                            agent.id,
+                            `/api/v1/admin/agents/${agent.id}/revoke`,
+                            'POST',
+                          )
+                        }
+                      >
+                        {actionState[agent.id + 'rev'] === 'loading' ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <XCircle className="h-3 w-3" />
+                        )}
+                        Revoke
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
             <Pagination
               total={data.total}
               offset={offset}
@@ -671,7 +771,7 @@ function RegistrationsPanel() {
             setStatus(e.target.value as RegStatusFilter);
             setOffset(0);
           }}
-          className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-auto"
         >
           <option value="all">All statuses</option>
           <option value="pending">Pending</option>
@@ -691,7 +791,7 @@ function RegistrationsPanel() {
           </div>
         ) : data && data.items.length > 0 ? (
           <>
-            <div className="overflow-x-auto">
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <tr className="border-b border-border/40">
@@ -795,6 +895,80 @@ function RegistrationsPanel() {
                 </tbody>
               </table>
             </div>
+            <div className="space-y-3 md:hidden">
+              {data.items.map((reg) => {
+                const key = reg.id;
+                return (
+                  <div key={key} className="rounded-lg border border-border/50 bg-background/40 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-mono text-xs text-muted-foreground">
+                          {shortAddress(reg.payerAddress)}
+                        </div>
+                        <div className="mt-1 font-mono text-lg font-semibold">${reg.paymentAmount}</div>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <RegistrationStatusBadge status={reg.status} />
+                          <span className="text-xs text-muted-foreground">
+                            {formatDate(reg.createdAt)}
+                          </span>
+                        </div>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => setSelectedId(key)}>
+                        <ClipboardList className="h-3 w-3" />
+                        Inspect
+                      </Button>
+                    </div>
+                    {reg.errorMessage && (
+                      <div className="wrap-anywhere mt-3 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
+                        {reg.errorMessage}
+                      </div>
+                    )}
+                    {reg.status === 'failed' && (
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={actionState[key + 'retry'] === 'loading'}
+                          onClick={() =>
+                            doAction(
+                              key,
+                              `/api/v1/admin/registrations/${key}/retry`,
+                              'retry',
+                            )
+                          }
+                        >
+                          {actionState[key + 'retry'] === 'loading' ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <RotateCcw className="h-3 w-3" />
+                          )}
+                          Retry
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={actionState[key + 'refund'] === 'loading'}
+                          onClick={() =>
+                            doAction(
+                              key,
+                              `/api/v1/admin/registrations/${key}/refund`,
+                              'refund',
+                            )
+                          }
+                        >
+                          {actionState[key + 'refund'] === 'loading' ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <XCircle className="h-3 w-3" />
+                          )}
+                          Refund
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
             <Pagination
               total={data.total}
               offset={offset}
@@ -868,7 +1042,7 @@ function RenewalsPanel() {
             setStatus(e.target.value as RenewalStatusFilter);
             setOffset(0);
           }}
-          className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-auto"
         >
           <option value="all">All statuses</option>
           <option value="scheduled">Scheduled</option>
@@ -889,7 +1063,7 @@ function RenewalsPanel() {
           </div>
         ) : data && data.items.length > 0 ? (
           <>
-            <div className="overflow-x-auto">
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <tr className="border-b border-border/40">
@@ -931,6 +1105,36 @@ function RenewalsPanel() {
                   ))}
                 </tbody>
               </table>
+            </div>
+            <div className="space-y-3 md:hidden">
+              {data.items.map((r) => (
+                <div key={r.id} className="rounded-lg border border-border/50 bg-background/40 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-mono text-xs text-muted-foreground">
+                        {r.agentId.slice(0, 8)}...
+                      </div>
+                      <div className="mt-1 font-mono text-lg font-semibold">${r.amount}</div>
+                    </div>
+                    <RenewalStatusBadge status={r.status} />
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs text-muted-foreground">
+                    <div>
+                      <div className="uppercase tracking-wide">Attempts</div>
+                      <div className="mt-1 text-sm text-foreground">{r.attemptCount}</div>
+                    </div>
+                    <div>
+                      <div className="uppercase tracking-wide">Scheduled</div>
+                      <div className="mt-1 text-sm text-foreground">{formatDate(r.scheduledFor)}</div>
+                    </div>
+                  </div>
+                  {r.lastError && (
+                    <div className="wrap-anywhere mt-3 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
+                      {r.lastError}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
             <Pagination
               total={data.total}
@@ -1049,8 +1253,8 @@ function DiscountsPanel() {
               {error}
             </div>
           )}
-          <form onSubmit={createCode} className="flex flex-wrap items-end gap-3">
-            <div className="space-y-1.5 flex-1 min-w-40">
+          <form onSubmit={createCode} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_6rem_6rem_auto] sm:items-end">
+            <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Code</label>
               <UiInput
                 name="code"
@@ -1059,7 +1263,7 @@ function DiscountsPanel() {
                 className="h-10 font-mono text-sm uppercase"
               />
             </div>
-            <div className="space-y-1.5 w-24">
+            <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Max Uses</label>
               <UiInput
                 name="usageLimit"
@@ -1071,7 +1275,7 @@ function DiscountsPanel() {
                 className="h-10 text-sm"
               />
             </div>
-            <div className="space-y-1.5 w-24">
+            <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Discount %</label>
               <UiInput
                 name="discountPercent"
@@ -1083,7 +1287,7 @@ function DiscountsPanel() {
                 className="h-10 text-sm"
               />
             </div>
-            <Button type="submit" variant="gradient" disabled={submitting}>
+            <Button type="submit" variant="gradient" disabled={submitting} className="w-full sm:w-auto">
               {submitting ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
@@ -1112,7 +1316,8 @@ function DiscountsPanel() {
             </div>
           )}
           {codes && codes.length > 0 && (
-            <div className="overflow-x-auto">
+            <>
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <tr className="border-b border-border/40">
@@ -1161,6 +1366,41 @@ function DiscountsPanel() {
                 </tbody>
               </table>
             </div>
+            <div className="space-y-3 md:hidden">
+              {codes.map((c) => (
+                <div key={c.id} className="rounded-lg border border-border/50 bg-background/40 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="wrap-anywhere font-mono font-semibold">{c.code}</div>
+                      <div className="mt-1 text-sm text-muted-foreground">
+                        {c.usedCount} / {c.usageLimit} used
+                      </div>
+                    </div>
+                    {c.isActive ? (
+                      <Badge variant="success">Active</Badge>
+                    ) : (
+                      <Badge variant="destructive">Deactivated</Badge>
+                    )}
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-3 text-sm">
+                    <span className="font-medium text-emerald-400">{c.discountPercent}% off</span>
+                    <span className="text-xs text-muted-foreground">{formatDate(c.createdAt)}</span>
+                  </div>
+                  {c.isActive && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-3 w-full"
+                      onClick={() => deactivate(c.id, c.code)}
+                    >
+                      <XCircle className="h-3 w-3" />
+                      Deactivate
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -1233,7 +1473,7 @@ function CreateAgentPanel() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <FormField label="Domain *" name="domain" placeholder="myagent.xyz" required />
             <FormField label="Wallet Address *" name="wallet" placeholder="0x..." required />
             <FormField
@@ -1272,7 +1512,7 @@ function CreateAgentPanel() {
               </select>
             </div>
           </div>
-          <Button type="submit" variant="gradient" disabled={submitting}>
+          <Button type="submit" variant="gradient" disabled={submitting} className="w-full sm:w-auto">
             {submitting ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
@@ -1337,9 +1577,9 @@ function StatCard({
 
   return (
     <Card className="border-border/40">
-      <CardContent className="p-6">
+      <CardContent className="p-4 sm:p-6">
         <div className="text-sm text-muted-foreground">{label}</div>
-        <div className={`text-3xl font-bold mt-2 tabular-nums ${colorClass}`}>{value}</div>
+        <div className={`mt-2 text-2xl font-bold tabular-nums sm:text-3xl ${colorClass}`}>{value}</div>
         {breakdown && <div className="text-xs text-muted-foreground mt-1">{breakdown}</div>}
       </CardContent>
     </Card>
@@ -1362,14 +1602,15 @@ function Pagination({
   loading: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 pt-4 text-sm text-muted-foreground">
+    <div className="flex flex-col gap-3 pt-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:gap-4">
       <span>
         Showing {offset + 1}-{Math.min(offset + pageSize, total)} of {total}
       </span>
-      <div className="flex gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:flex">
         <Button
           variant="outline"
           size="sm"
+          className="w-full sm:w-auto"
           disabled={offset === 0 || loading}
           onClick={() => onChange(Math.max(0, offset - pageSize))}
         >
@@ -1378,6 +1619,7 @@ function Pagination({
         <Button
           variant="outline"
           size="sm"
+          className="w-full sm:w-auto"
           disabled={!hasMore || loading}
           onClick={() => onChange(offset + pageSize)}
         >
@@ -1504,18 +1746,18 @@ function RegistrationCaseDrawer({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm">
-      <div className="absolute right-0 top-0 h-full w-full max-w-3xl overflow-y-auto border-l border-border/60 bg-background shadow-2xl">
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border/60 bg-background/95 px-5 py-4 backdrop-blur">
-          <div>
+      <div className="safe-bottom absolute inset-x-0 bottom-0 h-[92svh] w-full overflow-y-auto rounded-t-lg border border-border/60 bg-background shadow-2xl sm:inset-y-0 sm:left-auto sm:right-0 sm:h-full sm:max-w-3xl sm:rounded-none sm:border-l">
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-border/60 bg-background/95 px-4 py-4 backdrop-blur sm:px-5">
+          <div className="min-w-0">
             <div className="text-sm text-muted-foreground">Registration case</div>
-            <div className="font-mono text-sm">{registrationId}</div>
+            <div className="wrap-anywhere font-mono text-sm">{registrationId}</div>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose}>
             <XCircle className="h-4 w-4" />
           </Button>
         </div>
 
-        <div className="space-y-4 p-5">
+        <div className="space-y-4 p-4 sm:p-5">
           {loading && (
             <div className="py-10 text-center">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mx-auto" />
@@ -1557,11 +1799,12 @@ function RegistrationCaseDrawer({
               <Card>
                 <CardContent className="p-4 space-y-3">
                   <div className="text-sm font-medium">Recovery actions</div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid gap-2 sm:flex sm:flex-wrap">
                     <Button
                       variant="outline"
                       size="sm"
                       disabled={busy !== null || !data.agent}
+                      className="w-full sm:w-auto"
                       onClick={() =>
                         runAction(`/api/v1/admin/agents/${data.agent?.id ?? ''}/repair`, 'repair')
                       }
@@ -1574,6 +1817,7 @@ function RegistrationCaseDrawer({
                         variant="outline"
                         size="sm"
                         disabled={busy !== null}
+                        className="w-full sm:w-auto"
                         onClick={() =>
                           runAction(
                             `/api/v1/admin/agents/${data.agent?.id ?? ''}/ssl-reprovision`,
@@ -1592,6 +1836,7 @@ function RegistrationCaseDrawer({
                           size="sm"
                           disabled={busy !== null}
                           onClick={() => runAction(`/api/v1/admin/registrations/${registrationId}/retry`, 'retry')}
+                          className="w-full sm:w-auto"
                         >
                           <RotateCcw className="h-3 w-3" />
                           Retry registration
@@ -1601,6 +1846,7 @@ function RegistrationCaseDrawer({
                           size="sm"
                           disabled={busy !== null}
                           onClick={() => runAction(`/api/v1/admin/registrations/${registrationId}/refund`, 'refund')}
+                          className="w-full sm:w-auto"
                         >
                           <XCircle className="h-3 w-3" />
                           Record refund
@@ -1697,12 +1943,18 @@ function RepairMenu({
 
   return (
     <div ref={ref} className="relative">
-      <Button variant="outline" size="sm" disabled={loading} onClick={() => setOpen((v) => !v)}>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={loading}
+        onClick={() => setOpen((v) => !v)}
+        className="w-full sm:w-auto"
+      >
         {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Wrench className="h-3 w-3" />}
         <span className="ml-1 hidden sm:inline">Repair</span>
       </Button>
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-44 overflow-hidden rounded-xl border border-border/60 bg-popover p-1 shadow-2xl shadow-black/30">
+        <div className="absolute right-0 z-50 mt-2 w-[min(82vw,18rem)] overflow-hidden rounded-xl border border-border/60 bg-popover p-1 shadow-2xl shadow-black/30 sm:w-52">
           <button
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-foreground transition hover:bg-primary/15"
             onClick={() => {
