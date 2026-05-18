@@ -14,6 +14,7 @@ export interface RegistrationParams {
   emailEnabled: boolean;
   years: number;
   autoRenew: boolean;
+  discountCode?: string;
   dnsTarget?: string;
   metadata?: AgentMetadata;
   wallet: Address;
@@ -47,6 +48,7 @@ export interface PricingBreakdown {
   basenameCostUsdc: string;
   ensCostUsdc: string;
   serviceFeeUsdc: string;
+  emailFeeUsdc: string;
   providerCostUsdc: string;
   treasuryFeeUsdc: string;
   totalUsdc: string;
