@@ -1243,7 +1243,7 @@ function DiscountsPanel() {
         <CardHeader>
           <CardTitle className="text-base">Generate Discount Code</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">
-            90% off the $2.00 service fee. Single-use codes expire after first use. Multi-use codes
+            90% off the $2.39/year service fee. Single-use codes expire after first use. Multi-use codes
             have a configurable limit.
           </p>
         </CardHeader>
