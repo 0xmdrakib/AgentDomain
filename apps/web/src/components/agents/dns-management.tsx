@@ -123,15 +123,15 @@ export function DnsManagement({ agentId, initialDns }: { agentId: string; initia
 
   return (
     <Card className="mb-6">
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between mb-4">
+      <CardContent className="p-4 sm:p-6">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="font-semibold text-lg">DNS Records</h2>
-          <Button variant="outline" size="sm" onClick={openAdd} className="gap-2">
+          <Button variant="outline" size="sm" onClick={openAdd} className="w-full gap-2 sm:w-auto">
             <Plus className="h-4 w-4" /> Add Record
           </Button>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted-foreground uppercase tracking-wider">
@@ -185,26 +185,72 @@ export function DnsManagement({ agentId, initialDns }: { agentId: string; initia
           </table>
         </div>
 
+        <div className="space-y-3 md:hidden">
+          {records.length === 0 ? (
+            <div className="rounded-lg border border-border/40 py-6 text-center text-sm text-muted-foreground">
+              No DNS records found.
+            </div>
+          ) : (
+            records.map((r) => (
+              <div key={r.id} className="rounded-lg border border-border/50 bg-background/40 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-md bg-muted px-2 py-1 font-mono text-xs">{r.type}</span>
+                      <span className="wrap-anywhere font-mono text-sm">{r.name}</span>
+                    </div>
+                    <div className="wrap-anywhere mt-2 font-mono text-xs text-muted-foreground">
+                      {r.value}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      onClick={() => openEdit(r)}
+                      disabled={r.systemManaged}
+                      className="touch-target inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-primary disabled:pointer-events-none disabled:opacity-40"
+                      title="Edit"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(r.id)}
+                      disabled={r.systemManaged}
+                      className="touch-target inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-destructive disabled:pointer-events-none disabled:opacity-40"
+                      title="Delete"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span>TTL {r.ttl}</span>
+                  <span>{r.systemManaged ? r.purpose ?? 'system' : 'user'}</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
         {/* Modal */}
         {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-card border border-border/50 rounded-xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-              <div className="flex items-center justify-between p-4 border-b border-border/50 bg-muted/20">
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+            <div className="safe-bottom max-h-[92svh] w-full overflow-hidden rounded-t-lg border border-border/50 bg-card shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-200 sm:max-w-md sm:rounded-lg sm:zoom-in-95">
+              <div className="flex items-center justify-between border-b border-border/50 bg-muted/20 p-4">
                 <h3 className="font-semibold text-lg">{isEditing ? 'Edit Record' : 'Add Record'}</h3>
-                <button onClick={closeModal} className="text-muted-foreground hover:text-foreground">
+                <button onClick={closeModal} className="touch-target inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground">
                   <X className="h-5 w-5" />
                 </button>
               </div>
               
-              <form onSubmit={handleSubmit} className="p-5 space-y-4">
+              <form onSubmit={handleSubmit} className="max-h-[calc(92svh-4rem)] space-y-4 overflow-y-auto p-4 sm:p-5">
                 {error && (
                   <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm border border-destructive/20">
                     {error}
                   </div>
                 )}
                 
-                <div className="grid grid-cols-4 gap-4">
-                  <div className="col-span-1 space-y-1.5">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+                  <div className="space-y-1.5 sm:col-span-1">
                     <label className="text-xs font-medium text-muted-foreground">Type</label>
                     <select
                       value={form.type}
@@ -214,7 +260,7 @@ export function DnsManagement({ agentId, initialDns }: { agentId: string; initia
                       {['A', 'AAAA', 'ALIAS', 'CNAME', 'TXT', 'MX', 'NS'].map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </div>
-                  <div className="col-span-3 space-y-1.5">
+                  <div className="space-y-1.5 sm:col-span-3">
                     <label className="text-xs font-medium text-muted-foreground">Name</label>
                     <input
                       type="text"
@@ -239,7 +285,7 @@ export function DnsManagement({ agentId, initialDns }: { agentId: string; initia
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-muted-foreground">TTL (seconds)</label>
                     <input
@@ -266,11 +312,11 @@ export function DnsManagement({ agentId, initialDns }: { agentId: string; initia
                   )}
                 </div>
 
-                <div className="pt-4 flex justify-end gap-3">
-                  <Button type="button" variant="outline" onClick={closeModal} disabled={loading}>
+                <div className="flex flex-col-reverse gap-3 pt-4 sm:flex-row sm:justify-end">
+                  <Button type="button" variant="outline" onClick={closeModal} disabled={loading} className="w-full sm:w-auto">
                     Cancel
                   </Button>
-                  <Button type="submit" disabled={loading} className="min-w-[100px]">
+                  <Button type="submit" disabled={loading} className="w-full min-w-[100px] sm:w-auto">
                     {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
                   </Button>
                 </div>
