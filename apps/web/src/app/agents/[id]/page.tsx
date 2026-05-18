@@ -40,25 +40,25 @@ export default async function AgentDetailPage({ params }: PageProps) {
     <main className="min-h-screen bg-background">
       <LandingNav />
 
-      <section className="container py-12 max-w-4xl">
-        <div className="mb-8">
+      <section className="container max-w-4xl py-10 sm:py-12">
+        <div className="mb-6 sm:mb-8">
           <Link href="/registry" className="text-sm text-muted-foreground hover:text-foreground">
             ← Back to registry
           </Link>
         </div>
 
         {/* Header */}
-        <div className="flex items-start justify-between flex-wrap gap-4 mb-10">
-          <div className="flex items-center gap-4">
+        <div className="mb-8 flex flex-col gap-4 sm:mb-10 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 items-center gap-4">
             <Avatar seed={agent.domain} />
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">{agent.domain}</h1>
+            <div className="min-w-0">
+              <h1 className="wrap-anywhere text-2xl font-bold tracking-tight sm:text-3xl">{agent.domain}</h1>
               {agent.basename && (
-                <div className="font-mono text-sm text-muted-foreground mt-1">{agent.basename}</div>
+                <div className="wrap-anywhere mt-1 font-mono text-sm text-muted-foreground">{agent.basename}</div>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Badge variant={agent.status === 'active' ? 'success' : 'secondary'}>
               {agent.status}
             </Badge>
@@ -68,7 +68,7 @@ export default async function AgentDetailPage({ params }: PageProps) {
         </div>
 
         {/* Identity grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
+        <div className="mb-8 grid grid-cols-1 gap-4 sm:mb-10 md:grid-cols-2">
           <InfoCard
             title="Domain"
             value={agent.domain}
@@ -107,10 +107,10 @@ export default async function AgentDetailPage({ params }: PageProps) {
         {/* Metadata */}
         {agent.metadataUri && (
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               <h2 className="font-semibold mb-3">Metadata</h2>
-              <div className="flex items-center justify-between gap-4">
-                <code className="text-xs font-mono text-muted-foreground truncate flex-1">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                <code className="wrap-anywhere flex-1 text-xs font-mono text-muted-foreground">
                   {agent.metadataUri}
                 </code>
                 <a
@@ -118,7 +118,7 @@ export default async function AgentDetailPage({ params }: PageProps) {
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" className="w-full sm:w-auto">
                     View
                     <ExternalLink className="h-3 w-3" />
                   </Button>
