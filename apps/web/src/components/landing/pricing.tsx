@@ -36,24 +36,24 @@ const priceBlocks = [
 
 export function Pricing() {
   return (
-    <section id="pricing" className="border-t border-border/40 py-24">
+    <section id="pricing" className="border-t border-border/40 py-16 sm:py-24">
       <div className="container">
-        <div className="mx-auto mb-16 max-w-2xl text-center">
-          <h2 className="text-balance text-4xl font-bold tracking-tight md:text-5xl">
+        <div className="mx-auto mb-12 max-w-2xl text-center sm:mb-16">
+          <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
             Live Pricing of all domains
           </h2>
-          <p className="mt-4 text-muted-foreground">
+          <p className="mt-4 text-sm text-muted-foreground sm:text-base">
             The checkout calculates the real total from the selected TLD, live registrar data,
             Basename availability, ENS L1 rent, and current gas.
           </p>
         </div>
 
-        <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 md:grid-cols-3">
+        <div className="mx-auto grid max-w-5xl grid-cols-1 gap-4 md:grid-cols-3 sm:gap-6">
           {priceBlocks.map((block) => {
             const Icon = block.icon;
             return (
               <Card key={block.title} className="border-border/40 bg-card/50">
-                <CardContent className="p-8">
+                <CardContent className="p-5 sm:p-8">
                   <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
                     <Icon className="h-5 w-5" />
                   </div>
@@ -76,7 +76,7 @@ export function Pricing() {
           })}
         </div>
 
-        <div className="mx-auto mt-10 flex max-w-3xl flex-col items-center gap-4 rounded-2xl border border-primary/30 bg-primary/5 p-6 text-center">
+        <div className="mx-auto mt-10 flex max-w-3xl flex-col items-center gap-4 rounded-2xl border border-primary/30 bg-primary/5 p-5 text-center sm:p-6">
           <div>
             <div className="text-lg font-semibold">See the exact amount before signing</div>
             <p className="mt-2 text-sm text-muted-foreground">
