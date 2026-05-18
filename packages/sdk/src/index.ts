@@ -40,6 +40,7 @@ export interface QuoteResult {
   basenameCostUsdc: string;
   ensCostUsdc: string;
   serviceFeeUsdc: string;
+  emailFeeUsdc: string;
   totalUsdc: string;
   discountApplied: boolean;
   discountPercent: number;
@@ -112,6 +113,7 @@ export class AgentDomain {
     basenameLabel?: string;
     registerEns?: boolean;
     ensLabel?: string;
+    emailEnabled?: boolean;
     years?: number;
     discountCode?: string;
   }): Promise<QuoteResult> {
@@ -122,6 +124,7 @@ export class AgentDomain {
     if (args.basenameLabel) params.set('basenameLabel', args.basenameLabel);
     if (args.registerEns !== undefined) params.set('registerEns', String(args.registerEns));
     if (args.ensLabel) params.set('ensLabel', args.ensLabel);
+    if (args.emailEnabled !== undefined) params.set('emailEnabled', String(args.emailEnabled));
     if (args.years) params.set('years', String(args.years));
     if (args.discountCode) params.set('discountCode', args.discountCode);
     const url = `${this.apiUrl}/agents/quote?${params.toString()}`;
@@ -409,7 +412,9 @@ export function createOpenAITools(): Array<{
             tld: { type: 'string', description: 'TLD', default: 'xyz' },
             registerBasename: { type: 'boolean', description: 'Also register Basename', default: true },
             registerEns: { type: 'boolean', description: 'Also register ENS name', default: false },
+            emailEnabled: { type: 'boolean', description: 'Add an email inbox', default: false },
             years: { type: 'number', description: 'Registration years', default: 1 },
+            discountCode: { type: 'string', description: 'Optional service-fee discount code' },
           },
           required: ['preferredName'],
         },
@@ -427,7 +432,9 @@ export function createOpenAITools(): Array<{
             tld: { type: 'string', description: 'TLD', default: 'xyz' },
             registerBasename: { type: 'boolean', description: 'Register Basename', default: true },
             registerEns: { type: 'boolean', description: 'Register ENS', default: false },
+            emailEnabled: { type: 'boolean', description: 'Add an email inbox', default: false },
             years: { type: 'number', description: 'Registration years', default: 1 },
+            discountCode: { type: 'string', description: 'Optional service-fee discount code' },
           },
           required: ['preferredName'],
         },
@@ -479,7 +486,9 @@ export function createAnthropicTools(): Array<{
           tld: { type: 'string', description: 'TLD', default: 'xyz' },
           registerBasename: { type: 'boolean', description: 'Also register Basename', default: true },
           registerEns: { type: 'boolean', description: 'Also register ENS name', default: false },
+          emailEnabled: { type: 'boolean', description: 'Add an email inbox', default: false },
           years: { type: 'number', description: 'Registration years', default: 1 },
+          discountCode: { type: 'string', description: 'Optional service-fee discount code' },
         },
         required: ['preferredName'],
       },
@@ -494,7 +503,9 @@ export function createAnthropicTools(): Array<{
           tld: { type: 'string', description: 'TLD', default: 'xyz' },
           registerBasename: { type: 'boolean', description: 'Register Basename', default: true },
           registerEns: { type: 'boolean', description: 'Register ENS', default: false },
+          emailEnabled: { type: 'boolean', description: 'Add an email inbox', default: false },
           years: { type: 'number', description: 'Registration years', default: 1 },
+          discountCode: { type: 'string', description: 'Optional service-fee discount code' },
         },
         required: ['preferredName'],
       },
@@ -528,7 +539,9 @@ export async function runAgentDomainTool(
         tld: (args.tld as string) ?? 'xyz',
         registerBasename: (args.registerBasename as boolean) ?? true,
         registerEns: (args.registerEns as boolean) ?? false,
+        emailEnabled: (args.emailEnabled as boolean) ?? false,
         years: (args.years as number) ?? 1,
+        discountCode: args.discountCode as string | undefined,
       });
     case 'register_agent_identity':
       return ad.register({
@@ -536,9 +549,10 @@ export async function runAgentDomainTool(
         tld: (args.tld as string) ?? 'xyz',
         registerBasename: (args.registerBasename as boolean) ?? true,
         registerEns: (args.registerEns as boolean) ?? false,
+        emailEnabled: (args.emailEnabled as boolean) ?? false,
         years: (args.years as number) ?? 1,
         autoRenew: false,
-        emailEnabled: false,
+        discountCode: args.discountCode as string | undefined,
         wallet: args.wallet as Address,
       } as RegistrationParams);
     case 'search_agents':
