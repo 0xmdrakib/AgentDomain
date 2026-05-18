@@ -6,6 +6,7 @@ import {
   tldSchema,
   domainLabelSchema,
   SERVICE_FEE_USDC_ATOMIC,
+  parseUsdc,
   USDC_DECIMALS,
 } from '@agentdomain/shared';
 import { getIdentityService } from '@/services/identity';
@@ -25,6 +26,10 @@ const querySchema = z
       .default('false')
       .transform((v) => v === 'true'),
     ensLabel: domainLabelSchema.optional(),
+    emailEnabled: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
     years: z.coerce.number().int().min(1).max(10).optional(),
     discountCode: z.string().max(50).optional(),
   })
@@ -35,7 +40,7 @@ export const runtime = 'nodejs';
 /**
  * GET /api/v1/agents/quote
  * Returns a pricing breakdown for a registration.
- * Optionally applies a discount code to the service fee.
+ * Optionally applies a discount code to the yearly service fee only.
  */
 export async function GET(req: NextRequest) {
   return withErrorHandling(
@@ -43,21 +48,23 @@ export async function GET(req: NextRequest) {
       const parsed = parseQuery(req, querySchema);
       if (parsed instanceof Response) return parsed;
 
+      const years = parsed.years ?? 1;
       const svc = getIdentityService();
       const pricing = await svc.computePricing({
         tld: parsed.tld,
         registerBasename: parsed.registerBasename,
         registerEns: parsed.registerEns,
+        emailEnabled: parsed.emailEnabled,
         preferredName: parsed.preferredName,
         basenameLabel: parsed.basenameLabel,
         ensLabel: parsed.ensLabel,
-        years: parsed.years,
+        years,
       });
 
-      // Apply discount code if provided
       let discountApplied = false;
       let discountPercent = 0;
       let discountedFeeUsdc = pricing.serviceFeeUsdc;
+      let discountedServiceFeeAtomic = parseUsdc(pricing.serviceFeeUsdc);
 
       if (parsed.discountCode) {
         try {
@@ -71,23 +78,24 @@ export async function GET(req: NextRequest) {
           ) {
             discountApplied = true;
             discountPercent = code.discountPercent;
-            const feeAtomic = SERVICE_FEE_USDC_ATOMIC;
+            const feeAtomic = SERVICE_FEE_USDC_ATOMIC * BigInt(years);
             const discountAtomic = (feeAtomic * BigInt(discountPercent)) / 100n;
-            const discountedAtomic = feeAtomic - discountAtomic;
-            discountedFeeUsdc = formatUnits(discountedAtomic, USDC_DECIMALS);
+            discountedServiceFeeAtomic = feeAtomic - discountAtomic;
+            discountedFeeUsdc = formatUnits(discountedServiceFeeAtomic, USDC_DECIMALS);
           }
         } catch {
-          // DB may not be available — silently skip discount
+          // DB may not be available; silently skip discount.
         }
       }
 
-      let totalUsdc = pricing.totalUsdc;
+      let totalAtomic = parseUsdc(pricing.totalUsdc);
       if (discountApplied) {
-        const domainAtomic = BigInt(Math.round(Number(pricing.domainCostUsdc) * 1_000_000));
-        const bnAtomic = BigInt(Math.round(Number(pricing.basenameCostUsdc) * 1_000_000));
-        const ensAtomic = BigInt(Math.round(Number(pricing.ensCostUsdc) * 1_000_000));
-        const feeAtomic = BigInt(Math.round(Number(discountedFeeUsdc) * 1_000_000));
-        totalUsdc = formatUnits(domainAtomic + bnAtomic + ensAtomic + feeAtomic, USDC_DECIMALS);
+        totalAtomic =
+          parseUsdc(pricing.domainCostUsdc) +
+          parseUsdc(pricing.basenameCostUsdc) +
+          parseUsdc(pricing.ensCostUsdc) +
+          parseUsdc(pricing.emailFeeUsdc) +
+          discountedServiceFeeAtomic;
       }
 
       return Response.json({
@@ -95,7 +103,7 @@ export async function GET(req: NextRequest) {
         discountApplied,
         discountPercent,
         serviceFeeUsdc: discountApplied ? discountedFeeUsdc : pricing.serviceFeeUsdc,
-        totalUsdc,
+        totalUsdc: formatUnits(totalAtomic, USDC_DECIMALS),
       });
     },
     { route: '/agents/quote' },
