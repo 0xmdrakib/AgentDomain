@@ -80,7 +80,7 @@ const TOOLS = [
   {
     name: 'quote_registration',
     description:
-      'Get a price quote for registering an agent identity bundle (domain + Basename + ENS).',
+      'Get a price quote for registering an agent identity bundle (domain + Basename + ENS + optional email).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -88,6 +88,9 @@ const TOOLS = [
         tld: { type: 'string', enum: SUPPORTED_TLDS },
         registerBasename: { type: 'boolean' },
         registerEns: { type: 'boolean' },
+        emailEnabled: { type: 'boolean', default: false },
+        years: { type: 'integer', default: 1, minimum: 1, maximum: 10 },
+        discountCode: { type: 'string', description: 'Optional service-fee discount code' },
       },
       required: ['preferredName'],
     },
@@ -110,6 +113,7 @@ const TOOLS = [
           description: 'Optional EVM address to receive NFT ownership',
         },
         emailEnabled: { type: 'boolean', default: false },
+        discountCode: { type: 'string', description: 'Optional service-fee discount code' },
         years: { type: 'integer', default: 1, minimum: 1, maximum: 10 },
         autoRenew: { type: 'boolean', default: false },
         dnsTarget: { type: 'string', description: 'URL or IP to point the domain at' },
@@ -250,6 +254,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             tld: z.enum(SUPPORTED_TLDS).default('xyz'),
             registerBasename: z.boolean().default(true),
             registerEns: z.boolean().default(false),
+            emailEnabled: z.boolean().default(false),
+            years: z.number().int().min(1).max(10).default(1),
+            discountCode: z.string().max(50).optional(),
           })
           .parse(args);
         const result = await client.quote(a);
@@ -283,6 +290,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             emailEnabled: z.boolean().default(false),
             years: z.number().int().min(1).max(10).default(1),
             autoRenew: z.boolean().default(false),
+            discountCode: z.string().max(50).optional(),
             dnsTarget: z.string().optional(),
             metadata: z.record(z.any()).optional(),
           })
