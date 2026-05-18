@@ -7,19 +7,19 @@ const frameworks = [
 
 export function Frameworks() {
   return (
-    <section className="py-20 border-t border-border/40 bg-muted/20">
+    <section className="border-t border-border/40 bg-muted/20 py-16 sm:py-20">
       <div className="container">
-        <p className="text-center text-sm text-muted-foreground uppercase tracking-widest mb-10">
+        <p className="mb-8 text-center text-xs uppercase tracking-widest text-muted-foreground sm:mb-10 sm:text-sm">
           Works with supported agent stacks
         </p>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto">
+        <div className="mx-auto grid max-w-4xl grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {frameworks.map((f) => (
             <div
               key={f.name}
-              className="rounded-lg border border-border/40 bg-card/30 backdrop-blur px-4 py-5 text-center transition-all hover:border-primary/40 hover:bg-card/60"
+              className="rounded-lg border border-border/40 bg-card/30 px-4 py-5 text-center backdrop-blur transition-all hover:border-primary/40 hover:bg-card/60"
             >
-              <div className="font-semibold text-sm">{f.name}</div>
-              <div className="mt-1 text-[10px] font-mono text-muted-foreground truncate">
+              <div className="text-sm font-semibold">{f.name}</div>
+              <div className="wrap-anywhere mt-1 text-[10px] font-mono text-muted-foreground">
                 {f.plugin}
               </div>
             </div>
