@@ -39,11 +39,11 @@ export function AuthButton({ className }: { className?: string }) {
     <div className={cn('relative inline-flex', className)}>
       <button
         type="button"
-        className="flex h-10 max-w-full items-center justify-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 text-sm shadow-lg shadow-emerald-500/10 transition-colors hover:bg-emerald-500/15"
+        className="flex h-10 max-w-full items-center justify-center gap-2 rounded-full border border-primary/20 bg-card/70 px-3 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.78),0_10px_24px_-18px_rgba(20,21,18,0.42)] transition-colors hover:bg-accent/80"
         onClick={() => setShowMenu(!showMenu)}
       >
-        <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/60" />
-        <span className="hidden font-medium text-emerald-300 sm:inline">Connected</span>
+        <span className="h-2 w-2 rounded-full bg-orange-600 shadow-[0_0_0_3px_rgba(234,88,12,0.12)]" />
+        <span className="hidden font-medium text-foreground sm:inline">Connected</span>
         <span className="font-mono text-xs text-muted-foreground">{shortAddress(address)}</span>
         <ChevronDown className="h-4 w-4 text-muted-foreground" />
       </button>
@@ -79,7 +79,7 @@ function WalletMenu({ children, onClose }: { children: ReactNode; onClose: () =>
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} aria-hidden />
-      <div className="absolute right-0 top-full z-50 mt-2 w-[min(92vw,300px)] overflow-hidden rounded-xl border border-border/60 bg-popover shadow-2xl shadow-black/30">
+      <div className="absolute right-0 top-full z-50 mt-2 w-[min(92vw,300px)] overflow-hidden rounded-xl border border-border/70 bg-popover shadow-[0_22px_48px_-34px_rgba(20,21,18,0.55)]">
         {children}
       </div>
     </>
