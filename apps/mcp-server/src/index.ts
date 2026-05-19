@@ -35,9 +35,13 @@ import { base, baseSepolia } from 'viem/chains';
 const API_URL = process.env.AGENTDOMAIN_API_URL ?? 'https://api.agentdomain.xyz/v1';
 const NETWORK = (process.env.AGENTDOMAIN_NETWORK ?? 'base') as 'base' | 'base-sepolia';
 const AGENT_PRIVATE_KEY = process.env.AGENT_PRIVATE_KEY;
+const AGENTDOMAIN_API_KEY = process.env.AGENTDOMAIN_API_KEY;
 
 function getClient(): AgentDomain {
-  const config: ConstructorParameters<typeof AgentDomain>[0] = { apiUrl: API_URL };
+  const config: ConstructorParameters<typeof AgentDomain>[0] = {
+    apiUrl: API_URL,
+    apiKey: AGENTDOMAIN_API_KEY,
+  };
   if (AGENT_PRIVATE_KEY) {
     const account = privateKeyToAccount(AGENT_PRIVATE_KEY as `0x${string}`);
     const chain = NETWORK === 'base' ? base : baseSepolia;
@@ -223,6 +227,18 @@ const TOOLS = [
       required: ['agentId', 'amountUsdc'],
     },
   },
+  {
+    name: 'get_renewal_status',
+    description:
+      'Get renewal vault status for an agent, including exact renewal amount, vault balance, missing deposit, expiry, and auto-renew readiness.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agentId: { type: 'string', description: 'AgentDomain agent ID (UUID)' },
+      },
+      required: ['agentId'],
+    },
+  },
 ];
 
 // ----------------------------------------------------------------------
@@ -377,6 +393,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'fund_renewal_vault': {
         const a = z.object({ agentId: z.string(), amountUsdc: z.string() }).parse(args);
         const result = await client.fundRenewalVault(a.agentId, a.amountUsdc);
+        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      }
+
+      case 'get_renewal_status': {
+        const a = z.object({ agentId: z.string() }).parse(args);
+        const result = await client.getRenewalStatus(a.agentId);
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       }
 
