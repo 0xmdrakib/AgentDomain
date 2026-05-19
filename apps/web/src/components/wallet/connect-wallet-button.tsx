@@ -23,7 +23,7 @@ const CONNECTOR_LABELS: Record<string, string> = {
 
 const CONNECTOR_DESCRIPTIONS: Record<string, string> = {
   injected: 'MetaMask, Rabby, Base',
-  walletConnect: 'Open the WalletConnect picker or your mobile wallet',
+  walletConnect: 'Open WalletConnect',
   coinbaseWalletSDK: 'Coinbase Wallet or Base App',
 };
 
@@ -265,71 +265,103 @@ export function ConnectWalletButton({
         )}
       </Button>
 
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40 bg-background/40 backdrop-blur-sm" onClick={closeSelector} aria-hidden />
-          <div className="absolute right-0 top-full z-50 mt-3 w-[min(92vw,360px)] overflow-hidden rounded-2xl border border-border/60 bg-popover shadow-2xl shadow-black/30">
-            <div className="flex items-start justify-between border-b border-border/40 p-4">
-              <div>
-                <div className="text-sm font-semibold">Connect wallet</div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  Choose one wallet provider to continue.
-                </div>
-              </div>
-              <button
-                type="button"
-                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                onClick={closeSelector}
-                aria-label="Close wallet selector"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+      {open &&
+        createPortal(
+          <WalletProviderSelector
+            connectors={walletOptions}
+            pendingConnectorUid={pendingConnectorUid}
+            errorMessage={localError ?? error?.message ?? null}
+            onClose={closeSelector}
+            onInjectedSelect={() => {
+              reset();
+              setLocalError(null);
+              setPendingConnectorUid(null);
+              setShowInjectedSelector(true);
+            }}
+            onConnect={handleConnect}
+          />,
+          document.body,
+        )}
 
-            <div className="space-y-2 p-3">
-              {walletOptions.map((connector) => (
-                <WalletOption
-                  key={connector.uid}
-                  connector={connector}
-                  pending={pendingConnectorUid === connector.uid}
-                  onConnect={() => {
-                    if (connector.id === 'injected') {
-                      reset();
-                      setLocalError(null);
-                      setPendingConnectorUid(null);
-                      setShowInjectedSelector(true);
-                      return;
-                    }
-                    handleConnect(connector);
-                  }}
-                />
-              ))}
-            </div>
+      {open &&
+        showInjectedSelector &&
+        createPortal(
+          <InjectedWalletSelector
+            wallets={injectedOptions}
+            pendingConnectorUid={pendingConnectorUid}
+            onClose={() => {
+              reset();
+              setShowInjectedSelector(false);
+              setPendingConnectorUid(null);
+              setLocalError(null);
+            }}
+            onConnect={handleConnect}
+          />,
+          document.body,
+        )}
+    </div>
+  );
+}
 
-            {(localError || error) && (
-              <div className="border-t border-border/40 bg-destructive/10 px-4 py-3 text-xs text-destructive">
-                {localError ?? error?.message}
-              </div>
-            )}
+function WalletProviderSelector({
+  connectors,
+  pendingConnectorUid,
+  errorMessage,
+  onClose,
+  onInjectedSelect,
+  onConnect,
+}: {
+  connectors: Connector[];
+  pendingConnectorUid: string | null;
+  errorMessage: string | null;
+  onClose: () => void;
+  onInjectedSelect: () => void;
+  onConnect: (connector: ConnectableConnector, pendingId?: string) => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-4 py-6 backdrop-blur-md sm:px-6">
+      <div className="absolute inset-0 z-0" onClick={onClose} aria-hidden />
+      <div className="relative z-10 flex max-h-[calc(100dvh-2rem)] w-full max-w-[380px] flex-col overflow-hidden rounded-[24px] border border-border/70 bg-popover/95 shadow-2xl shadow-black/45">
+        <div className="flex items-start justify-between border-b border-border/40 px-5 py-5">
+          <div className="min-w-0">
+            <div className="text-base font-semibold tracking-tight">Connect wallet</div>
+            <div className="mt-1 text-sm leading-5 text-muted-foreground">
+              Choose one wallet provider to continue.
+            </div>
           </div>
+          <button
+            type="button"
+            className="ml-3 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            onClick={onClose}
+            aria-label="Close wallet selector"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
 
-          {showInjectedSelector &&
-            createPortal(
-              <InjectedWalletSelector
-                wallets={injectedOptions}
-                pendingConnectorUid={pendingConnectorUid}
-                onClose={() => {
-                  reset();
-                  setShowInjectedSelector(false);
-                  setPendingConnectorUid(null);
-                  setLocalError(null);
-                }}
-                onConnect={handleConnect}
-              />,
-              document.body,
-            )}
-        </>
-      )}
+        <div className="space-y-2.5 overflow-y-auto px-3.5 py-3.5 sm:px-4">
+          {connectors.map((connector) => (
+            <WalletOption
+              key={connector.uid}
+              connector={connector}
+              pending={pendingConnectorUid === connector.uid}
+              onConnect={() => {
+                if (connector.id === 'injected') {
+                  onInjectedSelect();
+                  return;
+                }
+                onConnect(connector);
+              }}
+            />
+          ))}
+        </div>
+
+        {errorMessage && (
+          <div className="border-t border-border/40 bg-destructive/10 px-5 py-3 text-xs leading-5 text-destructive">
+            {errorMessage}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -346,18 +378,19 @@ function InjectedWalletSelector({
   onConnect: (connector: ConnectableConnector, pendingId?: string) => void;
 }) {
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-sm overflow-hidden rounded-2xl border border-border/70 bg-popover shadow-2xl shadow-black/40">
-        <div className="flex items-start justify-between border-b border-border/40 p-4">
-          <div>
-            <div className="text-sm font-semibold">Choose injected wallet</div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              Available browser wallets on this device.
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-background/75 px-4 py-6 backdrop-blur-md sm:px-6">
+      <div className="absolute inset-0 z-0" onClick={onClose} aria-hidden />
+      <div className="relative z-10 flex max-h-[calc(100dvh-2rem)] w-full max-w-[390px] flex-col overflow-hidden rounded-[28px] border border-border/70 bg-popover/95 shadow-2xl shadow-black/45">
+        <div className="flex items-start justify-between px-6 pb-3 pt-6">
+          <div className="min-w-0">
+            <div className="text-lg font-semibold tracking-tight">Choose wallet</div>
+            <div className="mt-2 text-sm leading-6 text-muted-foreground">
+              Multiple browser wallets detected. Pick one to use on Base.
             </div>
           </div>
           <button
             type="button"
-            className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="ml-3 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             onClick={onClose}
             aria-label="Close injected wallet selector"
           >
@@ -365,29 +398,40 @@ function InjectedWalletSelector({
           </button>
         </div>
 
-        <div className="space-y-2 p-3">
+        <div className="space-y-2.5 overflow-y-auto px-5 pb-5 pt-3">
           {wallets.length > 0 ? (
             wallets.map((wallet) => (
               <button
                 key={wallet.id}
                 type="button"
-                className="group flex w-full items-center gap-3 rounded-xl border border-border/40 bg-card/50 p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/10"
+                className="group flex min-h-[66px] w-full items-center gap-3 rounded-2xl border border-border/60 bg-card/70 px-3.5 py-3 text-left shadow-sm shadow-black/10 transition-all hover:border-primary/50 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 onClick={() => onConnect(wallet.connector, wallet.pendingId)}
                 disabled={pendingConnectorUid === wallet.pendingId}
               >
                 <WalletLogo wallet={wallet} pending={pendingConnectorUid === wallet.pendingId} />
                 <div className="min-w-0 flex-1">
-                  <div className="font-medium">{wallet.name}</div>
-                  <div className="truncate text-xs text-muted-foreground">{wallet.description}</div>
+                  <div className="truncate text-sm font-semibold">{wallet.name}</div>
+                  <div className="mt-0.5 truncate text-[11px] leading-4 text-muted-foreground">
+                    {wallet.description}
+                  </div>
                 </div>
                 <Check className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
               </button>
             ))
           ) : (
-            <div className="rounded-xl border border-border/40 bg-card/50 p-4 text-sm text-muted-foreground">
+            <div className="rounded-2xl border border-border/60 bg-card/70 p-4 text-sm leading-6 text-muted-foreground">
               No injected wallet found. Install MetaMask, Rabby, or Coinbase Wallet/Base App and try again.
             </div>
           )}
+        </div>
+        <div className="border-t border-border/40 px-6 py-4">
+          <button
+            type="button"
+            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            onClick={onClose}
+          >
+            Cancel
+          </button>
         </div>
       </div>
     </div>
@@ -396,7 +440,7 @@ function InjectedWalletSelector({
 
 function WalletLogo({ wallet, pending }: { wallet: InjectedWalletOption; pending: boolean }) {
   return (
-    <div className={cn('relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br text-sm font-bold text-white shadow-lg', wallet.accent)}>
+    <div className={cn('relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br text-sm font-bold text-white shadow-lg shadow-black/20', wallet.accent)}>
       {pending ? (
         <Loader2 className="h-5 w-5 animate-spin" />
       ) : (
@@ -491,16 +535,18 @@ function WalletOption({
   return (
     <button
       type="button"
-      className="group flex w-full items-center gap-3 rounded-xl border border-border/40 bg-card/50 p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/10"
+      className="group flex min-h-[66px] w-full items-center gap-3 rounded-2xl border border-border/60 bg-card/70 px-3.5 py-3 text-left shadow-sm shadow-black/10 transition-all hover:border-primary/50 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
       onClick={onConnect}
       disabled={pending}
     >
-      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 via-violet-500 to-fuchsia-500 text-white shadow-lg shadow-blue-500/20">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 via-violet-500 to-fuchsia-500 text-white shadow-lg shadow-blue-500/20">
         {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="font-medium">{label}</div>
-        <div className="truncate text-xs text-muted-foreground">{description}</div>
+        <div className="truncate text-sm font-semibold">{label}</div>
+        <div className="mt-0.5 truncate text-[11px] leading-4 text-muted-foreground">
+          {description}
+        </div>
       </div>
       <Check className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
     </button>
