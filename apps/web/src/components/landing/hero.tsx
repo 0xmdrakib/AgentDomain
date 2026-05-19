@@ -5,15 +5,15 @@ import { ArrowRight, Sparkles } from 'lucide-react';
 
 export function Hero() {
   return (
-    <section className="relative overflow-hidden">
-      <div className="absolute inset-0 grid-pattern opacity-50" />
-      <div className="absolute -top-40 left-1/2 hidden h-[420px] w-[720px] -translate-x-1/2 rounded-full bg-gradient-to-r from-blue-500/20 via-violet-500/20 to-fuchsia-500/20 blur-3xl sm:block" />
+    <section className="premium-shell relative overflow-hidden border-b border-border/50">
+      <div className="absolute inset-0 grid-pattern opacity-70" />
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
 
       <div className="container relative py-16 sm:py-20 md:py-32">
         <div className="mx-auto max-w-4xl text-center">
           <Badge
             variant="outline"
-            className="mb-5 inline-flex max-w-full items-center gap-2 px-3 py-1.5 text-left backdrop-blur sm:mb-6 sm:px-4"
+            className="mb-5 inline-flex max-w-full items-center gap-2 border-primary/25 bg-primary/10 px-3 py-1.5 text-left text-primary shadow-sm shadow-primary/10 sm:mb-6 sm:px-4"
           >
             <Sparkles className="h-3 w-3 text-violet-400" />
             <span className="wrap-anywhere text-xs">
@@ -59,7 +59,7 @@ export function Hero() {
 function CodePreview() {
   return (
     <div className="sm:col-span-3">
-      <div className="overflow-hidden rounded-lg border border-border/60 bg-black/40 p-1 shadow-2xl shadow-violet-500/10 backdrop-blur">
+      <div className="code-surface overflow-hidden rounded-lg border p-1 backdrop-blur">
         <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border/40">
           <div className="h-2.5 w-2.5 rounded-full bg-red-500/70" />
           <div className="h-2.5 w-2.5 rounded-full bg-yellow-500/70" />
