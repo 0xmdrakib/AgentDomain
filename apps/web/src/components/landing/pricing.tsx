@@ -36,7 +36,7 @@ const priceBlocks = [
 
 export function Pricing() {
   return (
-    <section id="pricing" className="border-t border-border/40 py-16 sm:py-24">
+    <section id="pricing" className="border-t border-border/50 py-16 sm:py-24">
       <div className="container">
         <div className="mx-auto mb-12 max-w-2xl text-center sm:mb-16">
           <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
@@ -52,9 +52,9 @@ export function Pricing() {
           {priceBlocks.map((block) => {
             const Icon = block.icon;
             return (
-              <Card key={block.title} className="border-border/40 bg-card/50">
+              <Card key={block.title} className="interactive-surface premium-surface border-border/50">
                 <CardContent className="p-5 sm:p-8">
-                  <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                  <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary shadow-sm shadow-primary/10">
                     <Icon className="h-5 w-5" />
                   </div>
                   <h3 className="text-lg font-semibold">{block.title}</h3>
@@ -76,7 +76,7 @@ export function Pricing() {
           })}
         </div>
 
-        <div className="mx-auto mt-10 flex max-w-3xl flex-col items-center gap-4 rounded-2xl border border-primary/30 bg-primary/5 p-5 text-center sm:p-6">
+        <div className="premium-surface premium-elevated mx-auto mt-10 flex max-w-3xl flex-col items-center gap-4 rounded-lg border border-primary/30 p-5 text-center sm:p-6">
           <div>
             <div className="text-lg font-semibold">See the exact amount before signing</div>
             <p className="mt-2 text-sm text-muted-foreground">
