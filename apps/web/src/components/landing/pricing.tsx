@@ -27,7 +27,7 @@ const priceBlocks = [
   {
     icon: Calculator,
     title: 'Platform fee',
-    price: '$2 per registration',
+    price: '$2.39 per registration',
     description:
       'Covers orchestration, DNS setup, IPFS metadata, monitoring, and checkout infrastructure.',
     items: ['No monthly plan required', 'USDC payment on Base', 'Final quote before signing'],
