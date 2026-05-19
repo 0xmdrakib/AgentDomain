@@ -1336,7 +1336,7 @@ function DiscountsPanel() {
                       <td className="py-3 pr-3 text-muted-foreground">
                         {c.usedCount} / {c.usageLimit}
                       </td>
-                      <td className="py-3 pr-3 text-emerald-400 font-medium">
+                      <td className="py-3 pr-3 font-medium text-green-900">
                         {c.discountPercent}%
                       </td>
                       <td className="py-3 pr-3">
@@ -1383,7 +1383,7 @@ function DiscountsPanel() {
                     )}
                   </div>
                   <div className="mt-3 flex items-center justify-between gap-3 text-sm">
-                    <span className="font-medium text-emerald-400">{c.discountPercent}% off</span>
+                    <span className="font-medium text-green-900">{c.discountPercent}% off</span>
                     <span className="text-xs text-muted-foreground">{formatDate(c.createdAt)}</span>
                   </div>
                   {c.isActive && (
@@ -1460,7 +1460,7 @@ function CreateAgentPanel() {
       </CardHeader>
       <CardContent>
         {result && (
-          <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-300 mb-4 flex items-start gap-2">
+          <div className="mb-4 flex items-start gap-2 rounded-md border border-green-900/20 bg-green-900/10 p-3 text-sm text-green-900">
             <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
             {result}
           </div>
@@ -1571,7 +1571,7 @@ function StatCard({
   const colorClass = {
     default: 'text-foreground',
     primary: 'text-primary',
-    success: 'text-emerald-400',
+    success: 'text-green-900',
     warning: 'text-amber-400',
   }[tone ?? 'default'];
 
