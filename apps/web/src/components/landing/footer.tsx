@@ -102,10 +102,7 @@ export function Footer() {
           </div>
         </div>
         <div className="flex flex-col items-center justify-between border-t border-border/40 pt-8 text-center md:flex-row md:text-left">
-          <div className="flex items-center gap-2">
-            <div className="relative h-5 w-5 rounded-full border border-primary/80 bg-primary">
-              <span className="absolute right-0 top-0 h-1.5 w-1.5 rounded-full bg-orange-500" />
-            </div>
+          <div className="flex items-center">
             <span className="text-sm font-semibold">AgentDomain</span>
           </div>
           <p className="text-xs text-muted-foreground mt-4 md:mt-0">
