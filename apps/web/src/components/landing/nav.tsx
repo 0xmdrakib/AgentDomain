@@ -43,7 +43,7 @@ export function LandingNav() {
   }, [open]);
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-border/40 bg-background/80 backdrop-blur-lg">
+    <header className="sticky top-0 z-40 w-full border-b border-border/70 bg-background/80 shadow-[0_12px_45px_-35px_rgba(0,0,0,0.9)] backdrop-blur-xl">
       <div ref={menuRef} className="container relative flex h-16 items-center justify-between gap-3">
         <Link href="/" className="flex min-w-0 items-center gap-2" onClick={() => setOpen(false)}>
           <Logo />
@@ -62,7 +62,7 @@ export function LandingNav() {
         </div>
         <button
           type="button"
-          className="touch-target inline-flex h-10 w-10 items-center justify-center rounded-md border border-border/60 bg-background/70 text-muted-foreground transition hover:bg-accent hover:text-foreground md:hidden"
+          className="touch-target inline-flex h-10 w-10 items-center justify-center rounded-md border border-border/70 bg-background/70 text-muted-foreground shadow-sm shadow-black/20 transition hover:border-primary/50 hover:bg-accent hover:text-foreground md:hidden"
           onClick={() => setOpen((next) => !next)}
           aria-expanded={open}
           aria-label="Toggle navigation"
@@ -70,7 +70,7 @@ export function LandingNav() {
           {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
         {open && (
-          <div className="safe-x absolute left-0 right-0 top-full z-50 border-b border-border/60 bg-background/95 p-4 shadow-2xl shadow-black/20 backdrop-blur md:hidden">
+          <div className="safe-x premium-surface absolute left-0 right-0 top-full z-50 border-b p-4 shadow-2xl shadow-black/35 md:hidden">
             <nav className="grid gap-1 text-sm">
               <NavLinks showAdmin={showAdmin} onNavigate={() => setOpen(false)} mobile />
             </nav>
@@ -99,7 +99,7 @@ function NavLinks({
   mobile?: boolean;
 }) {
   const linkClass = mobile
-    ? 'touch-target flex items-center rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground'
+    ? 'touch-target flex items-center rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent/80 hover:text-foreground'
     : 'text-muted-foreground hover:text-foreground transition-colors';
 
   return (
@@ -139,9 +139,9 @@ function NavLinks({
 function Logo() {
   return (
     <div className="relative h-7 w-7">
-      <div className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-500 via-violet-500 to-fuchsia-500" />
+      <div className="absolute inset-0 rounded-full bg-gradient-to-br from-cyan-400 via-blue-500 to-emerald-400 shadow-lg shadow-cyan-500/20" />
       <div className="absolute inset-[3px] rounded-full bg-background" />
-      <div className="absolute inset-[6px] rounded-full bg-gradient-to-br from-blue-500 to-violet-500" />
+      <div className="absolute inset-[6px] rounded-full bg-gradient-to-br from-cyan-400 to-blue-500" />
     </div>
   );
 }
