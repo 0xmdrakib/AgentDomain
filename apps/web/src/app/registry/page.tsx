@@ -53,7 +53,7 @@ export default async function RegistryPage() {
         </div>
 
         {items.length === 0 ? (
-          <Card>
+          <Card className="premium-surface">
             <CardContent className="py-16 text-center">
               <p className="text-muted-foreground">
                 No agents registered yet. <Link href="/register" className="text-primary hover:underline">Be the first.</Link>
@@ -64,7 +64,7 @@ export default async function RegistryPage() {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {items.map((agent) => (
               <Link key={agent.id} href={`/agents/${agent.id}`}>
-                <Card className="border-border/40 bg-card/40 backdrop-blur transition-all hover:border-primary/50 hover:bg-card/80 hover:-translate-y-0.5 h-full">
+                <Card className="interactive-surface premium-surface h-full">
                   <CardContent className="p-4 sm:p-6">
                     <div className="mb-3 flex items-start justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-3">
