@@ -122,7 +122,7 @@ export function DnsManagement({ agentId, initialDns }: { agentId: string; initia
   };
 
   return (
-    <Card className="mb-6">
+    <Card className="premium-surface mb-6">
       <CardContent className="p-4 sm:p-6">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="font-semibold text-lg">DNS Records</h2>
@@ -192,7 +192,7 @@ export function DnsManagement({ agentId, initialDns }: { agentId: string; initia
             </div>
           ) : (
             records.map((r) => (
-              <div key={r.id} className="rounded-lg border border-border/50 bg-background/40 p-3">
+              <div key={r.id} className="premium-surface rounded-lg border p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -234,7 +234,7 @@ export function DnsManagement({ agentId, initialDns }: { agentId: string; initia
         {/* Modal */}
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-            <div className="safe-bottom max-h-[92svh] w-full overflow-hidden rounded-t-lg border border-border/50 bg-card shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-200 sm:max-w-md sm:rounded-lg sm:zoom-in-95">
+            <div className="safe-bottom premium-surface max-h-[92svh] w-full overflow-hidden rounded-t-lg border shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-200 sm:max-w-md sm:rounded-lg sm:zoom-in-95">
               <div className="flex items-center justify-between border-b border-border/50 bg-muted/20 p-4">
                 <h3 className="font-semibold text-lg">{isEditing ? 'Edit Record' : 'Add Record'}</h3>
                 <button onClick={closeModal} className="touch-target inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground">
@@ -255,7 +255,7 @@ export function DnsManagement({ agentId, initialDns }: { agentId: string; initia
                     <select
                       value={form.type}
                       onChange={(e) => setForm({ ...form, type: e.target.value })}
-                      className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                      className="w-full h-10 rounded-md border border-input bg-background/70 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                     >
                       {['A', 'AAAA', 'ALIAS', 'CNAME', 'TXT', 'MX', 'NS'].map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
@@ -267,7 +267,7 @@ export function DnsManagement({ agentId, initialDns }: { agentId: string; initia
                       value={form.name}
                       onChange={(e) => setForm({ ...form, name: e.target.value })}
                       placeholder="@ or sub"
-                      className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                      className="w-full h-10 rounded-md border border-input bg-background/70 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                       required
                     />
                   </div>
@@ -280,7 +280,7 @@ export function DnsManagement({ agentId, initialDns }: { agentId: string; initia
                     value={form.value}
                     onChange={(e) => setForm({ ...form, value: e.target.value })}
                     placeholder="Value"
-                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full h-10 rounded-md border border-input bg-background/70 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                     required
                   />
                 </div>
@@ -292,7 +292,7 @@ export function DnsManagement({ agentId, initialDns }: { agentId: string; initia
                       type="number"
                       value={form.ttl}
                       onChange={(e) => setForm({ ...form, ttl: parseInt(e.target.value) || 3600 })}
-                      className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                      className="w-full h-10 rounded-md border border-input bg-background/70 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                       min={60}
                       required
                     />
@@ -304,7 +304,7 @@ export function DnsManagement({ agentId, initialDns }: { agentId: string; initia
                         type="number"
                         value={form.priority || ''}
                         onChange={(e) => setForm({ ...form, priority: parseInt(e.target.value) || 0 })}
-                        className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="w-full h-10 rounded-md border border-input bg-background/70 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                         min={0}
                         required={form.type === 'MX'}
                       />
