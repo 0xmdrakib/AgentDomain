@@ -122,7 +122,7 @@ export function RegisterFlow() {
         });
         const res = await fetch(`/api/v1/domains/availability?${query.toString()}`);
         if (!res.ok) {
-          // API error — optimistically mark available so user can attempt
+          // API error - optimistically mark available so user can attempt
           if (!cancelled)
             setAvailability({ domain: `${searchedName}.${tld}`, available: true, reason: 'api_error' });
           return;
@@ -130,7 +130,7 @@ export function RegisterFlow() {
         const data = (await res.json()) as AvailabilityResult;
         if (!cancelled) setAvailability(data);
       } catch {
-        // Network error — optimistically mark available
+        // Network error - optimistically mark available
         if (!cancelled)
           setAvailability({ domain: `${searchedName}.${tld}`, available: true, reason: 'network_error' });
       } finally {
@@ -299,7 +299,7 @@ export function RegisterFlow() {
       {isConnected && address && (
         <div className="flex flex-col gap-2 px-1 text-sm sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
-            <div className="h-2 w-2 rounded-full bg-emerald-400" />
+            <div className="h-2 w-2 rounded-full bg-orange-600" />
             <span className="shrink-0">Connected:</span>
             <span className="min-w-0 break-all font-mono text-foreground">{shortAddress(address)}</span>
           </div>
@@ -365,8 +365,8 @@ export function RegisterFlow() {
                 </>
               ) : availability?.available ? (
                 <>
-                  <Check className="h-4 w-4 text-emerald-400" />
-                  <span className="wrap-anywhere text-emerald-400">
+                  <Check className="h-4 w-4 text-green-900" />
+                  <span className="wrap-anywhere text-green-900">
                     {name}.{tld} is available
                     {availability.priceUsd && Number(availability.priceUsd) > 0
                       ? ` ($${availability.priceUsd})`
@@ -379,7 +379,7 @@ export function RegisterFlow() {
                   <div className="flex items-center gap-2">
                     <X className="h-4 w-4 text-destructive" />
                     <span className="wrap-anywhere text-destructive">
-                      {name}.{tld} is unavailable — try an alternative below
+                      {name}.{tld} is unavailable - try an alternative below
                     </span>
                   </div>
                 </div>
@@ -398,8 +398,8 @@ export function RegisterFlow() {
                 </>
               ) : availability.basenameAvailable === true ? (
                 <>
-                  <Check className="h-4 w-4 text-emerald-400" />
-                  <span className="wrap-anywhere text-emerald-400">
+                  <Check className="h-4 w-4 text-green-900" />
+                  <span className="wrap-anywhere text-green-900">
                     {availability.basename} is available
                     {availability.basenameCostUsdc ? ` ($${availability.basenameCostUsdc})` : ''}
                   </span>
@@ -419,8 +419,8 @@ export function RegisterFlow() {
                 </>
               ) : availability.ensAvailable === true ? (
                 <>
-                  <Check className="h-4 w-4 text-emerald-400" />
-                  <span className="wrap-anywhere text-emerald-400">
+                  <Check className="h-4 w-4 text-green-900" />
+                  <span className="wrap-anywhere text-green-900">
                     {availability.ensName} is available
                     {availability.ensCostUsdc ? ` ($${availability.ensCostUsdc})` : ''}
                   </span>
@@ -448,7 +448,7 @@ export function RegisterFlow() {
                     <div className="flex items-center gap-2 font-mono text-sm text-foreground">
                       .{alt.tld}
                       {index === 0 && (
-                        <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-sans text-emerald-300">
+                        <span className="rounded-full border border-orange-700/20 bg-orange-600/10 px-2 py-0.5 text-[10px] font-sans text-orange-800">
                           Cheapest
                         </span>
                       )}
@@ -615,10 +615,10 @@ export function RegisterFlow() {
                 />
               </div>
               {quote.discountApplied && (
-                <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs space-y-1">
+                <div className="space-y-1 rounded-lg border border-green-900/20 bg-green-900/10 px-3 py-2 text-xs">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <span className="text-emerald-400 font-medium">
-                      Code applied — {quote.discountPercent}% off service fee
+                    <span className="font-medium text-green-900">
+                      Code applied - {quote.discountPercent}% off service fee
                     </span>
                     <button
                       onClick={() => {
@@ -628,12 +628,12 @@ export function RegisterFlow() {
                       }}
                       className="self-start text-muted-foreground hover:text-foreground sm:ml-2"
                     >
-                      ✕
+                      x
                     </button>
                   </div>
                   <div className="text-muted-foreground">
                     Service fee after discount:{' '}
-                    <span className="text-emerald-300">${quote.serviceFeeUsdc}</span>
+                    <span className="text-green-900">${quote.serviceFeeUsdc}</span>
                   </div>
                 </div>
               )}
@@ -990,10 +990,10 @@ function SuccessScreen({
   onReset: () => void;
 }) {
   return (
-    <Card className="border-emerald-500/40 bg-gradient-to-b from-emerald-500/10 to-transparent">
+    <Card className="premium-surface premium-elevated border-primary/20">
       <CardContent className="p-4 text-center sm:p-8">
-        <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20 mb-6">
-          <Check className="h-8 w-8 text-emerald-400" />
+        <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-full border border-green-900/20 bg-green-900/10">
+          <Check className="h-8 w-8 text-green-900" />
         </div>
         <h2 className="text-2xl font-bold mb-2">Identity registered!</h2>
         <p className="text-muted-foreground mb-6">
@@ -1019,7 +1019,7 @@ function SuccessScreen({
               <ExternalLink className="h-4 w-4" />
             </Button>
           </a>
-          <Button variant="gradient" onClick={onReset} className="w-full sm:w-auto">
+          <Button onClick={onReset} className="w-full sm:w-auto">
             Register another
           </Button>
         </div>
