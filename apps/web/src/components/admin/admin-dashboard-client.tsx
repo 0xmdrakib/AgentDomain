@@ -319,7 +319,7 @@ export function AdminDashboardClient() {
           </div>
 
           {/* Tab bar */}
-          <div className="mb-6 flex gap-1 overflow-x-auto border-b border-border/40 pb-0">
+          <div className="premium-surface mb-6 flex gap-1 overflow-x-auto rounded-lg border p-1">
             {(
               [
                 ['agents', 'Agents'],
@@ -333,9 +333,9 @@ export function AdminDashboardClient() {
                 key={k}
                 onClick={() => setTab(k)}
                 className={cn(
-                  'whitespace-nowrap px-4 py-2.5 text-sm font-medium rounded-t-lg border border-b-0 transition-colors -mb-px',
+                  'whitespace-nowrap rounded-md border px-4 py-2.5 text-sm font-medium transition-colors',
                   tab === k
-                    ? 'bg-card border-border/40 text-foreground'
+                    ? 'border-primary/35 bg-primary/10 text-foreground'
                     : 'text-muted-foreground hover:text-foreground border-transparent',
                 )}
               >
@@ -470,7 +470,7 @@ function AgentsPanel() {
             <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <tr className="border-b border-border/40">
+                  <tr className="border-b border-border/50">
                     <th className="py-3 pr-3 font-medium">Agent</th>
                     <th className="py-3 pr-3 font-medium">Owner</th>
                     <th className="py-3 pr-3 font-medium">Status</th>
@@ -585,7 +585,7 @@ function AgentsPanel() {
             </div>
             <div className="space-y-3 md:hidden">
               {data.items.map((agent) => (
-                <div key={agent.id} className="rounded-lg border border-border/50 bg-background/40 p-3">
+                <div key={agent.id} className="premium-surface rounded-lg border p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="wrap-anywhere font-medium">{agent.domain}</div>
@@ -794,7 +794,7 @@ function RegistrationsPanel() {
             <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <tr className="border-b border-border/40">
+                  <tr className="border-b border-border/50">
                     <th className="py-3 pr-3 font-medium">Payer</th>
                     <th className="py-3 pr-3 font-medium">Amount</th>
                     <th className="py-3 pr-3 font-medium">Status</th>
@@ -899,7 +899,7 @@ function RegistrationsPanel() {
               {data.items.map((reg) => {
                 const key = reg.id;
                 return (
-                  <div key={key} className="rounded-lg border border-border/50 bg-background/40 p-3">
+                <div key={key} className="premium-surface rounded-lg border p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="font-mono text-xs text-muted-foreground">
@@ -1066,7 +1066,7 @@ function RenewalsPanel() {
             <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <tr className="border-b border-border/40">
+                  <tr className="border-b border-border/50">
                     <th className="py-3 pr-3 font-medium">Agent ID</th>
                     <th className="py-3 pr-3 font-medium">Amount</th>
                     <th className="py-3 pr-3 font-medium">Status</th>
@@ -1108,7 +1108,7 @@ function RenewalsPanel() {
             </div>
             <div className="space-y-3 md:hidden">
               {data.items.map((r) => (
-                <div key={r.id} className="rounded-lg border border-border/50 bg-background/40 p-3">
+                <div key={r.id} className="premium-surface rounded-lg border p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="font-mono text-xs text-muted-foreground">
@@ -1320,7 +1320,7 @@ function DiscountsPanel() {
             <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <tr className="border-b border-border/40">
+                  <tr className="border-b border-border/50">
                     <th className="py-3 pr-3 font-medium">Code</th>
                     <th className="py-3 pr-3 font-medium">Usage</th>
                     <th className="py-3 pr-3 font-medium">Discount</th>
@@ -1368,7 +1368,7 @@ function DiscountsPanel() {
             </div>
             <div className="space-y-3 md:hidden">
               {codes.map((c) => (
-                <div key={c.id} className="rounded-lg border border-border/50 bg-background/40 p-3">
+                <div key={c.id} className="premium-surface rounded-lg border p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="wrap-anywhere font-mono font-semibold">{c.code}</div>
@@ -1576,7 +1576,7 @@ function StatCard({
   }[tone ?? 'default'];
 
   return (
-    <Card className="border-border/40">
+    <Card className="premium-surface interactive-surface">
       <CardContent className="p-4 sm:p-6">
         <div className="text-sm text-muted-foreground">{label}</div>
         <div className={`mt-2 text-2xl font-bold tabular-nums sm:text-3xl ${colorClass}`}>{value}</div>
@@ -1746,7 +1746,7 @@ function RegistrationCaseDrawer({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm">
-      <div className="safe-bottom absolute inset-x-0 bottom-0 h-[92svh] w-full overflow-y-auto rounded-t-lg border border-border/60 bg-background shadow-2xl sm:inset-y-0 sm:left-auto sm:right-0 sm:h-full sm:max-w-3xl sm:rounded-none sm:border-l">
+      <div className="safe-bottom premium-surface absolute inset-x-0 bottom-0 h-[92svh] w-full overflow-y-auto rounded-t-lg border shadow-2xl sm:inset-y-0 sm:left-auto sm:right-0 sm:h-full sm:max-w-3xl sm:rounded-none sm:border-l">
         <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-border/60 bg-background/95 px-4 py-4 backdrop-blur sm:px-5">
           <div className="min-w-0">
             <div className="text-sm text-muted-foreground">Registration case</div>
@@ -1782,7 +1782,7 @@ function RegistrationCaseDrawer({
                   <div className="text-sm font-medium">Progress</div>
                   <div className="grid gap-2 md:grid-cols-2">
                     {Object.entries(data.registration.progress?.steps ?? {}).map(([step, s]) => (
-                      <div key={step} className="rounded-lg border border-border/50 p-3 text-sm">
+                      <div key={step} className="premium-surface rounded-lg border p-3 text-sm">
                         <div className="flex items-center justify-between">
                           <span className="font-medium capitalize">{step}</span>
                           <Badge variant={stepBadgeVariant(s.status)}>{s.status}</Badge>
@@ -1875,7 +1875,7 @@ function RegistrationCaseDrawer({
                     <div className="text-sm font-medium">DNS records</div>
                     <div className="space-y-2">
                       {data.dnsRecords.map((record) => (
-                        <div key={record.id} className="rounded-lg border border-border/50 p-3 text-xs">
+                        <div key={record.id} className="premium-surface rounded-lg border p-3 text-xs">
                           <div className="flex items-center justify-between gap-2">
                             <div className="font-mono">
                               {record.type} {record.name}
@@ -1901,7 +1901,7 @@ function RegistrationCaseDrawer({
 
 function InfoTile({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="rounded-lg border border-border/50 p-3">
+    <div className="premium-surface rounded-lg border p-3">
       <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className={cn('mt-1 text-sm', mono && 'font-mono break-all')}>{value}</div>
     </div>
