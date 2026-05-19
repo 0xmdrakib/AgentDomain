@@ -279,6 +279,20 @@ export const RENEWAL_VAULT_ABI = [
   },
   {
     type: 'function',
+    name: 'renewalDuration',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint64' }],
+  },
+  {
+    type: 'function',
+    name: 'renewalWindow',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint64' }],
+  },
+  {
+    type: 'function',
     name: 'executeRenewal',
     stateMutability: 'nonpayable',
     inputs: [{ name: 'tokenId', type: 'uint256' }],
