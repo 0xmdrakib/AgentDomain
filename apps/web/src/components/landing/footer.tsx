@@ -2,7 +2,7 @@ import Link from 'next/link';
 
 export function Footer() {
   return (
-    <footer className="mt-16 border-t border-border/40 py-10 sm:mt-24 sm:py-12">
+    <footer className="mt-16 border-t border-border/50 bg-background/35 py-10 sm:mt-24 sm:py-12">
       <div className="container">
         <div className="mb-10 grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-4">
           <div>
@@ -103,7 +103,7 @@ export function Footer() {
         </div>
         <div className="flex flex-col items-center justify-between border-t border-border/40 pt-8 text-center md:flex-row md:text-left">
           <div className="flex items-center gap-2">
-            <div className="h-5 w-5 rounded-full bg-gradient-to-br from-blue-500 via-violet-500 to-fuchsia-500" />
+            <div className="h-5 w-5 rounded-full bg-gradient-to-br from-cyan-400 via-blue-500 to-emerald-400 shadow-lg shadow-cyan-500/20" />
             <span className="text-sm font-semibold">AgentDomain</span>
           </div>
           <p className="text-xs text-muted-foreground mt-4 md:mt-0">
