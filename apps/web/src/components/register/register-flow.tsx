@@ -671,28 +671,39 @@ export function RegisterFlow() {
               )}
               <div className="pt-2">
                 {!quote.discountApplied && (
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <input
-                      value={discountDraft}
-                      onChange={(e) => {
-                        setDiscountDraft(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''));
-                        setDiscountError(null);
-                      }}
-                      placeholder="Discount code"
-                      className="h-10 flex-1 rounded-md border border-input bg-background/70 px-3 text-sm font-mono outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40 placeholder:text-xs"
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        if (!discountDraft.trim()) return;
-                        setDiscountCode(discountDraft.trim());
-                      }}
-                      disabled={!discountDraft.trim()}
-                      className="h-10 w-full sm:w-auto"
-                    >
-                      Apply
-                    </Button>
+                  <div className="rounded-lg border border-border/60 bg-background/45 p-3 shadow-inner shadow-black/10">
+                    <div className="mb-2 text-xs font-medium text-muted-foreground">
+                      Discount code
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                      <input
+                        value={discountDraft}
+                        onChange={(e) => {
+                          setDiscountDraft(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''));
+                          setDiscountError(null);
+                        }}
+                        placeholder="PASTE CODE"
+                        inputMode="text"
+                        autoCapitalize="characters"
+                        autoComplete="off"
+                        className="h-12 min-w-0 rounded-md border border-input bg-background/80 px-3 font-mono text-base outline-none transition placeholder:text-xs placeholder:tracking-wider placeholder:text-muted-foreground focus:border-primary/60 focus:ring-2 focus:ring-primary/25 sm:h-10 sm:text-sm"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          if (!discountDraft.trim()) return;
+                          setDiscountCode(discountDraft.trim());
+                        }}
+                        disabled={!discountDraft.trim()}
+                        className="h-12 w-full sm:h-10 sm:w-auto"
+                      >
+                        Apply
+                      </Button>
+                    </div>
+                    <div className="mt-2 text-[11px] leading-4 text-muted-foreground">
+                      Applies only to the service fee, not domain, email, ENS, or Basename costs.
+                    </div>
                   </div>
                 )}
                 {discountError && (
