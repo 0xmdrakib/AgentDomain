@@ -105,7 +105,7 @@ export function DashboardClient() {
 
       {/* Wallet not connected */}
       {!isConnected ? (
-        <Card>
+        <Card className="premium-surface">
           <CardContent className="py-12 text-center sm:py-16">
             <Wallet className="h-10 w-10 text-muted-foreground mx-auto mb-4" />
             <h2 className="font-semibold mb-2">Connect your wallet</h2>
@@ -116,7 +116,7 @@ export function DashboardClient() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <Card className="premium-surface">
           <CardHeader>
             <CardTitle>Your agents</CardTitle>
             {address && (
@@ -142,7 +142,7 @@ export function DashboardClient() {
               <div className="divide-y divide-border/40">
                 {agents.map((agent) => (
                   <Link key={agent.id} href={`/agents/${agent.id}`}>
-                    <div className="flex flex-col gap-3 py-4 transition-colors hover:bg-accent/30 sm:-mx-6 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                    <div className="flex flex-col gap-3 rounded-lg py-4 transition-colors hover:bg-accent/40 sm:-mx-3 sm:flex-row sm:items-center sm:justify-between sm:px-3">
                       <div className="flex min-w-0 items-center gap-4">
                         <div
                           className="h-10 w-10 rounded-full flex-shrink-0"
@@ -201,7 +201,7 @@ export function DashboardClient() {
 
 function Stat({ label, value, loading }: { label: string; value: string; loading?: boolean }) {
   return (
-    <Card className="border-border/40">
+    <Card className="premium-surface interactive-surface">
       <CardContent className="p-4 sm:p-6">
         <div className="text-sm text-muted-foreground">{label}</div>
         <div className="text-3xl font-bold mt-2 tabular-nums">
@@ -215,7 +215,7 @@ function Stat({ label, value, loading }: { label: string; value: string; loading
 function ResourceCard({ title, desc, href }: { title: string; desc: string; href: string }) {
   return (
     <Link href={href}>
-      <Card className="h-full border-border/40 transition-all hover:border-primary/50">
+      <Card className="interactive-surface premium-surface h-full">
         <CardContent className="p-4 sm:p-6">
           <div className="flex items-start justify-between">
             <div>
