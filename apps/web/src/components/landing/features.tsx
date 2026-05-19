@@ -46,7 +46,7 @@ const features = [
 
 export function Features() {
   return (
-    <section id="features" className="border-t border-border/50 bg-background/20 py-16 sm:py-24">
+    <section id="features" className="border-t border-border/50 bg-background/10 py-16 sm:py-24">
       <div className="container">
         <div className="mx-auto mb-12 max-w-2xl text-center sm:mb-16">
           <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
@@ -62,15 +62,12 @@ export function Features() {
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {features.map((f) => (
-            <Card
-              key={f.title}
-            className="interactive-surface premium-surface border-border/50 bg-card/65"
-          >
+            <Card key={f.title} className="interactive-surface premium-surface border-border/60 bg-card/65">
               <CardContent className="p-5 sm:p-6">
-                <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary shadow-sm shadow-primary/10">
+                <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border/70 bg-background/60 text-primary shadow-sm">
                   <f.icon className="h-5 w-5" />
                 </div>
-                <h3 className="font-semibold mb-2">{f.title}</h3>
+                <h3 className="mb-2 font-semibold">{f.title}</h3>
                 <p className="text-sm text-muted-foreground">{f.desc}</p>
               </CardContent>
             </Card>
