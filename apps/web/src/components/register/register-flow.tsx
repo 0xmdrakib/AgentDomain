@@ -280,7 +280,7 @@ export function RegisterFlow() {
     <div className="space-y-6">
       {/* Wallet connection banner */}
       {!isConnected && (
-        <Card className="border-primary/40 bg-primary/5">
+        <Card className="premium-surface premium-elevated border-primary/35">
           <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
             <div className="min-w-0">
               <div className="font-semibold flex items-center gap-2">
@@ -313,11 +313,11 @@ export function RegisterFlow() {
       )}
 
       {/* Step 1: Name */}
-      <Card className="border-border/40">
+      <Card className="premium-surface">
         <CardContent className="p-4 sm:p-6">
           <label className="block text-sm font-semibold mb-3">1. Choose your name</label>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <div className="flex min-w-0 flex-1 items-stretch overflow-hidden rounded-lg border bg-background focus-within:ring-2 focus-within:ring-primary">
+            <div className="flex min-w-0 flex-1 items-stretch overflow-hidden rounded-lg border border-input bg-background/70 shadow-inner shadow-black/10 focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/60">
               <input
                 value={name}
                 onChange={(e) => {
@@ -346,7 +346,7 @@ export function RegisterFlow() {
                 if (name.length >= 3) setSearchedName(name);
               }}
               disabled={regState.phase !== 'idle' && regState.phase !== 'error' || name.length < 3 || checking}
-              className="h-11 px-6 bg-primary text-primary-foreground hover:bg-primary/90 sm:h-auto sm:py-3"
+              className="h-11 px-6 sm:h-auto sm:py-3"
             >
               Search
             </Button>
@@ -429,7 +429,7 @@ export function RegisterFlow() {
             </div>
           )}
           {suggestedAlternatives.length > 0 && (
-            <div className="mt-4 rounded-xl border border-border/40 bg-background/50 p-3">
+            <div className="premium-surface mt-4 rounded-lg border p-3">
               <div className="mb-2 flex items-center justify-between gap-3 text-xs text-muted-foreground">
                 <span>Available alternatives</span>
                 <span>Cheapest first</span>
@@ -443,7 +443,7 @@ export function RegisterFlow() {
                       setTld(alt.tld);
                     }}
                     disabled={regState.phase !== 'idle' && regState.phase !== 'error'}
-                    className="group rounded-lg border border-border/50 bg-card/80 px-3 py-2 text-left transition hover:border-primary/60 hover:bg-primary/10 disabled:pointer-events-none disabled:opacity-60"
+                    className="interactive-surface group rounded-lg border border-border/60 bg-card/80 px-3 py-2 text-left disabled:pointer-events-none disabled:opacity-60"
                   >
                     <div className="flex items-center gap-2 font-mono text-sm text-foreground">
                       .{alt.tld}
@@ -466,7 +466,7 @@ export function RegisterFlow() {
       </Card>
 
       {/* Step 2: Add-ons */}
-      <Card className="border-border/40">
+      <Card className="premium-surface">
         <CardContent className="p-4 sm:p-6">
           <label className="block text-sm font-semibold mb-4">2. Choose your stack</label>
           <div className="space-y-8">
@@ -476,10 +476,10 @@ export function RegisterFlow() {
               </h4>
               <div
                 className={cn(
-                  'w-full flex flex-col gap-3 rounded-lg border px-4 py-3 text-left transition-all sm:flex-row sm:items-center sm:justify-between',
+                  'interactive-surface w-full flex flex-col gap-3 rounded-lg border px-4 py-3 text-left sm:flex-row sm:items-center sm:justify-between',
                   years > 1
                     ? 'border-primary/50 bg-primary/10'
-                    : 'border-border/40 hover:border-border bg-card/40',
+                    : 'border-border/50 bg-card/60',
                   regState.phase !== 'idle' &&
                   regState.phase !== 'error' &&
                   'opacity-60 cursor-not-allowed',
@@ -498,7 +498,7 @@ export function RegisterFlow() {
                     value={years}
                     onChange={(e) => setYears(Number(e.target.value))}
                     disabled={regState.phase !== 'idle' && regState.phase !== 'error'}
-                    className="w-full bg-background/50 border border-border/40 rounded-md px-3 py-2 text-sm font-medium text-foreground outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer sm:w-auto sm:py-1.5"
+                    className="w-full rounded-md border border-input bg-background/70 px-3 py-2 text-sm font-medium text-foreground outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer sm:w-auto sm:py-1.5"
                   >
                     {[1, 2, 3, 5, 10].map((y) => (
                       <option key={y} value={y} className="bg-background text-foreground">
@@ -593,7 +593,7 @@ export function RegisterFlow() {
 
       {/* Step 3: Quote */}
       {quote && validName && (
-        <Card className="border-primary/40 bg-primary/5">
+        <Card className="premium-surface premium-elevated border-primary/40">
           <CardContent className="p-4 sm:p-6">
             <label className="block text-sm font-semibold mb-4">3. Pricing</label>
             <div className="space-y-2 text-sm">
@@ -607,7 +607,7 @@ export function RegisterFlow() {
               {registerEns && <Line label="ENS" value={`$${quote.ensCostUsdc}`} />}
               {emailEnabled && <Line label="Email inbox" value={`$${quote.emailFeeUsdc}`} />}
               <Line label="Service fee" value={`$${quote.serviceFeeUsdc}`} />
-              <div className="border-t border-border/40 pt-3 mt-3">
+              <div className="border-t border-border/50 pt-3 mt-3">
                 <Line
                   label="Total (USDC on Base)"
                   value={Number(quote.domainCostUsdc) > 0 ? `$${quote.totalUsdc}` : 'Checking...'}
@@ -615,7 +615,7 @@ export function RegisterFlow() {
                 />
               </div>
               {quote.discountApplied && (
-                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2 text-xs space-y-1">
+                <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs space-y-1">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <span className="text-emerald-400 font-medium">
                       Code applied — {quote.discountPercent}% off service fee
@@ -647,7 +647,7 @@ export function RegisterFlow() {
                         setDiscountError(null);
                       }}
                       placeholder="Discount code"
-                      className="h-10 flex-1 rounded-md border border-border/40 bg-background/50 px-3 text-sm font-mono outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 placeholder:text-xs"
+                      className="h-10 flex-1 rounded-md border border-input bg-background/70 px-3 text-sm font-mono outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40 placeholder:text-xs"
                     />
                     <Button
                       variant="outline"
@@ -674,7 +674,7 @@ export function RegisterFlow() {
 
       {/* Insufficient balance warning */}
       {insufficientBalance && (
-        <Card className="border-destructive/40 bg-destructive/5">
+        <Card className="premium-surface border-destructive/40">
           <CardContent className="flex items-start gap-2 p-4 text-sm">
             <X className="h-4 w-4 text-destructive flex-shrink-0" />
             <div className="space-y-2">
@@ -707,7 +707,7 @@ export function RegisterFlow() {
 
       {/* Status indicator during registration */}
       {regState.phase !== 'idle' && regState.phase !== 'error' && regState.phase !== 'success' && (
-        <Card className="border-primary/60 bg-primary/10">
+        <Card className="premium-surface border-primary/50">
           <CardContent className="flex items-center gap-3 p-4">
             <Loader2 className="h-5 w-5 animate-spin text-primary" />
             <div className="text-sm font-medium">{regState.message ?? 'Working...'}</div>
@@ -818,7 +818,7 @@ function TldSelector({
       {open && (
         <div
           role="listbox"
-          className="absolute right-0 z-30 mt-2 w-[min(76vw,10rem)] overflow-hidden rounded-xl border border-primary/30 bg-[#080b14] p-1 shadow-2xl shadow-blue-500/20 backdrop-blur sm:w-40"
+          className="premium-surface absolute right-0 z-30 mt-2 w-[min(76vw,10rem)] overflow-hidden rounded-lg border border-primary/30 p-1 sm:w-40"
         >
           <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             Popular
@@ -873,7 +873,7 @@ function NameOverrideInput({
   disabled?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-border/30 bg-background/50 p-3">
+    <div className="premium-surface rounded-lg border p-3">
       <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <span className="text-xs font-semibold text-muted-foreground">{label}</span>
         <button
@@ -887,7 +887,7 @@ function NameOverrideInput({
       </div>
       <div
         className={cn(
-          'flex min-w-0 items-stretch overflow-hidden rounded-md border bg-card/60 focus-within:ring-2 focus-within:ring-primary',
+          'flex min-w-0 items-stretch overflow-hidden rounded-md border border-input bg-background/70 shadow-inner shadow-black/10 focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/60',
           value && !valid && 'border-destructive/70',
         )}
       >
@@ -925,7 +925,7 @@ function AddressOverrideInput({
   disabled?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-border/30 bg-background/50 p-3">
+    <div className="premium-surface rounded-lg border p-3">
       <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <span className="text-xs font-semibold text-muted-foreground">Deliver identity to</span>
@@ -950,7 +950,7 @@ function AddressOverrideInput({
         onChange={(event) => onChange(event.target.value.trim())}
         placeholder="0x agent wallet address (optional)"
         className={cn(
-          'w-full rounded-md border bg-card/60 px-3 py-2 font-mono text-sm outline-none focus:ring-2 focus:ring-primary',
+          'w-full rounded-md border border-input bg-background/70 px-3 py-2 font-mono text-sm outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/60',
           value && !valid && 'border-destructive/70',
         )}
         disabled={disabled}
@@ -1080,10 +1080,10 @@ function Toggle({
       onClick={() => !disabled && onChange(!checked)}
       disabled={disabled}
       className={cn(
-        'w-full flex items-start justify-between gap-4 rounded-lg border px-4 py-3 text-left transition-all',
+        'interactive-surface w-full flex items-start justify-between gap-4 rounded-lg border px-4 py-3 text-left',
         checked
           ? 'border-primary/50 bg-primary/10'
-          : 'border-border/40 hover:border-border bg-card/40',
+          : 'border-border/50 bg-card/60',
         disabled && 'opacity-60 cursor-not-allowed',
       )}
     >
@@ -1100,7 +1100,7 @@ function Toggle({
       <div
         className={cn(
           'flex-shrink-0 h-6 w-11 rounded-full p-0.5 transition-colors',
-          checked ? 'bg-primary' : 'bg-muted',
+          checked ? 'bg-primary shadow-lg shadow-primary/20' : 'bg-muted/90',
         )}
       >
         <div
