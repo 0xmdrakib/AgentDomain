@@ -20,6 +20,7 @@ import {
 
 export interface AgentDomainOptions {
   apiUrl?: string;
+  apiKey?: string;
   walletClient?: WalletClient<Transport, Chain, Account>;
   publicClient?: PublicClient<Transport, Chain>;
   network?: 'base' | 'base-sepolia';
@@ -78,19 +79,43 @@ export interface VaultWithdrawResult {
 
 export interface RenewalStatus {
   agentId: string;
+  domain: string;
+  tokenId: string | null;
+  autoRenewEnabled: boolean;
+  vaultBalanceUsdc: string;
+  vaultBalanceAtomic: string;
   vaultBalance: string;
+  renewalFeeUsdc: string;
+  renewalFeeAtomic: string;
+  nextRenewalAmountUsdc: string;
+  nextRenewalAmountAtomic: string;
+  shortfallUsdc: string;
+  shortfallAtomic: string;
   requiredAmount: string;
+  hasEnoughBalanceForNextRenewal: boolean;
   isFunded: boolean;
+  estimatedYearsCovered: number;
+  expiresAt: string | null;
+  renewableFrom: string | null;
+  daysUntilExpiry: number | null;
+  renewalWindowDays: number;
+  renewalDurationDays: number;
+  isRenewableNow: boolean;
+  status: string;
+  message: string;
+  ownerAddress: string;
 }
 
 export class AgentDomain {
   private apiUrl: string;
+  private apiKey?: string;
   readonly walletClient?: WalletClient<Transport, Chain, Account>;
   readonly publicClient?: PublicClient<Transport, Chain>;
   readonly network: 'base' | 'base-sepolia';
 
   constructor(opts?: AgentDomainOptions) {
     this.apiUrl = opts?.apiUrl ?? 'https://agentdomain.xyz/api/v1';
+    this.apiKey = opts?.apiKey;
     this.walletClient = opts?.walletClient;
     this.publicClient = opts?.publicClient;
     this.network = opts?.network ?? 'base';
@@ -363,7 +388,7 @@ export class AgentDomain {
 
   async getRenewalStatus(agentId: string): Promise<RenewalStatus> {
     const url = `${this.apiUrl}/agents/${agentId}/renewal/status`;
-    const res = await fetch(url);
+    const res = await fetch(url, { headers: this.authHeaders() });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
   }
@@ -377,6 +402,14 @@ export class AgentDomain {
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
+  }
+
+  private authHeaders(extra?: Record<string, string>): Record<string, string> {
+    const headers = { ...(extra ?? {}) };
+    if (this.apiKey && !headers.Authorization) {
+      headers.Authorization = `Bearer ${this.apiKey}`;
+    }
+    return headers;
   }
 }
 
@@ -455,6 +488,21 @@ export function createOpenAITools(): Array<{
         },
       },
     },
+    {
+      type: 'function' as const,
+      function: {
+        name: 'get_renewal_status',
+        description:
+          'Get renewal vault status for an agent, including next renewal amount, vault balance, shortfall, renewal date, and auto-renew state',
+        parameters: {
+          type: 'object',
+          properties: {
+            agentId: { type: 'string', description: 'AgentDomain agent ID (UUID)' },
+          },
+          required: ['agentId'],
+        },
+      },
+    },
   ];
 }
 
@@ -522,6 +570,18 @@ export function createAnthropicTools(): Array<{
         },
       },
     },
+    {
+      name: 'get_renewal_status',
+      description:
+        'Get renewal vault status for an agent, including next renewal amount, vault balance, shortfall, renewal date, and auto-renew state',
+      input_schema: {
+        type: 'object',
+        properties: {
+          agentId: { type: 'string', description: 'AgentDomain agent ID (UUID)' },
+        },
+        required: ['agentId'],
+      },
+    },
   ];
 }
 
@@ -567,6 +627,8 @@ export async function runAgentDomainTool(
       return ad.createDnsRecord(args.agentId as string, args.record as Omit<DnsRecord, 'id'>);
     case 'list_agent_email':
       return ad.listEmail(args.agentId as string, { limit: (args.limit as number) ?? 20 });
+    case 'get_renewal_status':
+      return ad.getRenewalStatus(args.agentId as string);
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
