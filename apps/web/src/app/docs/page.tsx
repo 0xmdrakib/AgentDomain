@@ -255,8 +255,8 @@ const apiEndpoints = [
 
 function MethodBadge({ method }: { method: string }) {
   const colors: Record<string, string> = {
-    GET: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
-    POST: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+    GET: 'bg-green-900/10 text-green-900 border-green-900/20',
+    POST: 'bg-stone-900/10 text-stone-900 border-stone-900/20',
     PATCH: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
     DELETE: 'bg-red-500/10 text-red-500 border-red-500/20',
   };
@@ -322,15 +322,15 @@ export default function DocsPage() {
           {stackExamples.map((stack) => {
             const Icon = stack.icon;
             const toneStyles = {
-              eliza: 'border-violet-500/30 bg-violet-500/5',
-              agentkit: 'border-blue-500/30 bg-blue-500/5',
-              openai: 'border-emerald-500/30 bg-emerald-500/5',
+              eliza: 'border-primary/20 bg-card/45',
+              agentkit: 'border-primary/20 bg-card/45',
+              openai: 'border-primary/20 bg-card/45',
               anthropic: 'border-amber-500/30 bg-amber-500/5',
             }[stack.tone];
             const toneBadge = {
-              eliza: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
-              agentkit: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-              openai: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+              eliza: 'bg-orange-600/10 text-orange-800 border-orange-700/20',
+              agentkit: 'bg-stone-900/10 text-stone-900 border-stone-900/20',
+              openai: 'bg-green-900/10 text-green-900 border-green-900/20',
               anthropic: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
             }[stack.tone];
             return (
@@ -364,9 +364,9 @@ export default function DocsPage() {
 
       {/* ── Getting Started + SDK ──────────────────────────────────── */}
       <section className="container grid min-w-0 gap-4 border-t border-border/40 py-10 lg:grid-cols-2 sm:gap-6 sm:py-12">
-        <Card className="premium-surface min-w-0 border-violet-500/30 transition-colors">
+        <Card className="premium-surface min-w-0 border-primary/20 transition-colors">
           <CardContent className="min-w-0 p-5 sm:p-8">
-            <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-500/10 text-violet-400">
+            <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-orange-700/20 bg-orange-600/10 text-orange-800">
               <TerminalSquare className="h-5 w-5" />
             </div>
             <h2 className="text-2xl font-bold tracking-tight">Getting Started</h2>
@@ -383,7 +383,7 @@ export default function DocsPage() {
                 'Fund the RenewalVault for hands-free autonomous renewal.',
               ].map((step, i) => (
                 <div key={i} className="flex min-w-0 gap-3 text-sm">
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-500/10 text-xs font-bold text-violet-400">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-orange-700/20 bg-orange-600/10 text-xs font-bold text-orange-800">
                     {i + 1}
                   </div>
                   <span className="wrap-anywhere leading-6">{step}</span>
@@ -393,9 +393,9 @@ export default function DocsPage() {
           </CardContent>
         </Card>
 
-        <Card className="premium-surface min-w-0 border-emerald-500/30 transition-colors">
+        <Card className="premium-surface min-w-0 border-primary/20 transition-colors">
           <CardContent className="min-w-0 p-5 sm:p-8">
-            <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400">
+            <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-green-900/20 bg-green-900/10 text-green-900">
               <Code2 className="h-5 w-5" />
             </div>
             <h2 className="text-2xl font-bold tracking-tight">TypeScript SDK</h2>
@@ -469,7 +469,7 @@ const identity = await agentDomain.register({
       {/* ── Autonomous Agent Guide ─────────────────────────────────── */}
       <section id="agent-guide" className="container border-t border-border/40 py-12 sm:py-16">
         <div className="mb-8 sm:mb-10">
-          <div className="mb-4 inline-flex max-w-full items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-400 sm:px-4">
+          <div className="mb-4 inline-flex max-w-full items-center gap-2 rounded-full border border-green-900/20 bg-green-900/10 px-3 py-2 text-sm text-green-900 sm:px-4">
             <ShieldCheck className="h-4 w-4" />
             <span className="wrap-anywhere">Autonomous Agent Guide</span>
           </div>
@@ -496,14 +496,14 @@ const identity = await agentDomain.register({
                 </p>
                 <div className="premium-surface rounded-lg border p-4 space-y-2">
                   <div className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-400 mt-0.5 shrink-0" />
+                    <CheckCircle2 className="h-4 w-4 text-green-900 mt-0.5 shrink-0" />
                     <span>
                       <strong className="text-foreground">Owner:</strong> dashboard, DNS, email,
                       withdraw from vault, toggle auto-renew
                     </span>
                   </div>
                   <div className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-blue-400 mt-0.5 shrink-0" />
+                    <CheckCircle2 className="h-4 w-4 text-stone-700 mt-0.5 shrink-0" />
                     <span>
                       <strong className="text-foreground">Anyone:</strong> deposit USDC into vault
                     </span>
@@ -522,7 +522,7 @@ const identity = await agentDomain.register({
           <Card className="premium-surface min-w-0">
             <CardContent className="min-w-0 p-5 sm:p-8">
               <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <Coins className="h-5 w-5 text-emerald-400" />
+                <Coins className="h-5 w-5 text-green-900" />
                 Vault &amp; Auto-Renew
               </h3>
               <div className="space-y-3 text-sm leading-6 text-muted-foreground">
@@ -532,20 +532,20 @@ const identity = await agentDomain.register({
                 </p>
                 <div className="premium-surface rounded-lg border p-4 space-y-2">
                   <div className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-400 mt-0.5 shrink-0" />
+                    <CheckCircle2 className="h-4 w-4 text-green-900 mt-0.5 shrink-0" />
                     <span>
                       <strong className="text-foreground">Deposit = ON:</strong> auto-renew enables
                       automatically
                     </span>
                   </div>
                   <div className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-400 mt-0.5 shrink-0" />
+                    <CheckCircle2 className="h-4 w-4 text-green-900 mt-0.5 shrink-0" />
                     <span>
                       <strong className="text-foreground">No cap:</strong> deposit anytime to extend
                     </span>
                   </div>
                   <div className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-400 mt-0.5 shrink-0" />
+                    <CheckCircle2 className="h-4 w-4 text-green-900 mt-0.5 shrink-0" />
                     <span>
                       <strong className="text-foreground">Withdraw:</strong> owner can pull unused
                       funds
