@@ -33,7 +33,7 @@ const steps = [
 
 export function HowItWorks() {
   return (
-    <section id="how-it-works" className="border-t border-border/50 py-16 sm:py-24">
+    <section id="how-it-works" className="border-t border-border/50 bg-background/10 py-16 sm:py-24">
       <div className="container">
         <div className="mx-auto mb-12 max-w-2xl text-center sm:mb-16">
           <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
@@ -58,7 +58,7 @@ export function HowItWorks() {
               <div className="flex-1 pb-6">
                 <h3 className="text-base font-semibold sm:text-lg">{step.title}</h3>
                 <p className="mt-1 text-sm text-muted-foreground sm:text-base">{step.desc}</p>
-                <code className="mt-2 inline-block rounded border border-border/50 bg-muted/60 px-2 py-0.5 font-mono text-xs text-muted-foreground">
+                <code className="mt-2 inline-block rounded border border-border/60 bg-background/60 px-2 py-0.5 font-mono text-xs text-muted-foreground">
                   {step.detail}
                 </code>
               </div>
