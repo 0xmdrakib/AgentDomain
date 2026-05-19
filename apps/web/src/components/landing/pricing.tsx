@@ -36,11 +36,11 @@ const priceBlocks = [
 
 export function Pricing() {
   return (
-    <section id="pricing" className="border-t border-border/50 py-16 sm:py-24">
+    <section id="pricing" className="border-t border-border/50 bg-background/10 py-16 sm:py-24">
       <div className="container">
         <div className="mx-auto mb-12 max-w-2xl text-center sm:mb-16">
           <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
-            Live Pricing of all domains
+            Live pricing for every domain
           </h2>
           <p className="mt-4 text-sm text-muted-foreground sm:text-base">
             The checkout calculates the real total from the selected TLD, live registrar data,
@@ -52,9 +52,9 @@ export function Pricing() {
           {priceBlocks.map((block) => {
             const Icon = block.icon;
             return (
-              <Card key={block.title} className="interactive-surface premium-surface border-border/50">
+              <Card key={block.title} className="interactive-surface premium-surface border-border/60">
                 <CardContent className="p-5 sm:p-8">
-                  <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary shadow-sm shadow-primary/10">
+                  <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-lg border border-border/70 bg-background/60 text-primary shadow-sm">
                     <Icon className="h-5 w-5" />
                   </div>
                   <h3 className="text-lg font-semibold">{block.title}</h3>
@@ -65,7 +65,7 @@ export function Pricing() {
                   <ul className="mt-6 space-y-3">
                     {block.items.map((item) => (
                       <li key={item} className="flex items-start gap-2 text-sm">
-                        <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-400" />
+                        <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-orange-700" />
                         <span>{item}</span>
                       </li>
                     ))}
@@ -76,7 +76,7 @@ export function Pricing() {
           })}
         </div>
 
-        <div className="premium-surface premium-elevated mx-auto mt-10 flex max-w-3xl flex-col items-center gap-4 rounded-lg border border-primary/30 p-5 text-center sm:p-6">
+        <div className="premium-surface premium-elevated mx-auto mt-10 flex max-w-3xl flex-col items-center gap-4 rounded-lg border border-primary/20 p-5 text-center sm:p-6">
           <div>
             <div className="text-lg font-semibold">See the exact amount before signing</div>
             <p className="mt-2 text-sm text-muted-foreground">
@@ -85,7 +85,7 @@ export function Pricing() {
             </p>
           </div>
           <Link href="/register">
-            <Button variant="gradient" size="lg">
+            <Button size="lg">
               Open live quote
             </Button>
           </Link>
