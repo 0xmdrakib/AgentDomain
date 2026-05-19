@@ -7,7 +7,6 @@ export function Hero() {
   return (
     <section className="premium-shell relative overflow-hidden border-b border-border/70">
       <div className="absolute inset-0 grid-pattern opacity-60" />
-      <div className="absolute left-1/2 top-10 hidden h-44 w-px -rotate-45 bg-border/60 sm:block" />
       <div className="absolute right-[18%] top-24 hidden h-20 w-20 rounded-full border border-border/70 sm:block" />
 
       <div className="container relative py-16 sm:py-20 md:py-32">
