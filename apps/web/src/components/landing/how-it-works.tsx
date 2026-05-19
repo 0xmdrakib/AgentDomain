@@ -33,7 +33,7 @@ const steps = [
 
 export function HowItWorks() {
   return (
-    <section id="how-it-works" className="border-t border-border/40 py-16 sm:py-24">
+    <section id="how-it-works" className="border-t border-border/50 py-16 sm:py-24">
       <div className="container">
         <div className="mx-auto mb-12 max-w-2xl text-center sm:mb-16">
           <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
@@ -51,14 +51,14 @@ export function HowItWorks() {
                 <div className="absolute left-7 top-14 h-full w-px bg-gradient-to-b from-border to-transparent sm:left-8 sm:top-16" />
               )}
               <div className="flex-shrink-0">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border/60 bg-card font-mono text-xs transition-all group-hover:border-primary group-hover:bg-primary/10 group-hover:text-primary sm:h-16 sm:w-16 sm:text-sm">
+                <div className="premium-surface flex h-12 w-12 items-center justify-center rounded-full border font-mono text-xs transition-all group-hover:border-primary/60 group-hover:text-primary sm:h-16 sm:w-16 sm:text-sm">
                   {step.n}
                 </div>
               </div>
               <div className="flex-1 pb-6">
                 <h3 className="text-base font-semibold sm:text-lg">{step.title}</h3>
                 <p className="mt-1 text-sm text-muted-foreground sm:text-base">{step.desc}</p>
-                <code className="mt-2 inline-block px-2 py-0.5 rounded text-xs font-mono bg-muted text-muted-foreground">
+                <code className="mt-2 inline-block rounded border border-border/50 bg-muted/60 px-2 py-0.5 font-mono text-xs text-muted-foreground">
                   {step.detail}
                 </code>
               </div>
