@@ -138,9 +138,13 @@ function NavLinks({
 
 function Logo() {
   return (
-    <div className="relative h-7 w-7 rounded-full border border-primary/80 bg-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_10px_22px_-16px_rgba(20,21,18,0.72)]">
-      <div className="absolute inset-[5px] rounded-full border border-primary-foreground/35" />
-      <div className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-orange-500 shadow-[0_0_0_3px_hsl(var(--background))]" />
+    <div className="relative h-8 w-8 overflow-hidden rounded-[10px] border border-border/80 bg-card shadow-[inset_0_1px_0_rgba(255,255,255,0.75),0_10px_22px_-16px_rgba(20,21,18,0.55)]">
+      <img
+        src="/icon.png"
+        alt=""
+        aria-hidden="true"
+        className="h-full w-full object-cover"
+      />
     </div>
   );
 }
