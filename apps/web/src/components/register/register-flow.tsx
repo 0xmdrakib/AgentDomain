@@ -317,7 +317,7 @@ export function RegisterFlow() {
         <CardContent className="p-4 sm:p-6">
           <label className="block text-sm font-semibold mb-3">1. Choose your name</label>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <div className="flex min-w-0 flex-1 items-stretch overflow-hidden rounded-lg border border-input bg-background/70 shadow-inner shadow-black/10 focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/60">
+            <div className="relative z-20 flex min-w-0 flex-1 items-stretch rounded-lg border border-input bg-background/70 shadow-inner shadow-black/10 focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/60">
               <input
                 value={name}
                 onChange={(e) => {
@@ -808,7 +808,7 @@ function TldSelector({
         type="button"
         disabled={disabled}
         onClick={() => setOpen((next) => !next)}
-        className="flex h-full min-w-24 items-center justify-between gap-2 bg-card/70 px-3 py-3 font-mono text-sm text-foreground outline-none transition hover:bg-primary/10 focus:bg-primary/10 disabled:pointer-events-none disabled:opacity-60"
+        className="flex h-full min-w-24 items-center justify-between gap-2 rounded-r-lg bg-card/70 px-3 py-3 font-mono text-sm text-foreground outline-none transition hover:bg-primary/10 focus:bg-primary/10 disabled:pointer-events-none disabled:opacity-60"
         aria-haspopup="listbox"
         aria-expanded={open}
       >
@@ -818,7 +818,7 @@ function TldSelector({
       {open && (
         <div
           role="listbox"
-          className="premium-surface absolute right-0 z-30 mt-2 w-[min(76vw,10rem)] overflow-hidden rounded-lg border border-primary/30 p-1 sm:w-40"
+          className="premium-surface absolute right-0 top-full z-[70] mt-2 w-[min(76vw,10rem)] overflow-hidden rounded-lg border border-primary/30 p-1 shadow-[0_18px_36px_-24px_rgba(20,21,18,0.55)] sm:w-40"
         >
           <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             Popular
