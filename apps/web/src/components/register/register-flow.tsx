@@ -98,11 +98,31 @@ export function RegisterFlow() {
   const [discountDraft, setDiscountDraft] = useState('');
   const [discountError, setDiscountError] = useState<string | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [tldMenuOpen, setTldMenuOpen] = useState(false);
+  const tldSelectorRef = useRef<HTMLDivElement>(null);
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   const effectiveBasenameLabel = basenameLabel || name;
   const effectiveEnsLabel = ensLabel || name;
   const checkedBasenameLabel = registerBasename ? effectiveBasenameLabel : name;
   const checkedEnsLabel = registerEns ? effectiveEnsLabel : name;
+
+  useEffect(() => {
+    if (!tldMenuOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (tldSelectorRef.current && !tldSelectorRef.current.contains(event.target as Node | null)) {
+        setTldMenuOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setTldMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [tldMenuOpen]);
 
   // Live availability check
   useEffect(() => {
@@ -317,36 +337,48 @@ export function RegisterFlow() {
         <CardContent className="p-4 sm:p-6">
           <label className="block text-sm font-semibold mb-3">1. Choose your name</label>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <div className="relative z-20 flex min-w-0 flex-1 items-stretch rounded-lg border border-input bg-background/70 shadow-inner shadow-black/10 focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/60">
-              <input
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''));
-                  if (availability) setAvailability(null);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    if (name.length >= 3) setSearchedName(name);
-                  }
-                }}
-                placeholder="myagent"
-                className="min-w-0 flex-1 bg-transparent px-4 py-3 outline-none font-mono"
-                autoFocus
-                disabled={regState.phase !== 'idle' && regState.phase !== 'error'}
-              />
-              <TldSelector
-                value={tld}
-                onChange={setTld}
-                disabled={regState.phase !== 'idle' && regState.phase !== 'error'}
-              />
+            <div ref={tldSelectorRef} className="min-w-0 flex-1">
+              <div className="flex min-w-0 items-stretch rounded-lg border border-input bg-background/70 shadow-inner shadow-black/10 focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/60">
+                <input
+                  value={name}
+                  onChange={(e) => {
+                    setName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''));
+                    if (availability) setAvailability(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (name.length >= 3) setSearchedName(name);
+                    }
+                  }}
+                  placeholder="myagent"
+                  className="min-w-0 flex-1 bg-transparent px-4 py-3 outline-none font-mono"
+                  autoFocus
+                  disabled={regState.phase !== 'idle' && regState.phase !== 'error'}
+                />
+                <TldSelector
+                  value={tld}
+                  open={tldMenuOpen}
+                  onOpenChange={setTldMenuOpen}
+                  disabled={regState.phase !== 'idle' && regState.phase !== 'error'}
+                />
+              </div>
+              {tldMenuOpen && (
+                <TldOptionsPanel
+                  value={tld}
+                  onChange={(nextTld) => {
+                    setTld(nextTld);
+                    setTldMenuOpen(false);
+                  }}
+                />
+              )}
             </div>
             <Button
               onClick={() => {
                 if (name.length >= 3) setSearchedName(name);
               }}
               disabled={regState.phase !== 'idle' && regState.phase !== 'error' || name.length < 3 || checking}
-              className="h-11 px-6 sm:h-auto sm:py-3"
+              className="h-11 px-6 sm:h-auto sm:self-start sm:py-3"
             >
               Search
             </Button>
@@ -781,33 +813,21 @@ export function RegisterFlow() {
 
 function TldSelector({
   value,
-  onChange,
+  open,
+  onOpenChange,
   disabled,
 }: {
   value: SupportedTld;
-  onChange: (value: SupportedTld) => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   disabled?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node | null)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
-
   return (
-    <div ref={ref} className="relative flex-shrink-0">
+    <div className="flex-shrink-0">
       <button
         type="button"
         disabled={disabled}
-        onClick={() => setOpen((next) => !next)}
+        onClick={() => onOpenChange(!open)}
         className="flex h-full min-w-24 items-center justify-between gap-2 rounded-r-lg bg-card/70 px-3 py-3 font-mono text-sm text-foreground outline-none transition hover:bg-primary/10 focus:bg-primary/10 disabled:pointer-events-none disabled:opacity-60"
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -815,40 +835,48 @@ function TldSelector({
         .{value}
         <ChevronDown className={cn('h-4 w-4 transition-transform', open && 'rotate-180')} />
       </button>
-      {open && (
-        <div
-          role="listbox"
-          className="premium-surface absolute right-0 top-full z-[70] mt-2 w-[min(76vw,10rem)] overflow-hidden rounded-lg border border-primary/30 p-1 shadow-[0_18px_36px_-24px_rgba(20,21,18,0.55)] sm:w-40"
-        >
-          <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Popular
-          </div>
-          {TLDS.map((item) => {
-            const active = item === value;
-            return (
-              <button
-                key={item}
-                type="button"
-                role="option"
-                aria-selected={active}
-                onClick={() => {
-                  onChange(item);
-                  setOpen(false);
-                }}
-                className={cn(
-                  'flex w-full items-center justify-between rounded-lg px-3 py-2 font-mono text-sm transition',
-                  active
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-primary/15 hover:text-foreground',
-                )}
-              >
-                .{item}
-                {active && <Check className="h-3.5 w-3.5" />}
-              </button>
-            );
-          })}
+    </div>
+  );
+}
+
+function TldOptionsPanel({
+  value,
+  onChange,
+}: {
+  value: SupportedTld;
+  onChange: (value: SupportedTld) => void;
+}) {
+  return (
+    <div className="mt-2 flex justify-end">
+      <div
+        role="listbox"
+        className="premium-surface w-full overflow-hidden rounded-lg border border-primary/30 p-1 shadow-[0_18px_36px_-24px_rgba(20,21,18,0.55)] sm:w-40"
+      >
+        <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Popular
         </div>
-      )}
+        {TLDS.map((item) => {
+          const active = item === value;
+          return (
+            <button
+              key={item}
+              type="button"
+              role="option"
+              aria-selected={active}
+              onClick={() => onChange(item)}
+              className={cn(
+                'flex w-full items-center justify-between rounded-lg px-3 py-2 font-mono text-sm transition',
+                active
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-primary/15 hover:text-foreground',
+              )}
+            >
+              .{item}
+              {active && <Check className="h-3.5 w-3.5" />}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
