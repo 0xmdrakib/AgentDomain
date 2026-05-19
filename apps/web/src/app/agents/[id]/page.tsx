@@ -106,7 +106,7 @@ export default async function AgentDetailPage({ params }: PageProps) {
 
         {/* Metadata */}
         {agent.metadataUri && (
-          <Card>
+          <Card className="premium-surface">
             <CardContent className="p-4 sm:p-6">
               <h2 className="font-semibold mb-3">Metadata</h2>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
@@ -136,7 +136,7 @@ export default async function AgentDetailPage({ params }: PageProps) {
 
 function InfoCard({ title, value, href }: { title: string; value: string; href?: string }) {
   const content = (
-    <Card className="h-full transition-all hover:border-primary/50">
+    <Card className="interactive-surface premium-surface h-full">
       <CardContent className="p-4">
         <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">{title}</div>
         <div className="flex items-center justify-between gap-2">
