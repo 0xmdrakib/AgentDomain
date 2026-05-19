@@ -7,7 +7,7 @@ export default function TermsPage() {
       <LandingNav />
       <section className="container py-16 md:py-24 max-w-4xl">
         <h1 className="text-4xl font-bold tracking-tight mb-8">Terms of Service</h1>
-        <div className="prose prose-sm dark:prose-invert max-w-none space-y-6 text-muted-foreground">
+        <div className="prose prose-sm max-w-none space-y-6 text-muted-foreground">
           <p>Last updated: {new Date().toLocaleDateString()}</p>
           
           <h2 className="text-2xl font-semibold text-foreground mt-8">1. Acceptance of Terms</h2>
