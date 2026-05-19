@@ -277,8 +277,8 @@ export default function DocsPage() {
       <LandingNav />
 
       {/* ── Hero ──────────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden border-b border-border/40">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.22),transparent_42%),radial-gradient(circle_at_80%_20%,rgba(168,85,247,0.18),transparent_34%)]" />
+      <section className="premium-shell relative overflow-hidden border-b border-border/50">
+        <div className="absolute inset-0 grid-pattern opacity-60" />
         <div className="container relative py-14 sm:py-20 md:py-28">
           <div className="max-w-4xl">
             <div className="mb-5 inline-flex max-w-full items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary sm:mb-6 sm:px-4">
@@ -334,7 +334,7 @@ export default function DocsPage() {
               anthropic: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
             }[stack.tone];
             return (
-              <Card key={stack.name} className={`${toneStyles} min-w-0 transition-colors`}>
+              <Card key={stack.name} className={`${toneStyles} premium-surface min-w-0 transition-colors`}>
                 <CardContent className="min-w-0 p-4 sm:p-6">
                   <div className="mb-4 flex items-center justify-between">
                     <div className="flex min-w-0 items-center gap-3">
@@ -351,7 +351,7 @@ export default function DocsPage() {
                       </div>
                     </div>
                   </div>
-                  <pre className="mobile-scroll mb-4 max-w-full rounded-lg border border-border/30 bg-background/60 p-3 text-[11px] leading-relaxed text-muted-foreground sm:p-4">
+                  <pre className="code-surface mobile-scroll mb-4 max-w-full rounded-lg border p-3 text-[11px] leading-relaxed text-muted-foreground sm:p-4">
                     <code>{stack.code}</code>
                   </pre>
                   <p className="text-sm text-muted-foreground">{stack.desc}</p>
@@ -364,7 +364,7 @@ export default function DocsPage() {
 
       {/* ── Getting Started + SDK ──────────────────────────────────── */}
       <section className="container grid min-w-0 gap-4 border-t border-border/40 py-10 lg:grid-cols-2 sm:gap-6 sm:py-12">
-        <Card className="min-w-0 border-violet-500/30 bg-violet-500/5 transition-colors">
+        <Card className="premium-surface min-w-0 border-violet-500/30 transition-colors">
           <CardContent className="min-w-0 p-5 sm:p-8">
             <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-500/10 text-violet-400">
               <TerminalSquare className="h-5 w-5" />
@@ -393,13 +393,13 @@ export default function DocsPage() {
           </CardContent>
         </Card>
 
-        <Card className="min-w-0 border-emerald-500/30 bg-emerald-500/5 transition-colors">
+        <Card className="premium-surface min-w-0 border-emerald-500/30 transition-colors">
           <CardContent className="min-w-0 p-5 sm:p-8">
             <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400">
               <Code2 className="h-5 w-5" />
             </div>
             <h2 className="text-2xl font-bold tracking-tight">TypeScript SDK</h2>
-            <pre className="mobile-scroll mt-6 max-w-full rounded-xl border border-border/50 bg-background/70 p-3 text-xs text-muted-foreground sm:p-4">
+            <pre className="code-surface mobile-scroll mt-6 max-w-full rounded-lg border p-3 text-xs text-muted-foreground sm:p-4">
               <code>{`const quote = await agentDomain.quote({
   preferredName: 'atlas',
   tld: 'com',
@@ -447,13 +447,13 @@ const identity = await agentDomain.register({
               <h3 className="text-xl font-semibold mb-4 text-primary">{group.group}</h3>
               <div className="grid min-w-0 gap-4 md:grid-cols-2">
                 {group.endpoints.map((api) => (
-                  <Card key={api.title} className="min-w-0 border-border/40 bg-card/50">
+                  <Card key={api.title} className="interactive-surface premium-surface min-w-0">
                     <CardContent className="flex h-full min-w-0 flex-col p-4 sm:p-5">
                       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div className="wrap-anywhere text-base font-semibold">{api.title}</div>
                         <MethodBadge method={api.method} />
                       </div>
-                      <code className="mobile-scroll mb-3 block max-w-full rounded border border-border/40 bg-background/50 p-2 font-mono text-xs text-muted-foreground">
+                      <code className="mobile-scroll mb-3 block max-w-full rounded border border-border/60 bg-background/55 p-2 font-mono text-xs text-muted-foreground">
                         {api.path}
                       </code>
                       <p className="text-sm text-muted-foreground mt-auto">{api.text}</p>
@@ -481,7 +481,7 @@ const identity = await agentDomain.register({
         </div>
 
         <div className="grid min-w-0 gap-4 lg:grid-cols-2 sm:gap-6">
-          <Card className="min-w-0 border-border/40 bg-card/50">
+          <Card className="premium-surface min-w-0">
             <CardContent className="min-w-0 p-5 sm:p-8">
               <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
                 <Wallet className="h-5 w-5 text-primary" />
@@ -494,7 +494,7 @@ const identity = await agentDomain.register({
                   USDC, but the <strong className="text-foreground">Owner</strong> receives the NFT
                   and full control.
                 </p>
-                <div className="rounded-lg border border-border/40 bg-background/50 p-4 space-y-2">
+                <div className="premium-surface rounded-lg border p-4 space-y-2">
                   <div className="flex items-start gap-2">
                     <CheckCircle2 className="h-4 w-4 text-emerald-400 mt-0.5 shrink-0" />
                     <span>
@@ -519,7 +519,7 @@ const identity = await agentDomain.register({
             </CardContent>
           </Card>
 
-          <Card className="min-w-0 border-border/40 bg-card/50">
+          <Card className="premium-surface min-w-0">
             <CardContent className="min-w-0 p-5 sm:p-8">
               <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
                 <Coins className="h-5 w-5 text-emerald-400" />
@@ -530,7 +530,7 @@ const identity = await agentDomain.register({
                   RenewalVault holds USDC per domain. Keeper Bot checks every 5 minutes — when
                   expiry nears and vault has funds, it auto-renews.
                 </p>
-                <div className="rounded-lg border border-border/40 bg-background/50 p-4 space-y-2">
+                <div className="premium-surface rounded-lg border p-4 space-y-2">
                   <div className="flex items-start gap-2">
                     <CheckCircle2 className="h-4 w-4 text-emerald-400 mt-0.5 shrink-0" />
                     <span>
@@ -556,7 +556,7 @@ const identity = await agentDomain.register({
             </CardContent>
           </Card>
 
-          <Card className="min-w-0 border-primary/30 bg-primary/5 lg:col-span-2">
+          <Card className="premium-surface premium-elevated min-w-0 border-primary/30 lg:col-span-2">
             <CardContent className="min-w-0 p-5 sm:p-8">
               <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
                 <Code2 className="h-5 w-5 text-primary" />
@@ -565,7 +565,7 @@ const identity = await agentDomain.register({
               <p className="text-sm text-muted-foreground mb-5">
                 Full lifecycle — register, fund vault, check status, withdraw.
               </p>
-              <pre className="mobile-scroll max-w-full rounded-xl border border-border/50 bg-background/70 p-3 text-xs leading-relaxed text-muted-foreground sm:p-5">
+              <pre className="code-surface mobile-scroll max-w-full rounded-lg border p-3 text-xs leading-relaxed text-muted-foreground sm:p-5">
                 <code>{`import { AgentDomain } from '@agentdomain/sdk';
 const ad = new AgentDomain({ walletClient, publicClient });
 
