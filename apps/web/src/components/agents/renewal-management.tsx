@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useAccount, useReadContract, useWriteContract } from 'wagmi';
 import { parseUnits, formatUnits } from 'viem';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -140,7 +140,7 @@ export function RenewalManagement({ tokenId }: RenewalManagementProps) {
   }
 
   return (
-    <Card className="mb-6 border-border/50 bg-accent/10">
+    <Card className="premium-surface premium-elevated mb-6 border-primary/25">
       <CardHeader className="p-4 sm:p-6">
         <div className="flex items-start gap-2">
           <ShieldCheck className="h-5 w-5 text-primary" />
@@ -163,7 +163,7 @@ export function RenewalManagement({ tokenId }: RenewalManagementProps) {
               </div>
             </div>
 
-            <div className="flex items-start gap-3 rounded-lg border border-border/50 bg-background p-4">
+            <div className="flex items-start gap-3 rounded-lg border border-border/60 bg-background/55 p-4 shadow-inner shadow-black/10">
               <Switch 
                 id="auto-renew" 
                 checked={isAutoRenewEnabled || false} 
@@ -188,7 +188,7 @@ export function RenewalManagement({ tokenId }: RenewalManagementProps) {
                   placeholder="0.00" 
                   value={depositAmount}
                   onChange={(e) => setDepositAmount(e.target.value)}
-                  className="bg-background"
+                  className="bg-background/70"
                 />
                 <Button onClick={handleDeposit} disabled={isPending || !depositAmount} variant="secondary" className="w-full sm:w-auto">
                   {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
@@ -205,7 +205,7 @@ export function RenewalManagement({ tokenId }: RenewalManagementProps) {
                   placeholder="0.00" 
                   value={withdrawAmount}
                   onChange={(e) => setWithdrawAmount(e.target.value)}
-                  className="bg-background"
+                  className="bg-background/70"
                 />
                 <Button onClick={handleWithdraw} disabled={isPending || !withdrawAmount || Number(balanceFormatted) === 0} variant="outline" className="w-full sm:w-auto">
                   Withdraw
