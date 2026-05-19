@@ -43,7 +43,7 @@ export function LandingNav() {
   }, [open]);
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-border/70 bg-background/80 shadow-[0_12px_45px_-35px_rgba(0,0,0,0.9)] backdrop-blur-xl">
+    <header className="sticky top-0 z-40 w-full border-b border-border/80 bg-background/82 shadow-[0_12px_35px_-30px_rgba(20,21,18,0.45)] backdrop-blur-xl">
       <div ref={menuRef} className="container relative flex h-16 items-center justify-between gap-3">
         <Link href="/" className="flex min-w-0 items-center gap-2" onClick={() => setOpen(false)}>
           <Logo />
@@ -62,7 +62,7 @@ export function LandingNav() {
         </div>
         <button
           type="button"
-          className="touch-target inline-flex h-10 w-10 items-center justify-center rounded-md border border-border/70 bg-background/70 text-muted-foreground shadow-sm shadow-black/20 transition hover:border-primary/50 hover:bg-accent hover:text-foreground md:hidden"
+          className="touch-target inline-flex h-10 w-10 items-center justify-center rounded-md border border-border/80 bg-card/70 text-muted-foreground shadow-sm transition hover:border-primary/45 hover:bg-accent hover:text-foreground md:hidden"
           onClick={() => setOpen((next) => !next)}
           aria-expanded={open}
           aria-label="Toggle navigation"
@@ -70,7 +70,7 @@ export function LandingNav() {
           {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
         {open && (
-          <div className="safe-x premium-surface absolute left-0 right-0 top-full z-50 border-b p-4 shadow-2xl shadow-black/35 md:hidden">
+          <div className="safe-x premium-surface absolute left-0 right-0 top-full z-50 border-b p-4 shadow-[0_22px_48px_-34px_rgba(20,21,18,0.5)] md:hidden">
             <nav className="grid gap-1 text-sm">
               <NavLinks showAdmin={showAdmin} onNavigate={() => setOpen(false)} mobile />
             </nav>
@@ -138,10 +138,9 @@ function NavLinks({
 
 function Logo() {
   return (
-    <div className="relative h-7 w-7">
-      <div className="absolute inset-0 rounded-full bg-gradient-to-br from-cyan-400 via-blue-500 to-emerald-400 shadow-lg shadow-cyan-500/20" />
-      <div className="absolute inset-[3px] rounded-full bg-background" />
-      <div className="absolute inset-[6px] rounded-full bg-gradient-to-br from-cyan-400 to-blue-500" />
+    <div className="relative h-7 w-7 rounded-full border border-primary/80 bg-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_10px_22px_-16px_rgba(20,21,18,0.72)]">
+      <div className="absolute inset-[5px] rounded-full border border-primary-foreground/35" />
+      <div className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-orange-500 shadow-[0_0_0_3px_hsl(var(--background))]" />
     </div>
   );
 }
