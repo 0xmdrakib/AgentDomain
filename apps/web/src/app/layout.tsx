@@ -53,7 +53,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en" className="dark" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
         <Providers>{children}</Providers>
-        <Toaster position="bottom-right" theme="dark" richColors />
+        <Toaster position="bottom-right" theme="light" richColors />
       </body>
     </html>
   );
