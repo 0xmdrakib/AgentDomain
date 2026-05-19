@@ -99,7 +99,7 @@ export default async function AgentDetailPage({ params }: PageProps) {
         </div>
 
         {/* Renewal Vault */}
-        <RenewalManagement tokenId={agent.agentIdNft} />
+        <RenewalManagement agentId={agent.id} tokenId={agent.agentIdNft} expiresAt={agent.expiresAt} />
 
         {/* DNS Management */}
         <DnsManagement agentId={agent.id} initialDns={dns} />
