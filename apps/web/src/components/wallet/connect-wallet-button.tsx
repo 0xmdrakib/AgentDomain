@@ -81,14 +81,14 @@ const INJECTED_WALLETS: Record<string, Omit<InjectedWalletOption, 'connector' | 
     description: 'DeFi-friendly injected wallet',
     iconUrl: 'https://rabby.io/assets/images/logo-128.png',
     fallback: 'R',
-    accent: 'from-sky-400 to-blue-500',
+    accent: 'from-stone-700 to-stone-950',
   },
   baseApp: {
     id: 'baseApp',
     name: 'Base App',
     description: 'Coinbase Wallet or Base App',
     fallback: 'B',
-    accent: 'from-blue-500 to-cyan-500',
+    accent: 'from-stone-800 to-stone-950',
   },
 };
 
@@ -205,7 +205,7 @@ export function ConnectWalletButton({
         installed: true,
         iconUrl: detail.info.icon ?? meta?.iconUrl,
         fallback: meta?.fallback ?? getInitials(detail.info.name),
-        accent: meta?.accent ?? 'from-blue-500 to-violet-500',
+        accent: meta?.accent ?? 'from-stone-700 to-stone-950',
       } satisfies InjectedWalletOption;
     });
 
@@ -231,7 +231,7 @@ export function ConnectWalletButton({
           pendingId: browserConnector.uid,
           installed: true,
           fallback: 'W',
-          accent: 'from-blue-500 to-violet-500',
+          accent: 'from-stone-700 to-stone-950',
         },
       ] satisfies InjectedWalletOption[];
     }
@@ -254,7 +254,7 @@ export function ConnectWalletButton({
       >
         {isConnected && address ? (
           <>
-            <span className="h-2 w-2 rounded-full bg-emerald-400" />
+            <span className="h-2 w-2 rounded-full bg-orange-600" />
             {shortAddress(address)}
           </>
         ) : (
@@ -319,9 +319,9 @@ function WalletProviderSelector({
   onConnect: (connector: ConnectableConnector, pendingId?: string) => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-4 py-6 backdrop-blur-md sm:px-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/72 px-4 py-6 backdrop-blur-md sm:px-6">
       <div className="absolute inset-0 z-0" onClick={onClose} aria-hidden />
-      <div className="relative z-10 flex max-h-[calc(100dvh-2rem)] w-full max-w-[380px] flex-col overflow-hidden rounded-[24px] border border-border/70 bg-popover/95 shadow-2xl shadow-black/45">
+      <div className="relative z-10 flex max-h-[calc(100dvh-2rem)] w-full max-w-[380px] flex-col overflow-hidden rounded-[24px] border border-border/80 bg-popover/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.82),0_24px_58px_-34px_rgba(20,21,18,0.56)]">
         <div className="flex items-start justify-between border-b border-border/40 px-5 py-5">
           <div className="min-w-0">
             <div className="text-base font-semibold tracking-tight">Connect wallet</div>
@@ -380,7 +380,7 @@ function InjectedWalletSelector({
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-background/75 px-4 py-6 backdrop-blur-md sm:px-6">
       <div className="absolute inset-0 z-0" onClick={onClose} aria-hidden />
-      <div className="relative z-10 flex max-h-[calc(100dvh-2rem)] w-full max-w-[390px] flex-col overflow-hidden rounded-[28px] border border-border/70 bg-popover/95 shadow-2xl shadow-black/45">
+      <div className="relative z-10 flex max-h-[calc(100dvh-2rem)] w-full max-w-[390px] flex-col overflow-hidden rounded-[28px] border border-border/80 bg-popover/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.82),0_24px_58px_-34px_rgba(20,21,18,0.56)]">
         <div className="flex items-start justify-between px-6 pb-3 pt-6">
           <div className="min-w-0">
             <div className="text-lg font-semibold tracking-tight">Choose wallet</div>
@@ -404,7 +404,7 @@ function InjectedWalletSelector({
               <button
                 key={wallet.id}
                 type="button"
-                className="group flex min-h-[66px] w-full items-center gap-3 rounded-2xl border border-border/60 bg-card/70 px-3.5 py-3 text-left shadow-sm shadow-black/10 transition-all hover:border-primary/50 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="group flex min-h-[66px] w-full items-center gap-3 rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_8px_18px_-16px_rgba(20,21,18,0.4)] transition-all hover:border-primary/40 hover:bg-accent/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                 onClick={() => onConnect(wallet.connector, wallet.pendingId)}
                 disabled={pendingConnectorUid === wallet.pendingId}
               >
@@ -440,7 +440,7 @@ function InjectedWalletSelector({
 
 function WalletLogo({ wallet, pending }: { wallet: InjectedWalletOption; pending: boolean }) {
   return (
-    <div className={cn('relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br text-sm font-bold text-white shadow-lg shadow-black/20', wallet.accent)}>
+    <div className={cn('relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br text-sm font-bold text-white shadow-[0_10px_22px_-16px_rgba(20,21,18,0.75)]', wallet.accent)}>
       {pending ? (
         <Loader2 className="h-5 w-5 animate-spin" />
       ) : (
@@ -535,11 +535,11 @@ function WalletOption({
   return (
     <button
       type="button"
-      className="group flex min-h-[66px] w-full items-center gap-3 rounded-2xl border border-border/60 bg-card/70 px-3.5 py-3 text-left shadow-sm shadow-black/10 transition-all hover:border-primary/50 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      className="group flex min-h-[66px] w-full items-center gap-3 rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_8px_18px_-16px_rgba(20,21,18,0.4)] transition-all hover:border-primary/40 hover:bg-accent/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       onClick={onConnect}
       disabled={pending}
     >
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 via-violet-500 to-fuchsia-500 text-white shadow-lg shadow-blue-500/20">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_10px_22px_-16px_rgba(20,21,18,0.75)]">
         {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
       </div>
       <div className="min-w-0 flex-1">
