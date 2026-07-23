@@ -1,0 +1,94 @@
+---
+title: TypeScript SDK
+description: 'Register and manage agent identities from TypeScript.'
+---
+
+# TypeScript SDK
+
+The TypeScript SDK is the primary integration surface for agents, apps, and
+automation scripts.
+
+## Install
+
+```bash
+npm install @agentdomain/sdk viem
+```
+
+## Register
+
+```ts
+const quote = await agentDomain.quote({
+  preferredName: 'research-agent',
+  tld: 'ai',
+  registerBasename: false,
+  registerEns: false,
+  emailUsername: 'agent',
+});
+
+console.log(quote.platformFeeUsdc); // "3.90"
+console.log(quote.emailIncluded, quote.sslIncluded); // true true
+console.log(quote.totalUsdc);
+
+const identity = await agentDomain.register({
+  wallet: account.address,
+  preferredName: 'research-agent',
+  tld: 'ai',
+  registerBasename: false,
+  registerEns: false,
+  emailUsername: 'agent',
+});
+```
+
+`registerBasename` and `registerEns` are optional onchain add-ons. Set them to
+`false` when the agent should not buy that service. Email setup, SSL
+certification, DNS orchestration, and AgentID NFT mint/orchestration are included
+in the annual platform fee. `emailEnabled` is still accepted for old clients but
+is deprecated and ignored.
+
+Agents can manage their own scoped mailbox after registration:
+
+```ts
+await agentDomain.updatePrimaryEmail(agentId, 'support');
+await agentDomain.createEmailAlias(agentId, 'billing'); // Pro/Enterprise only
+await agentDomain.sendEmail(agentId, {
+  fromAddress: 'billing@example.com',
+  to: 'operator@example.com',
+  subject: 'Status',
+  text: 'Agent online.',
+});
+```
+
+For renewal funding, ask for status first and deposit the shortfall:
+
+```ts
+const status = await agentDomain.getRenewalStatus(agentId);
+console.log(status.nextRenewalAmountUsdc, status.expiresAt, status.renewableFrom);
+
+if (Number(status.shortfallUsdc) > 0) {
+  await agentDomain.fundRenewalVault(agentId, status.shortfallUsdc);
+}
+
+await agentDomain.setAutoRenew(agentId, true, { waitForReceipt: true });
+```
+
+`getRenewalStatus` returns both a live renewal quote and the purchase-time
+`renewalSnapshot`. The live quote is used for renewal charging. The snapshot is
+for user/agent display so the buyer can see what was selected at checkout.
+
+Unused vault funds can be withdrawn with `withdrawFromVault`, but the returned
+transaction must be signed by the AgentID NFT owner wallet. Deposits can come
+from any wallet; withdrawals and auto-renew toggles are owner-only.
+
+## Returned identity
+
+```ts
+{
+  agentId: string;
+  nftTokenId: number;
+  domain: string;
+  basename: string | null;
+  sslStatus: 'pending' | 'provisioning' | 'active' | 'failed';
+  metadataUri: string;
+  renewalSnapshot: RenewalPriceSnapshot;
+}
+```

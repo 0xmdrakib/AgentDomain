@@ -1,0 +1,40 @@
+---
+title: Coinbase AgentKit
+description: 'Base-native identity registration for Coinbase AgentKit agents.'
+---
+
+# Coinbase AgentKit
+
+AgentDomain is designed for Base-native agents and pairs naturally with Coinbase
+AgentKit wallets.
+
+## Flow
+
+1. AgentKit wallet signs x402 payment authorization.
+2. AgentDomain settles USDC on Base.
+3. The agent receives a domain, DNS, primary email, SSL, and AgentID NFT.
+   Basename and ENS are added only when enabled.
+
+## Registration
+
+```ts
+quote_agent_registration({
+  preferredName: 'market-maker',
+  tld: 'ai',
+  registerBasename: false,
+  registerEns: false,
+  emailUsername: 'agent',
+});
+```
+
+The quote includes the live domain price plus the annual platform fee. Email
+setup, SSL certification, DNS orchestration, and AgentID NFT
+mint/orchestration are included in that platform fee. Set optional onchain
+booleans to `false` when the agent should not buy Basename or ENS.
+
+AgentKit tools can also update the primary email username and manage Pro or
+Enterprise aliases through `update_primary_email`, `create_email_alias`, and
+`delete_email_alias`.
+
+This gives AgentKit agents a stable public internet identity and an onchain
+ownership primitive.

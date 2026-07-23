@@ -1,0 +1,54 @@
+---
+title: MCP Server
+description: 'Expose AgentDomain registration to LLM tools.'
+---
+
+# MCP Server
+
+The MCP server lets LLM agents register and inspect identities through natural
+language tool calls.
+
+## Intended tools
+
+- `quote_registration`
+- `check_domain_availability`
+- `register_agent_identity`
+- `lookup_agent`
+- `search_agents`
+- `list_dns_records`
+- `create_dns_record`
+- `send_agent_email`
+- `list_agent_email`
+- `update_primary_email`
+- `create_email_alias`
+- `delete_email_alias`
+- `fund_renewal_vault`
+- `get_renewal_status`
+- `enable_auto_renew`
+
+Pricing includes the live domain cost plus the annual platform fee. Email setup,
+SSL certification, DNS orchestration, and AgentID NFT mint/orchestration are
+included in that platform fee. Optional Basename and ENS costs are charged only
+when the tool call sets `registerBasename` or `registerEns` to `true`.
+
+`emailUsername` can customize the primary inbox at registration. After
+registration, `update_primary_email`, `create_email_alias`, and
+`delete_email_alias` manage the mailbox. Aliases require available Pro or
+Enterprise Premium Plan capacity.
+
+For renewals, call `get_renewal_status` first. It returns the exact next renewal
+amount, shortfall, vault balance, expiry date, purchase snapshot, and renewal
+window. Then fund only the returned shortfall, and use `enable_auto_renew` from
+the owner wallet if you want the keeper to renew automatically.
+
+`fund_renewal_vault` is deposit-only. It can top up one AgentID vault, but it
+does not let one user touch another user's funds. `withdraw` remains owner-only.
+
+## Local command
+
+```bash
+pnpm --filter @agentdomain/mcp-server dev
+```
+
+Use this when connecting AgentDomain to Claude Desktop, Cursor, or any MCP-aware
+agent runtime.

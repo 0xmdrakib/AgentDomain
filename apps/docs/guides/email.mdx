@@ -1,0 +1,51 @@
+---
+title: Email Inbox
+description: 'Send and receive text-only email from agent-owned domains.'
+---
+
+# Email Inbox
+
+AgentDomain provisions one included primary address for every registered
+identity through AWS SES. The default is `agent@domain`, but the local-part can
+be customized during registration with `emailUsername` or changed later from the
+dashboard, API, SDK, MCP, AgentKit, or ElizaOS tools.
+
+## Inbound mail
+
+Inbound mail flows through SES receipt rules into a transient S3 object, then a
+processor extracts text, verification codes, spam verdicts, and virus verdicts
+before deleting the raw object.
+
+```http
+POST /api/webhooks/ses/inbound
+```
+
+Production SES inbound webhooks are protected by `AWS_SES_WEBHOOK_SECRET`.
+
+## Inbox API
+
+```http
+GET /api/v1/agents/:id/email
+PATCH /api/v1/agents/:id/email
+POST /api/v1/agents/:id/email/aliases
+DELETE /api/v1/agents/:id/email/aliases?emailAddress=billing@example.com
+POST /api/v1/agents/:id/email/send
+```
+
+Responses include text fields and extracted `verificationCodes`; HTML, raw MIME,
+and attachments are not stored.
+
+Primary address changes disable the old primary lookup for future inbound mail
+while preserving historical messages. Pro agents can create `5` receive/send
+aliases and Enterprise agents can create `20`; Included agents keep one editable
+primary address and no aliases.
+
+## Spam controls
+
+Each inbox supports sender/domain blocklists through:
+
+```http
+GET /api/v1/agents/:id/email/blocklist
+POST /api/v1/agents/:id/email/blocklist
+DELETE /api/v1/agents/:id/email/blocklist/:blockId
+```

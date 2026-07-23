@@ -1,0 +1,180 @@
+---
+title: Registration Flow
+description: 'How AgentDomain registers a complete agent identity.'
+---
+
+# Registration Flow
+
+The registration API is designed to be safe before payment and idempotent after
+payment.
+
+## Steps
+
+1. Validate the requested label and TLD.
+2. Check local database availability.
+3. Check registrar availability through Spaceship.
+4. Check Basename availability on Base if selected. This can use a custom `basenameLabel`.
+5. Check ENS availability and backend Ethereum funding if selected. This can use a custom `ensLabel`.
+6. Return an x402 payment challenge.
+7. Settle USDC payment on Base.
+8. Register ENS through Ethereum mainnet commit/reveal if selected.
+9. Register the domain and enable Spaceship Basic DNS.
+10. Create the Cloudflare for SaaS apex hostname.
+11. Provision the included AWS SES primary email address.
+12. Register the Basename if selected.
+13. Mint the AgentID NFT.
+14. Store the final record and recovery state in DynamoDB.
+
+## Supported names
+
+Domain labels must be 3-63 lowercase alphanumeric characters with optional
+hyphens, not at the beginning or end.
+
+Basename and ENS labels follow the same label rule. They do not have to match
+the domain label, so `atlas.com`, `atlas-ai.base.eth`, and `atlasbot.eth` can be
+registered together when the matching onchain names are unavailable.
+
+## Payer vs owner
+
+The `wallet` field is the payer for x402. The optional `ownerAddress` field is
+the final owner/recipient. If `ownerAddress` is set, AgentDomain delivers the
+AgentID NFT, Basename, ENS name, resolver records, and database ownership to
+that address while still settling payment from `wallet`.
+
+## ENS status
+
+ENS `.eth` registration is supported on Ethereum mainnet. The user still pays in
+USDC on Base; the backend pays the L1 ETH commit/reveal transactions and the ENS
+rent from the quoted amount.
+
+## Fees and optional services
+
+Every registration includes the domain, managed DNS, primary email setup, SSL
+certification, AgentID NFT mint/orchestration, and the `$3.90/year` platform
+fee. The platform fee is charged per agent every registration year and renewal
+year. Discount codes are disabled so pricing stays predictable against email,
+SSL, and orchestration operating costs.
+
+Optional services are charged only when enabled:
+
+- `registerBasename: false` skips Basename registration and Basename cost.
+- `registerEns: false` skips ENS registration and ENS cost.
+- `emailEnabled` is a deprecated compatibility flag. Email is always included.
+- `emailUsername` customizes the primary inbox local-part; omit it for `agent@domain`.
+- `premiumPlan` can be `included`, `pro`, or `enterprise`; paid plans are charged
+  for the same term as the identity registration and renew through RenewalVault.
+
+If an agent or automation does not want an optional service, send the boolean as
+`false`. If a label override is not needed, omit `basenameLabel`, `ensLabel`, or
+`emailUsername` and AgentDomain uses sensible defaults.
+
+---
+
+## Agent API Walkthrough (Raw HTTP)
+
+If your agent is not using the AgentDomain SDK or plugins, it can interact with the API directly using standard HTTP requests.
+
+### 1. Get a Quote
+
+First, the agent checks availability and calculates the total cost (including multi-year pricing).
+
+```http
+GET /api/v1/agents/quote?preferredName=research-agent&tld=ai&years=3&registerBasename=false&registerEns=false&emailUsername=agent
+```
+
+The response returns `domainCostUsdc`, `platformFeeUsdc`,
+included `email`/`ssl` metadata, optional component costs, and `totalUsdc`. Use
+that quote to show the agent exactly what it will pay.
+
+### 2. Initiate Registration (x402 Challenge)
+
+Next, the agent sends the registration payload.
+
+```http
+POST /api/v1/agents/register
+Content-Type: application/json
+
+{
+  "wallet": "0xYourAgentWalletAddress...",
+  "preferredName": "research-agent",
+  "tld": "ai",
+  "years": 3,
+  "autoRenew": true,
+  "registerBasename": false,
+  "registerEns": false,
+  "emailUsername": "agent"
+}
+```
+
+If the agent has not yet paid, the server responds with a **402 Payment Required** status and an `X-Payment-Required` header containing the payment instructions (recipient address, USDC amount, chain ID).
+
+When `X402_BUILDER_CODE` is configured, the payment requirement also includes
+the Base Builder Code extension. SDK and web clients echo that extension in the
+payment payload, and the server preserves it before settlement for onchain
+attribution.
+
+### 3. Fulfill Payment via EIP-3009
+
+The agent's wallet must sign an EIP-3009 `transferWithAuthorization` message for the requested USDC amount to the backend's recipient address.
+
+Once signed, the agent repeats the exact same registration request, but this time includes the signature in the `X-Payment` header:
+
+```http
+POST /api/v1/agents/register
+Content-Type: application/json
+X-Payment: <base64-json-payment-payload>
+
+{ ... same body as before ... }
+```
+
+The decoded payment payload shape is:
+
+```json
+{
+  "x402Version": 1,
+  "scheme": "exact",
+  "network": "base",
+  "extensions": {
+    "builder-code": {
+      "info": {
+        "a": "bc_your_code"
+      }
+    }
+  },
+  "payload": {
+    "signature": "0x...",
+    "authorization": {
+      "from": "0xAgentWallet",
+      "to": "0xBackendWallet",
+      "value": "15590000",
+      "validAfter": "0",
+      "validBefore": "1779321900",
+      "nonce": "0x..."
+    }
+  }
+}
+```
+
+The server verifies the signature, executes the transfer on-chain, and immediately provisions the identity bundle. It returns the newly minted AgentID NFT `tokenId`.
+
+### 4. Enable Auto-Renew (On-Chain)
+
+Registration is paid with one x402 checkout. If the agent passed `"autoRenew":
+true`, the backend records the preference, but the **owner wallet** must
+authorize the RenewalVault contract on-chain to allow the Keeper Bot to deduct
+USDC in the future.
+
+The agent submits a transaction to the `RenewalVault` smart contract on Base:
+
+```solidity
+// Contract: RenewalVault (Base L2)
+function setAutoRenew(uint256 tokenId, bool enabled) external;
+```
+
+**Parameters:**
+
+- `tokenId`: The NFT Token ID returned from the registration API.
+- `enabled`: `true`
+
+_Note: Anyone can deposit USDC into the token vault. Only the AgentID NFT owner
+can enable auto-renew or withdraw unused funds._

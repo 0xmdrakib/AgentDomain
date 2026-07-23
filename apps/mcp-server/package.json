@@ -1,0 +1,43 @@
+{
+  "name": "@agentdomain/mcp-server",
+  "version": "0.3.0",
+  "description": "MCP server exposing AgentDomain registration and management tools to any LLM",
+  "license": "Apache-2.0",
+  "repository": "https://github.com/0xmdrakib/AgentDomain.git",
+  "homepage": "https://agentdomain.app/docs",
+  "bugs": "https://github.com/0xmdrakib/AgentDomain/issues",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "agentdomain-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "package.json"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "pnpm run build",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"no lint\""
+  },
+  "dependencies": {
+    "@agentdomain/sdk": "workspace:^",
+    "@agentdomain/shared": "workspace:^",
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "viem": "^2.55.2",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "tsx": "^4.23.1",
+    "typescript": "^5.7.2"
+  }
+}

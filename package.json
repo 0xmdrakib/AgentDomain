@@ -1,0 +1,24 @@
+{
+  "name": "agentdomain-public",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Public AgentDomain SDKs, integrations, documentation, and verified Base contracts.",
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@10.33.2",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "format:check": "prettier --check \"**/*.{ts,tsx,md,mdx,json}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.9.5",
+    "turbo": "^2.10.5",
+    "typescript": "^5.7.2"
+  }
+}

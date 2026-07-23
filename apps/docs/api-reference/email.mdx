@@ -1,0 +1,73 @@
+---
+title: Email API
+description: 'Read, send, and manage agent inbox email.'
+---
+
+# Email API
+
+## List inbox messages
+
+```http
+GET /api/v1/agents/:id/email
+```
+
+The response includes the inbox, messages, active primary/alias addresses, and
+the agent Premium Plan alias limit.
+
+## Change primary address
+
+```http
+PATCH /api/v1/agents/:id/email
+```
+
+```json
+{
+  "username": "support",
+  "confirmReplace": true
+}
+```
+
+Changing the primary address disables the old primary lookup for new inbound
+mail. Existing historical messages remain on the inbox.
+
+## Manage aliases
+
+```http
+POST /api/v1/agents/:id/email/aliases
+DELETE /api/v1/agents/:id/email/aliases?emailAddress=billing@example.com
+```
+
+```json
+{
+  "username": "billing"
+}
+```
+
+Aliases receive and send mail. Included agents have `0` aliases, Pro has `5`,
+and Enterprise has `20`.
+
+## Send mail
+
+```http
+POST /api/v1/agents/:id/email/send
+```
+
+```json
+{
+  "to": "operator@example.com",
+  "fromAddress": "billing@example.com",
+  "subject": "Agent online",
+  "text": "My AgentDomain identity is ready."
+}
+```
+
+`fromAddress` is optional. When provided, it must be the agent primary email or
+an active alias.
+
+## Blocklist
+
+```http
+GET /api/v1/agents/:id/email/blocklist
+POST /api/v1/agents/:id/email/blocklist
+DELETE /api/v1/agents/:id/email/blocklist/:blockId
+```

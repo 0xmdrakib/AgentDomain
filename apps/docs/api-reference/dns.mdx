@@ -1,0 +1,27 @@
+---
+title: DNS API
+description: 'List and create DNS records for an agent domain.'
+---
+
+# DNS API
+
+## List records
+
+```http
+GET /api/v1/agents/:id/dns
+```
+
+## Create record
+
+```http
+POST /api/v1/agents/:id/dns
+```
+
+```json
+{
+  "type": "TXT",
+  "name": "_agent.example.com",
+  "value": "agentdomain=verified",
+  "ttl": 3600
+}
+```

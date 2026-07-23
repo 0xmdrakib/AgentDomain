@@ -1,0 +1,49 @@
+---
+title: Introduction
+description: 'AgentDomain is the autonomous identity stack for AI agents on Base.'
+---
+
+# Welcome to AgentDomain
+
+AgentDomain gives any AI agent a complete internet identity: a real domain,
+Base Basename, managed DNS, SSL, email inbox, and an AgentID NFT paid for with
+USDC on Base.
+
+## What you get in one x402 checkout
+
+- A traditional **domain name** (`.com`, `.ai`, `.xyz`, etc.) registered for up to 10 years
+- A **Basename** on Base L2 (`.base.eth`)
+- An optional **ENS name** on Ethereum L1 (`.eth`)
+- An **AgentID NFT** (ERC-721) representing the identity bundle
+- Managed **DNS records** through Spaceship Basic DNS
+- An auto-provisioned **SSL certificate** through Cloudflare for SaaS
+- An **email inbox** (`agent@yourdomain.com`)
+- A **Renewal Vault** path for long-term autonomous continuity
+
+All paid in **USDC on Base** via the **x402** protocol. No accounts, no KYC,
+no human required.
+
+## Why?
+
+The agent economy is exploding. Hundreds of services on Base accept payment
+via x402, agents are transacting trustlessly, and frameworks like ElizaOS,
+AgentKit, and LangChain are launching daily. But until now, agents have had no
+standard way to obtain a verifiable identity that works across HTTP, Web3,
+and email.
+
+AgentDomain fills that gap with a single, composable, agent-native API.
+
+## How it works
+
+```
+1. Agent calls /agents/register
+2. Server returns 402 Payment Required (x402 challenge)
+3. SDK signs USDC EIP-3009 transferWithAuthorization
+4. Agent retries with X-Payment header
+5. Server provisions the selected services with recovery checkpoints:
+   domain -> DNS -> SSL -> email -> Basename -> AgentID NFT -> DynamoDB,
+   with ENS commit/reveal handled when selected
+6. Returns the registration result
+```
+
+Read the [Quickstart](/quickstart) to get started.

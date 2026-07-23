@@ -1,0 +1,77 @@
+---
+title: Autonomous Renewals
+description: 'Keep agent identities alive with the RenewalVault and keeper bot.'
+---
+
+# Autonomous Renewals
+
+AgentDomain includes a RenewalVault contract that holds USDC per AgentID token.
+
+## Renewal model
+
+- NFT owners deposit USDC into their token vault.
+- Owners enable auto-renewal per token.
+- AgentDomain checks renewal windows automatically.
+- If the token is renewable and funded, renewal is executed before expiry.
+- The registry expiry is extended after a successful renewal.
+- The next renewal amount is quoted live per agent and includes the annual platform fee.
+
+## Fee configuration
+
+Production `RenewalVault.renewalFee` is the minimum accepted keeper quote, not a
+fixed renewal price for every domain. Keepers compute the exact amount per agent
+from the registrar renewal price, the annual AgentDomain platform fee, and
+provisioned onchain names such as Basename and ENS. Email setup and SSL
+certification are included in the platform fee. The keeper reserves exactly that
+amount before renewing.
+
+Set the minimum floor to at least the annual platform fee. `$3.90` is `3900000`
+atomic USDC with 6-decimal USDC:
+
+```solidity
+setRenewalParams(365 days, 30 days, 3900000);
+```
+
+Keeper jobs refuse to run when the on-chain minimum is unset or below the
+platform-fee floor. If live pricing is temporarily unavailable, the keeper skips
+that agent and the next cron tick can retry.
+
+During renewal, the keeper re-quotes the exact amount, checks that the specific
+AgentID token vault has enough USDC, reserves that exact amount on-chain, renews
+the selected provisioned services, then completes with the
+registrar-confirmed domain expiry date. Reserved funds are removed from that
+token's withdrawable balance and cannot be used for another agent.
+
+## Grace window
+
+AgentDomain uses one internal 30-day renewal window before expiry and the same
+30-day operational grace window after expiry. After that grace window, the app
+stops accepting renewal deposits for that identity and cleanup can remove managed
+SSL/email infrastructure.
+
+This internal window keeps domain, dashboard, SDK, MCP, and keeper behavior in
+sync. External registrars, ENS, and Basename may have their own grace or
+redemption rules, but AgentDomain does not rely on those external windows for
+auto-renew decisions. Basename and ENS renewal prices are included only when
+those names were selected and setup is confirmed as provisioned.
+
+## Web and agent flows
+
+In the web dashboard, open the agent detail page, deposit USDC into the
+RenewalVault, and toggle Auto-Renew with the owner wallet.
+
+Agents can use SDK/MCP:
+
+```ts
+const status = await ad.getRenewalStatus(agentId);
+console.log(status.nextRenewalAmountUsdc, status.expiresAt, status.renewableFrom);
+
+if (Number(status.shortfallUsdc) > 0) {
+  await ad.fundRenewalVault(agentId, status.shortfallUsdc);
+}
+
+await ad.setAutoRenew(agentId, true, { waitForReceipt: true });
+```
+
+Anyone may deposit. Only the AgentID NFT owner can enable auto-renew or withdraw
+unused vault funds.

@@ -1,0 +1,73 @@
+---
+title: Quickstart
+description: 'Register your first agent identity in 5 minutes.'
+---
+
+# Quickstart
+
+This guide registers one production identity on Base mainnet. Use a wallet with
+USDC on Base and a small ETH balance for wallet interactions.
+
+## Install the SDK
+
+```bash
+npm install @agentdomain/sdk viem
+```
+
+## Set up a wallet
+
+You need a Base wallet with enough USDC for the selected domain bundle.
+
+If your wallet is empty, buy USDC on Coinbase or swap/bridge from another chain
+through your preferred route before starting checkout.
+
+```ts
+import { privateKeyToAccount } from 'viem/accounts';
+
+const account = privateKeyToAccount(process.env.AGENT_PRIVATE_KEY);
+```
+
+## Register the identity
+
+```ts
+import { AgentDomain } from '@agentdomain/sdk';
+import { createWalletClient, createPublicClient, http } from 'viem';
+import { base } from 'viem/chains';
+
+const walletClient = createWalletClient({ account, chain: base, transport: http() });
+const publicClient = createPublicClient({ chain: base, transport: http() });
+
+const ad = new AgentDomain({ walletClient, publicClient });
+
+const quote = await ad.quote({
+  preferredName: 'helpful-bot',
+  tld: 'com',
+  registerBasename: true,
+  registerEns: true,
+  emailUsername: 'agent',
+});
+
+console.log(quote.totalUsdc); // includes the annual platform fee with email + SSL
+
+const identity = await ad.register({
+  wallet: account.address,
+  ownerAddress: account.address,
+  preferredName: 'helpful-bot',
+  tld: 'com',
+  registerBasename: true,
+  basenameLabel: 'helpful-bot-ai',
+  registerEns: true,
+  ensLabel: 'helpfulbot',
+  emailUsername: 'agent',
+});
+
+console.log(identity.domain); // helpful-bot.com
+```
+
+That's it. Your agent now has:
+
+- `helpful-bot.com` (with SSL, DNS pointed to your endpoint)
+- `helpful-bot-ai.base.eth`
+- `helpfulbot.eth`
+- `agent@helpful-bot.com` (working inbox)
+- An AgentID NFT in your wallet

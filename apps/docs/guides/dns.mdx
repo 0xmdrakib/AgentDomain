@@ -1,0 +1,27 @@
+---
+title: DNS Automation
+description: 'How Spaceship Basic DNS is provisioned for every agent domain.'
+---
+
+# DNS Automation
+
+AgentDomain uses Spaceship Basic DNS as the authoritative DNS provider and writes the
+baseline records required for web routing, email, and SSL challenges.
+
+## Baseline records
+
+- Apex `ALIAS` pointing to `CLOUDFLARE_SAAS_FALLBACK_HOSTNAME`
+- Cloudflare for SaaS validation TXT records when required
+- MX, SPF, DKIM, and DMARC records when email is enabled
+
+## Custom DNS records
+
+Agents can add DNS records through:
+
+```http
+POST /api/v1/agents/:id/dns
+```
+
+Supported record types are `A`, `AAAA`, `ALIAS`, `CNAME`, `MX`, `TXT`, `NS`, and `SRV`.
+System-managed apex, Cloudflare validation, and SES mail records cannot be
+edited or deleted by users.

@@ -1,0 +1,62 @@
+{
+  "network": "base-mainnet",
+  "chainId": 8453,
+  "updatedAt": "2026-07-12",
+  "contracts": {
+    "agentIdentityRegistry": "0x234a2B83B32910436A35CDa797CCC57988B9Bd15",
+    "renewalVault": "0xb7b19826a566ebd9e8b50bee986a8da04bbb2c0a",
+    "usdc": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+  },
+  "renewalVault": {
+    "source": "packages/contracts/src/RenewalVault.sol",
+    "compiler": "0.8.34+commit.80d5c536",
+    "compilerSettings": {
+      "optimizerEnabled": false,
+      "viaIR": false,
+      "evmVersion": "cancun"
+    },
+    "bytecodeProof": {
+      "method": "Compiled source runtime bytecode with solc 0.8.34, stripped Solidity metadata, and normalized immutable constructor reference slots before comparing to on-chain runtime bytecode.",
+      "matchesOnchainRuntime": true,
+      "normalizedRuntimeBytecodeBytes": 11473,
+      "normalizedRuntimeBytecodeSha256": "2f0cb212b74687018299a908dd31930f8e03591eb70a4215be42f55cdc220df1"
+    },
+    "constructorArgs": {
+      "initialOwner": "0xdE57dd241eA13A5EE749b940897538CF4ff4C25D",
+      "usdc": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "registry": "0x234a2B83B32910436A35CDa797CCC57988B9Bd15",
+      "nft": "0x234a2B83B32910436A35CDa797CCC57988B9Bd15",
+      "treasury": "0xdE57dd241eA13A5EE749b940897538CF4ff4C25D"
+    },
+    "configuredState": {
+      "owner": "0xdE57dd241eA13A5EE749b940897538CF4ff4C25D",
+      "treasury": "0xdE57dd241eA13A5EE749b940897538CF4ff4C25D",
+      "keeper": "0xD6f017D89ae6BA281537cf60D61feC11a0ac4e36",
+      "keeperAllowed": true,
+      "renewalDurationSeconds": "31536000",
+      "renewalWindowSeconds": "2592000",
+      "renewalFeeAtomicUsdc": "3900000"
+    },
+    "postDeployCalls": [
+      {
+        "contract": "RenewalVault",
+        "function": "setKeeper",
+        "args": ["0xD6f017D89ae6BA281537cf60D61feC11a0ac4e36", true]
+      },
+      {
+        "contract": "RenewalVault",
+        "function": "setRenewalParams",
+        "args": ["31536000", "2592000", "3900000"]
+      },
+      {
+        "contract": "AgentIdentityRegistry",
+        "function": "setRenewalVault",
+        "args": ["0xb7b19826a566ebd9e8b50bee986a8da04bbb2c0a"]
+      }
+    ]
+  },
+  "productionEnv": {
+    "RENEWAL_VAULT_ADDRESS": "0xb7b19826a566ebd9e8b50bee986a8da04bbb2c0a",
+    "NEXT_PUBLIC_RENEWAL_VAULT_ADDRESS": "0xb7b19826a566ebd9e8b50bee986a8da04bbb2c0a"
+  }
+}

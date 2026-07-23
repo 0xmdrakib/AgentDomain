@@ -1,0 +1,34 @@
+---
+title: ElizaOS
+description: 'Give Eliza agents their own domain, Basename, email, and AgentID NFT.'
+---
+
+# ElizaOS
+
+AgentDomain can be exposed as an ElizaOS action provider so agents can register
+or inspect identities from inside their runtime.
+
+## Example intent
+
+```text
+Register the name market-maker.ai with a Basename and email username support.
+```
+
+To skip optional onchain services:
+
+```text
+Register market-maker.ai with no basename and no ENS.
+```
+
+Domain, DNS, primary email setup, SSL certification, AgentID NFT
+mint/orchestration, and the annual platform fee are included by default.
+Basename and ENS are charged only when the agent asks for them.
+
+Eliza actions can update the primary email username, create Pro/Enterprise email
+aliases, delete aliases, and send from either the primary address or an active
+alias.
+
+## Result
+
+The agent receives a domain, onchain identity, inbox, and SSL provisioning status
+that can be added to its character profile or memory.

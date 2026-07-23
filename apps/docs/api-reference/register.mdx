@@ -1,0 +1,73 @@
+---
+title: Register API
+description: 'Create a complete AgentDomain identity bundle.'
+---
+
+# Register API
+
+```http
+POST /api/v1/agents/register
+```
+
+This endpoint is x402-protected. The first request returns payment requirements;
+the second request includes the `X-Payment` header.
+
+## Body
+
+```json
+{
+  "wallet": "0x...",
+  "ownerAddress": "0x...",
+  "preferredName": "research-agent",
+  "tld": "com",
+  "registerBasename": true,
+  "basenameLabel": "research-agent-ai",
+  "registerEns": true,
+  "ensLabel": "researchagent",
+  "emailEnabled": true,
+  "emailUsername": "agent",
+  "years": 3,
+  "autoRenew": true
+}
+```
+
+## Notes
+
+- ENS and Basename availability are checked before payment.
+- Domain, managed DNS, primary email setup, SSL certification, AgentID NFT mint/orchestration, and the `$3.90/year` platform fee are included in every registration.
+- `basenameLabel` and `ensLabel` are optional. If omitted, the API uses `preferredName`.
+- Use separate labels when `preferredName.base.eth` or `preferredName.eth` is already taken.
+- Set `registerBasename: false` or `registerEns: false` to skip those optional onchain names and their costs.
+- `emailEnabled` remains accepted for old clients but is deprecated and ignored; email is always included.
+- `emailUsername` sets the primary inbox local-part. Omit it for `agent@domain`.
+- `ownerAddress` is optional. If omitted, the payer wallet owns the AgentID NFT, Basename, and ENS name.
+- ENS registration uses Ethereum mainnet commit/reveal and is included in the displayed USDC quote.
+- Domain availability is checked against the local DB and Spaceship.
+- `years` sets the initial registration duration (1-10 years) and calculates the correct upfront price.
+- `autoRenew` records the desired automated renewal setting. The owner wallet still needs to call RenewalVault `setAutoRenew(tokenId, true)` from web, SDK, MCP, or another wallet tool.
+
+## Quote response
+
+Use `GET /api/v1/agents/quote` before registration:
+
+```http
+GET /api/v1/agents/quote?preferredName=research-agent&tld=com&registerBasename=false&registerEns=false&emailUsername=support&years=1
+```
+
+The response includes:
+
+```json
+{
+  "domainCostUsdc": "12",
+  "platformFeeUsdc": "3.90",
+  "serviceFeeUsdc": "3.90",
+  "emailFeeUsdc": "0",
+  "sslCertificationFeeUsdc": "0",
+  "emailIncluded": true,
+  "sslIncluded": true,
+  "includedServices": ["email", "ssl", "dns", "agentid_nft"],
+  "basenameCostUsdc": "0",
+  "ensCostUsdc": "0",
+  "totalUsdc": "15.90"
+}
+```

@@ -1,0 +1,44 @@
+{
+  "name": "@agentdomain/eliza-plugin",
+  "version": "0.3.0",
+  "description": "ElizaOS plugin for AgentDomain - give your Eliza agent a complete identity stack",
+  "license": "Apache-2.0",
+  "repository": "https://github.com/0xmdrakib/AgentDomain.git",
+  "homepage": "https://agentdomain.app/docs",
+  "bugs": "https://github.com/0xmdrakib/AgentDomain/issues",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "package.json"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "pnpm run build",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"no lint\""
+  },
+  "dependencies": {
+    "@agentdomain/sdk": "workspace:^",
+    "@agentdomain/shared": "workspace:^",
+    "viem": "^2.55.2",
+    "zod": "^3.24.1"
+  },
+  "peerDependencies": {
+    "@elizaos/core": "^1.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}

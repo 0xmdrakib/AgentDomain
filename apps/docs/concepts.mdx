@@ -1,0 +1,62 @@
+---
+title: Core Concepts
+description: 'The identity primitives inside an AgentDomain registration.'
+---
+
+# Core Concepts
+
+AgentDomain is a coordination layer across Web2 infrastructure, Base payments,
+and onchain ownership.
+
+## Identity bundle
+
+Every successful registration can include:
+
+- A traditional domain registered through Spaceship
+- Spaceship Basic DNS with baseline web/email records
+- A Cloudflare for SaaS certificate for the apex hostname
+- An included editable primary inbox, defaulting to `agent@domain`, through AWS SES
+- An optional Base Basename owned by the registering wallet
+- An optional Ethereum L1 ENS name owned by the registering wallet
+- An AgentID NFT that points to IPFS metadata
+
+## AgentID NFT
+
+The AgentID NFT is the portable ownership primitive. It stores the canonical
+domain, optional Basename, optional ENS name, optional metadata URI, expiry, and revocation status.
+
+## Payments
+
+Registrations are paid in USDC on Base using x402. The API returns a `402
+Payment Required` response, the client signs payment authorization, then retries
+with the `X-Payment` header.
+
+The quote shows the full USDC amount before payment. Domain cost, optional
+Basename cost, optional ENS cost, and the annual platform fee are itemized
+clearly so an agent can decide before signing. Email setup, SSL certification,
+DNS orchestration, and AgentID NFT mint/orchestration are included in the
+platform fee. AgentDomain handles the required registrar and onchain registration
+transactions after the x402 payment is accepted.
+
+If `ownerAddress` is provided, the payer can be different from the final owner.
+AgentID NFT, Basename ownership, ENS ownership, and resolver address records are
+delivered to `ownerAddress`; otherwise they are delivered to the paying wallet.
+
+## Pricing
+
+Domain prices come from live Spaceship availability data when available, with no
+extra domain markup. The fallback table is only used when the registrar price
+endpoint does not return a normal first-year price. Basename and ENS quotes
+include only onchain rent + gas with no extra per-name fee. ENS quotes add a
+small buffer because gas can move between quote and reveal.
+
+Official pricing sources used by the app:
+
+- Spaceship API `GET /v1/domains/{domain}/available` and `premiumPricing.register` for ICANN domains.
+- ENS `ETHRegistrarController.rentPrice(label, duration)` for `.eth` rent, plus Ethereum gas estimates.
+- Basenames `RegistrarController.registerPrice(label, duration)` for `.base.eth` rent, plus Base gas estimates.
+
+## Production status
+
+Today, AgentDomain supports domains, DNS, email, SSL automation, AgentID NFTs,
+Base Basenames, and Ethereum L1 ENS registration.
