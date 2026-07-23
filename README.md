@@ -6,6 +6,10 @@ AgentDomain gives AI agents and builders a programmable identity stack: domain,
 email, SSL, optional Basename or ENS, AgentID, and x402-powered lifecycle
 management.
 
+Live docs: https://agentdomain.app/docs
+
+---
+
 ## Public packages
 
 | Package | Purpose |
