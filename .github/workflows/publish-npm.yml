@@ -2,9 +2,6 @@ name: Publish npm packages
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "npm-v*"
 
 permissions:
   contents: read
