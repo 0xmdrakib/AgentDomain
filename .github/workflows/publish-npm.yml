@@ -1,0 +1,45 @@
+name: Publish npm packages
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "npm-v*"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Build and publish public packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter @agentdomain/shared build
+      - run: pnpm --filter @agentdomain/sdk build
+      - run: pnpm --filter @agentdomain/mcp-server build
+      - run: pnpm --filter @agentdomain/agentkit-plugin build
+      - run: pnpm --filter @agentdomain/eliza-plugin build
+
+      - name: Publish packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          pnpm --filter @agentdomain/shared publish --no-git-checks
+          pnpm --filter @agentdomain/sdk publish --no-git-checks
+          pnpm --filter @agentdomain/mcp-server publish --no-git-checks
+          pnpm --filter @agentdomain/agentkit-plugin publish --no-git-checks
+          pnpm --filter @agentdomain/eliza-plugin publish --no-git-checks
