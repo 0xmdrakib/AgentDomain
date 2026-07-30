@@ -1,6 +1,6 @@
 ---
 title: DNS API
-description: 'List and create DNS records for an agent domain.'
+description: 'List, create, update, and delete DNS records for an agent domain.'
 ---
 
 # DNS API
@@ -25,3 +25,25 @@ POST /api/v1/agents/:id/dns
   "ttl": 3600
 }
 ```
+
+Creating or updating a user-managed apex `A`, `AAAA`, `ALIAS`, or `CNAME`
+record switches the domain to external hosting. AgentDomain removes its
+Cloudflare SaaS routing and validation records while preserving email records.
+The response includes a `hosting` object with the resulting mode and transition
+status.
+
+## Update record
+
+```http
+PATCH /api/v1/agents/:id/dns/:recordId
+```
+
+## Delete record
+
+```http
+DELETE /api/v1/agents/:id/dns/:recordId
+```
+
+Deleting the last user-managed apex routing record restores AgentDomain-managed
+routing and Cloudflare SSL. DNS caches may continue serving the previous target
+until the record TTL expires.

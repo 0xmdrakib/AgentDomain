@@ -357,7 +357,8 @@ const TOOLS = [
   },
   {
     name: 'create_dns_record',
-    description: 'Create a user-managed DNS record and sync the full DNS state to Spaceship.',
+    description:
+      'Create a user-managed DNS record and sync it to Spaceship. An apex A, AAAA, ALIAS, or CNAME switches web routing and SSL ownership to the external provider without removing email records.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -373,7 +374,8 @@ const TOOLS = [
   },
   {
     name: 'update_dns_record',
-    description: 'Update a user-managed DNS record and sync the DNS state to Spaceship.',
+    description:
+      'Update a user-managed DNS record and reconcile AgentDomain-managed versus external apex hosting.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -390,7 +392,8 @@ const TOOLS = [
   },
   {
     name: 'delete_dns_record',
-    description: 'Delete a user-managed DNS record and sync the DNS state to Spaceship.',
+    description:
+      'Delete a user-managed DNS record. Removing the final external apex route restores AgentDomain-managed routing and SSL.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -403,7 +406,7 @@ const TOOLS = [
   {
     name: 'reconfigure_ssl',
     description:
-      'Rebuild the Cloudflare SaaS SSL hostname and sync required DNS validation records.',
+      'Rebuild AgentDomain Cloudflare SaaS SSL when managed hosting is active. External apex hosting uses the external provider SSL instead.',
     inputSchema: {
       type: 'object',
       properties: {

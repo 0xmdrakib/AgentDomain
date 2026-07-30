@@ -307,7 +307,7 @@ export class AgentDomainActionProvider {
       {
         name: 'reconfigure_ssl',
         description:
-          'Rebuild the Cloudflare SaaS SSL hostname and sync the required Spaceship DNS validation records for an existing agent.',
+          'Rebuild AgentDomain Cloudflare SaaS SSL for managed hosting. External apex hosting uses the external provider SSL.',
         schema: SslReconfigureSchema,
         invoke: this.reconfigureSsl.bind(this),
       },
@@ -319,7 +319,8 @@ export class AgentDomainActionProvider {
       },
       {
         name: 'create_dns_record',
-        description: 'Create a user-managed DNS record and sync it to the domain provider.',
+        description:
+          'Create a user-managed DNS record. An apex routing record activates external hosting without removing email records.',
         schema: CreateDnsSchema,
         invoke: this.createDns.bind(this),
       },

@@ -25,3 +25,17 @@ POST /api/v1/agents/:id/dns
 Supported record types are `A`, `AAAA`, `ALIAS`, `CNAME`, `MX`, `TXT`, `NS`, and `SRV`.
 System-managed apex, Cloudflare validation, and SES mail records cannot be
 edited or deleted by users.
+
+## External apex hosting
+
+Adding a user-managed apex `A`, `AAAA`, `ALIAS`, or `CNAME` transfers web
+routing ownership to the external hosting provider. AgentDomain then:
+
+- removes its managed apex route;
+- deletes the Cloudflare for SaaS custom hostname and DCV records;
+- preserves MX, SPF, DKIM, DMARC, and all other user records; and
+- blocks AgentDomain SSL reconfiguration while external apex routing is active.
+
+Deleting the last external apex route reverses the transition and provisions
+AgentDomain-managed routing and Cloudflare SSL again. Both transitions are
+idempotent and reconciled if a provider is temporarily unavailable.

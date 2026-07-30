@@ -20,10 +20,10 @@ Lets any MCP-compatible LLM client (Claude Desktop, ChatGPT desktop apps, custom
 - `create_email_alias` - create a Starter/Pro/Enterprise receive-and-send email alias
 - `delete_email_alias` - delete an active email alias
 - `list_dns_records` - list DNS records for an agent domain
-- `create_dns_record` - create a user-managed DNS record
+- `create_dns_record` - create a user-managed record; apex routing records activate external hosting
 - `update_dns_record` - update a user-managed DNS record
 - `delete_dns_record` - delete a user-managed DNS record
-- `reconfigure_ssl` - rebuild Cloudflare SaaS SSL and DNS validation records
+- `reconfigure_ssl` - rebuild Cloudflare SaaS SSL when AgentDomain-managed hosting is active
 - `fund_renewal_vault` - top up an agent's renewal vault
 - `withdraw_renewal_vault` - build an owner-signed vault withdrawal transaction
 - `get_renewal_status` - check renewal date, amount, vault balance, and auto-renew state

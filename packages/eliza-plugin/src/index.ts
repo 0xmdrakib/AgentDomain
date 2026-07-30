@@ -527,7 +527,7 @@ export const listDnsAction = {
 export const createDnsAction = {
   name: 'CREATE_DNS_RECORD',
   description:
-    'Create a user-managed DNS record. Use text like: agentId type A name @ value 1.2.3.4.',
+    'Create a user-managed DNS record. An apex routing record activates external hosting; use text like: agentId type A name @ value 1.2.3.4.',
   similes: ['ADD_DNS', 'CREATE_DNS'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
