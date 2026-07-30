@@ -76,6 +76,18 @@ const ListEmailSchema = z.object({
   agentId: z.string(),
   limit: z.number().int().min(1).max(100).default(20),
 });
+const BatchEmailSchema = z.object({
+  agentId: z.string(),
+  messages: z.array(SendEmailSchema.omit({ agentId: true })).max(100),
+  idempotencyKey: z.string().max(256).optional(),
+});
+const EmailUsageSchema = z.object({ agentId: z.string() });
+const EmailWebhookSchema = z.object({
+  agentId: z.string(),
+  url: z.string().url(),
+  payloadMode: z.enum(['metadata', 'inline_text']).default('metadata'),
+  enabled: z.boolean().default(true),
+});
 
 const RenewalStatusSchema = z.object({
   agentId: z.string().min(1),
@@ -131,7 +143,8 @@ const ServicePlanStatusSchema = z.object({
 
 const PurchaseServicePlanSchema = z.object({
   agentId: z.string().min(1),
-  plan: z.enum(['pro', 'enterprise']),
+  plan: z.enum(['starter', 'pro', 'enterprise']),
+  planSku: z.custom<import('@agentdomain/shared').ServicePlanSku>().optional(),
 });
 
 const SetRegistryVisibilitySchema = z.object({
@@ -198,8 +211,7 @@ export class AgentDomainActionProvider {
       account: {
         address: wallet,
         signTypedData: walletProvider.signTypedData as
-          | ((parameters: any) => Promise<string>)
-          | undefined,
+          ((parameters: any) => Promise<string>) | undefined,
         signMessage: walletProvider.signMessage
           ? (parameters: { message: string }) => walletProvider.signMessage!(parameters.message)
           : undefined,
@@ -252,6 +264,24 @@ export class AgentDomainActionProvider {
         description: 'Query text-only agent email and extracted verification codes.',
         schema: ListEmailSchema,
         invoke: this.listEmail.bind(this),
+      },
+      {
+        name: 'send_agent_email_batch',
+        description: 'Queue up to 100 emails in one API request.',
+        schema: BatchEmailSchema,
+        invoke: this.sendEmailBatch.bind(this),
+      },
+      {
+        name: 'get_agent_email_usage',
+        description: 'Get combined monthly sent and received email usage.',
+        schema: EmailUsageSchema,
+        invoke: this.emailUsage.bind(this),
+      },
+      {
+        name: 'configure_email_webhook',
+        description: 'Configure signed inbound email events for this agent.',
+        schema: EmailWebhookSchema,
+        invoke: this.configureEmailWebhook.bind(this),
       },
       {
         name: 'get_renewal_status',
@@ -321,14 +351,14 @@ export class AgentDomainActionProvider {
       {
         name: 'purchase_service_plan',
         description:
-          'Upgrade one agent to an AgentDomain Pro or Enterprise Premium Plan using x402 USDC payment.',
+          'Upgrade one agent to an AgentDomain Starter, Pro, or Enterprise Premium Plan using x402 USDC payment.',
         schema: PurchaseServicePlanSchema,
         invoke: this.purchaseServicePlan.bind(this),
       },
       {
         name: 'set_registry_visibility',
         description:
-          'Hide or show one agent in the public AgentDomain registry. Hiding requires an active Pro or Enterprise Premium Plan.',
+          'Hide or show one agent in the public AgentDomain registry. Hiding requires an active paid Premium Plan.',
         schema: SetRegistryVisibilitySchema,
         invoke: this.setRegistryVisibility.bind(this),
       },
@@ -342,7 +372,7 @@ export class AgentDomainActionProvider {
       {
         name: 'create_email_alias',
         description:
-          'Create an extra receive-and-send alias for one agent. Requires available Pro or Enterprise alias capacity.',
+          'Create an extra receive-and-send alias for one agent. Requires available paid-plan alias capacity.',
         schema: CreateEmailAliasSchema,
         invoke: this.createEmailAlias.bind(this),
       },
@@ -515,7 +545,7 @@ export class AgentDomainActionProvider {
   ) {
     const { ad } = this.createAgentDomain(walletProvider);
     const result = await ad.getServicePlan(args.agentId);
-    return `Premium Plan for ${result.domain}: ${result.entitlement.plan} (${result.entitlement.status}), email ${result.entitlement.limits.emailPerHour}/hour and ${result.entitlement.limits.emailPerDay}/day, ${result.entitlement.limits.apiKeys} API key(s), ${result.entitlement.limits.dnsRecords} DNS records, registry hidden ${result.registryVisibility.hidden}.`;
+    return `Premium Plan for ${result.domain}: ${result.entitlement.plan} (${result.entitlement.status}), ${result.entitlement.limits.monthlyEmails} combined emails/month, ${result.entitlement.limits.apiKeys} API key(s), ${result.entitlement.limits.dnsRecords} DNS records, registry hidden ${result.registryVisibility.hidden}.`;
   }
 
   private async purchaseServicePlan(
@@ -541,7 +571,10 @@ export class AgentDomainActionProvider {
     const q = await ad.quote(args);
     const basenamePart = Number(q.basenameCostUsdc) > 0 ? ` + Basename $${q.basenameCostUsdc}` : '';
     const ensPart = Number(q.ensCostUsdc) > 0 ? ` + ENS $${q.ensCostUsdc}` : '';
-    const planPart = Number(q.premiumPlanFeeUsdc ?? 0) > 0 ? ` + ${q.premiumPlanLabel} $${q.premiumPlanFeeUsdc}` : '';
+    const planPart =
+      Number(q.premiumPlanFeeUsdc ?? 0) > 0
+        ? ` + ${q.premiumPlanLabel} $${q.premiumPlanFeeUsdc}`
+        : '';
     return `Total: $${q.totalUsdc} USDC (domain $${q.domainCostUsdc} + platform $${q.platformFeeUsdc ?? q.serviceFeeUsdc}, email and SSL included${basenamePart}${ensPart}${planPart})`;
   }
 
@@ -561,13 +594,39 @@ export class AgentDomainActionProvider {
       subject: args.subject,
       text: args.text,
     });
-    return `Email sent via SES: ${result.id}`;
+    return `Email queued: ${result.id}`;
   }
 
   private async listEmail(walletProvider: WalletProvider, args: z.infer<typeof ListEmailSchema>) {
     const { ad } = this.createAgentDomain(walletProvider);
     const result = await ad.listEmail(args.agentId, { limit: args.limit });
     return JSON.stringify(result, null, 2);
+  }
+
+  private async sendEmailBatch(
+    walletProvider: WalletProvider,
+    args: z.infer<typeof BatchEmailSchema>,
+  ) {
+    const { ad } = this.createAgentDomain(walletProvider);
+    return JSON.stringify(
+      await ad.sendEmailBatch(args.agentId, {
+        messages: args.messages,
+        idempotencyKey: args.idempotencyKey,
+      }),
+      null,
+      2,
+    );
+  }
+  private async emailUsage(walletProvider: WalletProvider, args: z.infer<typeof EmailUsageSchema>) {
+    const { ad } = this.createAgentDomain(walletProvider);
+    return JSON.stringify(await ad.getEmailUsage(args.agentId), null, 2);
+  }
+  private async configureEmailWebhook(
+    walletProvider: WalletProvider,
+    args: z.infer<typeof EmailWebhookSchema>,
+  ) {
+    const { ad } = this.createAgentDomain(walletProvider);
+    return JSON.stringify(await ad.setEmailWebhook(args.agentId, args), null, 2);
   }
 
   private async updatePrimaryEmail(

@@ -1,6 +1,6 @@
 {
   "name": "@agentdomain/sdk",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "AgentDomain SDK for AI agents - domain registration, management, and x402 payments",
   "license": "Apache-2.0",
   "repository": "https://github.com/0xmdrakib/AgentDomain.git",

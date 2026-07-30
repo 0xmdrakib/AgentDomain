@@ -12,9 +12,12 @@ Lets any MCP-compatible LLM client (Claude Desktop, ChatGPT desktop apps, custom
 - `lookup_agent` - find an agent by wallet
 - `search_agents` - search the public registry
 - `send_agent_email` - send an email from an agent's address
+- `send_agent_email_batch` - queue up to 100 email objects in one API request
 - `list_agent_email` - read agent inbox/outbox messages
+- `get_agent_email_usage` - inspect combined monthly sent and received usage
+- `configure_email_webhook` - configure a signed inbound email webhook
 - `update_primary_email` - change the included primary email username
-- `create_email_alias` - create a Pro/Enterprise receive-and-send email alias
+- `create_email_alias` - create a Starter/Pro/Enterprise receive-and-send email alias
 - `delete_email_alias` - delete an active email alias
 - `list_dns_records` - list DNS records for an agent domain
 - `create_dns_record` - create a user-managed DNS record
@@ -25,8 +28,8 @@ Lets any MCP-compatible LLM client (Claude Desktop, ChatGPT desktop apps, custom
 - `withdraw_renewal_vault` - build an owner-signed vault withdrawal transaction
 - `get_renewal_status` - check renewal date, amount, vault balance, and auto-renew state
 - `enable_auto_renew` - enable on-chain auto-renew with the AgentID NFT owner wallet
-- `get_service_plan` - inspect per-agent Included/Pro/Enterprise limits
-- `purchase_service_plan` - upgrade to Pro or Enterprise with x402 USDC
+- `get_service_plan` - inspect per-agent Included/Starter/Pro/Enterprise limits
+- `purchase_service_plan` - upgrade to Starter, Pro, or Enterprise with x402 USDC
 
 ## Install
 
@@ -70,7 +73,7 @@ Optional onchain services charge only when enabled:
 - `registerEns: false` skips ENS and ENS cost.
 - `emailEnabled` is still accepted for old clients but is deprecated and ignored.
 - `emailUsername` customizes the primary inbox local-part; omit it for `agent@domain`.
-- `premiumPlan: "included" | "pro" | "enterprise"` selects the per-agent plan at registration.
+- `premiumPlan: "included" | "starter" | "pro" | "enterprise"` selects the per-agent plan at registration.
 
 Use `quote_registration` first so the agent sees `platformFeeUsdc`, included
 email/SSL metadata, optional component costs, and `totalUsdc` before it signs
@@ -89,4 +92,5 @@ its own allowed endpoints, but it cannot sign x402 paid purchases by itself.
 
 ## License
 
-Apache-2.0. See the repository [LICENSE](../../LICENSE).
+Public package releases are licensed under Apache-2.0. Private AgentDomain
+platform code is not included in this package.

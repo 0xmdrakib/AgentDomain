@@ -43,8 +43,8 @@ DELETE /api/v1/agents/:id/email/aliases?emailAddress=billing@example.com
 }
 ```
 
-Aliases receive and send mail. Included agents have `0` aliases, Pro has `5`,
-and Enterprise has `20`.
+Aliases receive and send mail. Included agents have `0`, Starter `5`, Pro `10`,
+and Enterprise `20` aliases.
 
 ## Send mail
 
@@ -63,6 +63,43 @@ POST /api/v1/agents/:id/email/send
 
 `fromAddress` is optional. When provided, it must be the agent primary email or
 an active alias.
+
+Successful requests create durable per-recipient jobs and return `status:
+"queued"`. Each recipient counts once against the combined monthly send and
+receive quota. Send `Idempotency-Key` to deduplicate retries for 24 hours.
+
+The endpoint returns `201` when queued, `429 MONTHLY_EMAIL_QUOTA_EXCEEDED` when
+the monthly quota is exhausted, `429 RATE_LIMITED` above 12 requests per second,
+and `503` when the distributed limiter or durable queue is unavailable.
+
+## Batch send
+
+```http
+POST /api/v1/agents/:id/email/batch
+```
+
+Send up to 100 message objects. A batch is one request for the 12 requests per
+second limit, while every recipient counts toward monthly usage. Validation is
+`strict` by default; use `validationMode: "partial"` to queue valid entries.
+The response is `202` with a batch ID and per-recipient job IDs. Batch requests
+also support a 24-hour `Idempotency-Key`.
+
+## Inbound webhook
+
+```http
+GET|PUT|PATCH|DELETE /api/v1/agents/:id/email/webhook
+```
+
+Webhook events include metadata, preview and an authenticated content URL.
+Choose `inline_text` to include plain text up to 256KB. Verify the event ID,
+timestamp and HMAC-SHA256 signature headers before processing.
+
+- `PUT` creates or updates the HTTPS endpoint and returns the signing secret
+  only when the configuration is first created.
+- `PATCH` rotates the signing secret and returns the new secret once.
+- `POST` sends a signed test event; `DELETE` removes the configuration.
+- `GET /api/v1/agents/:id/email/webhook/deliveries` lists delivery status.
+- `POST /api/v1/agents/:id/email/webhook/deliveries` replays a failed delivery.
 
 ## Blocklist
 

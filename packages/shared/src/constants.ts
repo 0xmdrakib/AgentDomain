@@ -22,8 +22,14 @@ export const X402_PAYMENT_HEADER = 'X-Payment';
 export const X402_PAYMENT_REQUIRED_HEADER = 'X-Payment-Required';
 export const AGENTDOMAIN_API_BASE_URL = 'https://agentdomain.app/api/v1';
 
-export const SERVICE_PLAN_KEYS = ['included', 'pro', 'enterprise'] as const;
+export const SERVICE_PLAN_KEYS = ['included', 'starter', 'pro', 'enterprise'] as const;
 export const SERVICE_PLAN_INTERVALS = ['yearly'] as const;
+export const EMAIL_RETENTION_DAYS = 30;
+export const EMAIL_REQUESTS_PER_SECOND = 12;
+export const ENTERPRISE_EMAIL_TIERS = [
+  100_000, 150_000, 200_000, 300_000, 400_000, 500_000, 600_000, 700_000, 800_000, 900_000,
+  1_000_000, 1_500_000, 2_000_000, 2_500_000, 3_000_000, 3_500_000, 4_000_000, 4_500_000, 5_000_000,
+] as const;
 
 export const SERVICE_PLAN_CATALOG = {
   included: {
@@ -31,12 +37,27 @@ export const SERVICE_PLAN_CATALOG = {
     label: 'Included',
     yearlyPriceUsdcAtomic: 0n,
     limits: {
-      emailPerHour: 10,
-      emailPerDay: 100,
+      monthlyEmails: 3_000,
+      requestsPerSecond: EMAIL_REQUESTS_PER_SECOND,
       apiKeys: 1,
       dnsRecords: 20,
       emailAliases: 0,
-      emailRetentionDays: 180,
+      emailRetentionDays: EMAIL_RETENTION_DAYS,
+    },
+    supportTier: 'standard',
+    registryPriority: false,
+  },
+  starter: {
+    key: 'starter',
+    label: 'Starter',
+    yearlyPriceUsdcAtomic: 59_000_000n,
+    limits: {
+      monthlyEmails: 25_000,
+      requestsPerSecond: EMAIL_REQUESTS_PER_SECOND,
+      apiKeys: 5,
+      dnsRecords: 100,
+      emailAliases: 5,
+      emailRetentionDays: EMAIL_RETENTION_DAYS,
     },
     supportTier: 'standard',
     registryPriority: false,
@@ -44,14 +65,14 @@ export const SERVICE_PLAN_CATALOG = {
   pro: {
     key: 'pro',
     label: 'Pro',
-    yearlyPriceUsdcAtomic: 59_000_000n,
+    yearlyPriceUsdcAtomic: 120_000_000n,
     limits: {
-      emailPerHour: 100,
-      emailPerDay: 1_000,
-      apiKeys: 5,
-      dnsRecords: 100,
-      emailAliases: 5,
-      emailRetentionDays: 365,
+      monthlyEmails: 50_000,
+      requestsPerSecond: EMAIL_REQUESTS_PER_SECOND,
+      apiKeys: 10,
+      dnsRecords: 250,
+      emailAliases: 10,
+      emailRetentionDays: EMAIL_RETENTION_DAYS,
     },
     supportTier: 'priority',
     registryPriority: false,
@@ -59,19 +80,25 @@ export const SERVICE_PLAN_CATALOG = {
   enterprise: {
     key: 'enterprise',
     label: 'Enterprise',
-    yearlyPriceUsdcAtomic: 590_000_000n,
+    yearlyPriceUsdcAtomic: 240_000_000n,
     limits: {
-      emailPerHour: 1_000,
-      emailPerDay: 10_000,
+      monthlyEmails: 100_000,
+      requestsPerSecond: EMAIL_REQUESTS_PER_SECOND,
       apiKeys: 25,
       dnsRecords: 500,
       emailAliases: 20,
-      emailRetentionDays: 730,
+      emailRetentionDays: EMAIL_RETENTION_DAYS,
     },
     supportTier: 'enterprise',
     registryPriority: true,
   },
 } as const;
+
+export const ENTERPRISE_PLAN_OFFERS = ENTERPRISE_EMAIL_TIERS.map((monthlyEmails) => ({
+  sku: `enterprise-${monthlyEmails}` as const,
+  monthlyEmails,
+  yearlyPriceUsdcAtomic: BigInt(monthlyEmails / 50_000) * 120_000_000n,
+}));
 
 export const ENS_MAINNET = {
   registrarController: '0x253553366Da8546fC250F225fe3d25d0C782303b',

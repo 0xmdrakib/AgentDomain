@@ -1,6 +1,8 @@
 import { z } from 'zod';
-import { SERVICE_PLAN_KEYS } from './constants.js';
+import { ENTERPRISE_EMAIL_TIERS, SERVICE_PLAN_KEYS } from './constants.js';
 import type { Address } from 'viem';
+import type { ServicePlanSku } from './types.js';
+import { isServicePlanSkuForPlan } from './utils.js';
 
 const emptyStringToUndefined = (value: unknown) =>
   typeof value === 'string' && value.trim() === '' ? undefined : value;
@@ -37,45 +39,58 @@ export const emailUsernameSchema = z
   )
   .refine((value) => !value.includes('..'), 'Email username cannot contain consecutive dots');
 
-export const tldSchema = z.enum([
-  'xyz',
-  'com',
-  'ai',
-  'org',
-  'io',
-  'net',
-  'co',
-  'app',
-]);
+export const tldSchema = z.enum(['xyz', 'com', 'ai', 'org', 'io', 'net', 'co', 'app']);
 
-export const registrationParamsSchema = z.object({
-  preferredName: domainLabelSchema,
-  tld: tldSchema,
-  registerBasename: z.boolean().default(true),
-  basenameLabel: domainLabelSchema.optional(),
-  registerEns: z.boolean().default(false),
-  ensLabel: domainLabelSchema.optional(),
-  ownerAddress: addressSchema.optional(),
-  emailEnabled: z.boolean().default(true),
-  emailUsername: emailUsernameSchema.default('agent'),
-  premiumPlan: z.enum(SERVICE_PLAN_KEYS).default('included'),
-  years: z.number().int().min(1).max(10).default(1),
-  autoRenew: z.boolean().default(false),
-  dnsTarget: z.string().optional(),
-  metadata: z
-    .object({
-      name: optionalMetadataString(120),
-      description: optionalMetadataString(1000),
-      imageUri: optionalMetadataUrl(2048),
-      framework: optionalMetadataString(80),
-      capabilities: z.array(z.string().trim().min(1).max(64)).max(20).optional(),
-      x402Endpoint: optionalMetadataUrl(2048),
-      socials: z.record(z.string().trim().max(2048)).optional(),
-    })
-    .optional(),
-  wallet: addressSchema,
-  turnstileToken: z.string().optional(),
-});
+export const registrationParamsSchema = z
+  .object({
+    preferredName: domainLabelSchema,
+    tld: tldSchema,
+    registerBasename: z.boolean().default(true),
+    basenameLabel: domainLabelSchema.optional(),
+    registerEns: z.boolean().default(false),
+    ensLabel: domainLabelSchema.optional(),
+    ownerAddress: addressSchema.optional(),
+    emailEnabled: z.boolean().default(true),
+    emailUsername: emailUsernameSchema.default('agent'),
+    premiumPlan: z.enum(SERVICE_PLAN_KEYS).default('included'),
+    premiumPlanSku: z
+      .union([
+        z.enum(['included', 'starter', 'pro']),
+        z
+          .string()
+          .refine(
+            (value) =>
+              value.startsWith('enterprise-') &&
+              ENTERPRISE_EMAIL_TIERS.includes(Number(value.slice(11)) as never),
+          )
+          .transform((value) => value as ServicePlanSku),
+      ])
+      .optional(),
+    years: z.number().int().min(1).max(10).default(1),
+    autoRenew: z.boolean().default(false),
+    dnsTarget: z.string().optional(),
+    metadata: z
+      .object({
+        name: optionalMetadataString(120),
+        description: optionalMetadataString(1000),
+        imageUri: optionalMetadataUrl(2048),
+        framework: optionalMetadataString(80),
+        capabilities: z.array(z.string().trim().min(1).max(64)).max(20).optional(),
+        x402Endpoint: optionalMetadataUrl(2048),
+        socials: z.record(z.string().trim().max(2048)).optional(),
+      })
+      .optional(),
+    wallet: addressSchema,
+    turnstileToken: z.string().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (!isServicePlanSkuForPlan(value.premiumPlan, value.premiumPlanSku))
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['premiumPlanSku'],
+        message: 'premiumPlanSku must match premiumPlan',
+      });
+  });
 
 export const searchQuerySchema = z.object({
   q: z.string().optional(),

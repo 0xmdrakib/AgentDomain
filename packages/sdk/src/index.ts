@@ -114,6 +114,28 @@ export interface AgentRow {
 export interface EmailResult {
   id: string;
   status: string;
+  messages?: unknown[];
+}
+
+export interface EmailUsageResult {
+  agentId: string;
+  plan: ServicePlanKey;
+  limit: number;
+  sent: number;
+  received: number;
+  reserved: number;
+  used: number;
+  remaining: number;
+  requestsPerSecond: number;
+  cycleStart: string;
+  cycleEnd: string;
+}
+export interface EmailWebhookConfig {
+  agentId: string;
+  url: string;
+  payloadMode: 'metadata' | 'inline_text';
+  enabled: boolean;
+  secretVersion: number;
 }
 
 export interface EmailAddressSummary {
@@ -327,6 +349,7 @@ export class AgentDomain {
     emailEnabled?: boolean;
     emailUsername?: string;
     premiumPlan?: ServicePlanKey;
+    premiumPlanSku?: import('@agentdomain/shared').ServicePlanSku;
     years?: number;
   }): Promise<QuoteResult> {
     const params = new URLSearchParams();
@@ -340,6 +363,7 @@ export class AgentDomain {
     if (args.emailEnabled !== undefined) params.set('emailEnabled', String(args.emailEnabled));
     if (args.emailUsername) params.set('emailUsername', args.emailUsername);
     if (args.premiumPlan) params.set('premiumPlan', args.premiumPlan);
+    if (args.premiumPlanSku) params.set('premiumPlanSku', args.premiumPlanSku);
     if (args.years) params.set('years', String(args.years));
     const url = `${this.apiUrl}/agents/quote?${params.toString()}`;
     const res = await fetch(url);
@@ -349,8 +373,7 @@ export class AgentDomain {
 
   async register(args: RegisterArgs): Promise<RegistrationResult> {
     const walletAddress = (args.wallet || this.walletClient?.account?.address) as
-      | Address
-      | undefined;
+      Address | undefined;
     if (!walletAddress) {
       throw new Error(
         'Registration requires a wallet address. Pass args.wallet or provide a walletClient with an account.',
@@ -423,10 +446,7 @@ export class AgentDomain {
     return res.json();
   }
 
-  private async buildX402Payment(
-    requirement: X402RequirementForClient,
-    from: Address,
-  ) {
+  private async buildX402Payment(requirement: X402RequirementForClient, from: Address) {
     const authorization = await this.buildEip3009Authorization(requirement, from);
 
     return {
@@ -441,10 +461,7 @@ export class AgentDomain {
     };
   }
 
-  private async buildEip3009Authorization(
-    requirement: X402RequirementForClient,
-    from: Address,
-  ) {
+  private async buildEip3009Authorization(requirement: X402RequirementForClient, from: Address) {
     const chain = this.network === 'base-sepolia' ? baseSepolia : base;
     const now = BigInt(Math.floor(Date.now() / 1000));
     const validBefore = now + BigInt(requirement.maxTimeoutSeconds || 300);
@@ -532,13 +549,91 @@ export class AgentDomain {
       text: string;
       fromAddress?: string;
       replyTo?: string;
+      idempotencyKey?: string;
     },
   ): Promise<EmailResult> {
     const url = `${this.apiUrl}/agents/${agentId}/email/send`;
     const res = await fetch(url, {
       method: 'POST',
+      headers: await this.authHeaders({
+        'Content-Type': 'application/json',
+        ...(args.idempotencyKey ? { 'Idempotency-Key': args.idempotencyKey } : {}),
+      }),
+      body: JSON.stringify(args),
+    });
+    if (!res.ok) throw new Error(await responseError(res));
+    return res.json();
+  }
+
+  async sendEmailBatch(
+    agentId: string,
+    args: {
+      messages: Array<{
+        to: string | string[];
+        subject: string;
+        text: string;
+        fromAddress?: string;
+        replyTo?: string;
+      }>;
+      validationMode?: 'strict' | 'partial';
+      idempotencyKey?: string;
+    },
+  ) {
+    const res = await fetch(`${this.apiUrl}/agents/${agentId}/email/batch`, {
+      method: 'POST',
+      headers: await this.authHeaders({
+        'Content-Type': 'application/json',
+        ...(args.idempotencyKey ? { 'Idempotency-Key': args.idempotencyKey } : {}),
+      }),
+      body: JSON.stringify({
+        messages: args.messages,
+        validationMode: args.validationMode ?? 'strict',
+      }),
+    });
+    if (!res.ok) throw new Error(await responseError(res));
+    return res.json() as Promise<{
+      batchId: string;
+      status: string;
+      jobs: unknown[];
+      errors: unknown[];
+    }>;
+  }
+
+  async getEmailUsage(agentId: string): Promise<EmailUsageResult> {
+    const res = await fetch(`${this.apiUrl}/agents/${agentId}/email/usage`, {
+      headers: await this.authHeaders(),
+    });
+    if (!res.ok) throw new Error(await responseError(res));
+    return res.json();
+  }
+
+  async getEmailWebhook(agentId: string): Promise<{ webhook: EmailWebhookConfig | null }> {
+    const res = await fetch(`${this.apiUrl}/agents/${agentId}/email/webhook`, {
+      headers: await this.authHeaders(),
+    });
+    if (!res.ok) throw new Error(await responseError(res));
+    return res.json();
+  }
+
+  async setEmailWebhook(
+    agentId: string,
+    args: { url: string; payloadMode?: 'metadata' | 'inline_text'; enabled?: boolean },
+  ): Promise<{ webhook: EmailWebhookConfig; signingSecret?: string }> {
+    const res = await fetch(`${this.apiUrl}/agents/${agentId}/email/webhook`, {
+      method: 'PUT',
       headers: await this.authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(args),
+    });
+    if (!res.ok) throw new Error(await responseError(res));
+    return res.json();
+  }
+
+  async rotateEmailWebhookSecret(
+    agentId: string,
+  ): Promise<{ webhook: EmailWebhookConfig; signingSecret: string }> {
+    const res = await fetch(`${this.apiUrl}/agents/${agentId}/email/webhook`, {
+      method: 'PATCH',
+      headers: await this.authHeaders(),
     });
     if (!res.ok) throw new Error(await responseError(res));
     return res.json();
@@ -782,6 +877,7 @@ export class AgentDomain {
   async purchaseServicePlan(args: {
     agentId: string;
     plan: Exclude<ServicePlanKey, 'included'>;
+    planSku?: import('@agentdomain/shared').ServicePlanSku;
   }): Promise<ServicePlanPurchaseResult> {
     const walletAddress = this.walletClient?.account?.address as Address | undefined;
     if (!this.walletClient || !walletAddress) {
@@ -793,6 +889,7 @@ export class AgentDomain {
     const url = `${this.apiUrl}/agents/${args.agentId}/plan`;
     const body = JSON.stringify({
       plan: args.plan,
+      planSku: args.planSku,
     });
 
     let res = await fetch(url, {
@@ -964,7 +1061,7 @@ export function createOpenAITools(): Array<{
             },
             premiumPlan: {
               type: 'string',
-              enum: ['included', 'pro', 'enterprise'],
+              enum: ['included', 'starter', 'pro', 'enterprise'],
               description: 'Premium Plan to buy with registration. Defaults to included.',
               default: 'included',
             },
@@ -1024,7 +1121,7 @@ export function createOpenAITools(): Array<{
             },
             premiumPlan: {
               type: 'string',
-              enum: ['included', 'pro', 'enterprise'],
+              enum: ['included', 'starter', 'pro', 'enterprise'],
               description: 'Premium Plan to buy with registration. Defaults to included.',
               default: 'included',
             },
@@ -1106,7 +1203,7 @@ export function createOpenAITools(): Array<{
       function: {
         name: 'create_email_alias',
         description:
-          'Create an extra receive-and-send email alias. Requires available Pro or Enterprise alias capacity.',
+          'Create an extra receive-and-send email alias. Requires available paid-plan alias capacity.',
         parameters: {
           type: 'object',
           properties: {
@@ -1201,7 +1298,7 @@ export function createOpenAITools(): Array<{
       function: {
         name: 'set_registry_visibility',
         description:
-          'Hide or show an agent in the public AgentDomain registry. Hiding requires an active Pro or Enterprise Premium Plan.',
+          'Hide or show an agent in the public AgentDomain registry. Hiding requires an active paid Premium Plan.',
         parameters: {
           type: 'object',
           properties: {
@@ -1276,7 +1373,7 @@ export function createAnthropicTools(): Array<{
           },
           premiumPlan: {
             type: 'string',
-            enum: ['included', 'pro', 'enterprise'],
+            enum: ['included', 'starter', 'pro', 'enterprise'],
             description: 'Premium Plan to buy with registration. Defaults to included.',
             default: 'included',
           },
@@ -1333,7 +1430,7 @@ export function createAnthropicTools(): Array<{
           },
           premiumPlan: {
             type: 'string',
-            enum: ['included', 'pro', 'enterprise'],
+            enum: ['included', 'starter', 'pro', 'enterprise'],
             description: 'Premium Plan to buy with registration. Defaults to included.',
             default: 'included',
           },
@@ -1400,7 +1497,7 @@ export function createAnthropicTools(): Array<{
     {
       name: 'create_email_alias',
       description:
-        'Create an extra receive-and-send email alias. Requires available Pro or Enterprise alias capacity.',
+        'Create an extra receive-and-send email alias. Requires available paid-plan alias capacity.',
       input_schema: {
         type: 'object',
         properties: {
@@ -1477,7 +1574,7 @@ export function createAnthropicTools(): Array<{
     {
       name: 'set_registry_visibility',
       description:
-        'Hide or show an agent in the public AgentDomain registry. Hiding requires an active Pro or Enterprise Premium Plan.',
+        'Hide or show an agent in the public AgentDomain registry. Hiding requires an active paid Premium Plan.',
       input_schema: {
         type: 'object',
         properties: {

@@ -1,5 +1,7 @@
 # AgentDomain
 
+AgentDomain 0.4 adds per-agent monthly send-and-receive quotas, Starter and self-serve Enterprise tiers, 100-message batch sending, usage APIs, and signed inbound email webhooks across the SDK, MCP, AgentKit, and Eliza integrations.
+
 Public developer tools for autonomous identity on Base.
 
 AgentDomain gives AI agents and builders a programmable identity stack: domain,
@@ -12,13 +14,13 @@ Live docs: https://agentdomain.app/docs
 
 ## Public packages
 
-| Package | Purpose |
-| --- | --- |
-| [`@agentdomain/sdk`](https://www.npmjs.com/package/@agentdomain/sdk) | TypeScript SDK for AgentDomain API and x402 workflows |
-| [`@agentdomain/shared`](https://www.npmjs.com/package/@agentdomain/shared) | Public schemas, types, constants, and utilities |
-| [`@agentdomain/mcp-server`](https://www.npmjs.com/package/@agentdomain/mcp-server) | MCP tools for agent runtimes |
-| [`@agentdomain/agentkit-plugin`](https://www.npmjs.com/package/@agentdomain/agentkit-plugin) | Coinbase AgentKit integration |
-| [`@agentdomain/eliza-plugin`](https://www.npmjs.com/package/@agentdomain/eliza-plugin) | ElizaOS integration |
+| Package                                                                                      | Purpose                                               |
+| -------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| [`@agentdomain/sdk`](https://www.npmjs.com/package/@agentdomain/sdk)                         | TypeScript SDK for AgentDomain API and x402 workflows |
+| [`@agentdomain/shared`](https://www.npmjs.com/package/@agentdomain/shared)                   | Public schemas, types, constants, and utilities       |
+| [`@agentdomain/mcp-server`](https://www.npmjs.com/package/@agentdomain/mcp-server)           | MCP tools for agent runtimes                          |
+| [`@agentdomain/agentkit-plugin`](https://www.npmjs.com/package/@agentdomain/agentkit-plugin) | Coinbase AgentKit integration                         |
+| [`@agentdomain/eliza-plugin`](https://www.npmjs.com/package/@agentdomain/eliza-plugin)       | ElizaOS integration                                   |
 
 Install the SDK:
 

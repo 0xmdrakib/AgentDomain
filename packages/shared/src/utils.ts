@@ -1,8 +1,5 @@
-import {
-  SERVICE_PLAN_CATALOG,
-  USDC_DECIMALS,
-} from './constants.js';
-import type { ServicePlanInterval, ServicePlanKey } from './types.js';
+import { ENTERPRISE_PLAN_OFFERS, SERVICE_PLAN_CATALOG, USDC_DECIMALS } from './constants.js';
+import type { ServicePlanInterval, ServicePlanKey, ServicePlanSku } from './types.js';
 
 export function parseUsdc(amount: string): bigint {
   const [whole, frac = ''] = amount.replace(/[^0-9.]/g, '').split('.');
@@ -21,15 +18,52 @@ export function formatUsdcAtomic(value: bigint): string {
 export function getServicePlanPriceAtomic(
   plan: ServicePlanKey,
   _interval: ServicePlanInterval,
+  sku?: ServicePlanSku,
 ): bigint {
+  if (plan === 'enterprise' && sku?.startsWith('enterprise-')) {
+    const monthly = Number(sku.slice('enterprise-'.length));
+    const offer = ENTERPRISE_PLAN_OFFERS.find((entry) => entry.monthlyEmails === monthly);
+    if (!offer) throw new Error('Unsupported Enterprise email tier');
+    return offer.yearlyPriceUsdcAtomic;
+  }
   const entry = SERVICE_PLAN_CATALOG[plan];
   return entry.yearlyPriceUsdcAtomic;
+}
+
+export function normalizeServicePlanSku(
+  plan: ServicePlanKey,
+  sku?: ServicePlanSku,
+): ServicePlanSku {
+  if (plan === 'enterprise') return sku?.startsWith('enterprise-') ? sku : 'enterprise-100000';
+  return plan;
+}
+
+export function isServicePlanSkuForPlan(
+  plan: ServicePlanKey,
+  sku: string | undefined,
+): sku is ServicePlanSku | undefined {
+  if (!sku) return true;
+  if (plan !== 'enterprise') return sku === plan;
+  if (!sku.startsWith('enterprise-')) return false;
+  const monthlyEmails = Number(sku.slice('enterprise-'.length));
+  return ENTERPRISE_PLAN_OFFERS.some((offer) => offer.monthlyEmails === monthlyEmails);
 }
 
 export function addServicePlanInterval(date: Date, _interval: ServicePlanInterval): Date {
   const out = new Date(date);
   out.setUTCFullYear(out.getUTCFullYear() + 1);
   return out;
+}
+
+export function getMonthlyUsageCycle(anchor: Date, now: Date) {
+  const day = anchor.getUTCDate();
+  const boundary = (year: number, month: number) => {
+    const last = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    return new Date(Date.UTC(year, month, Math.min(day, last)));
+  };
+  let start = boundary(now.getUTCFullYear(), now.getUTCMonth());
+  if (start > now) start = boundary(now.getUTCFullYear(), now.getUTCMonth() - 1);
+  return { start, end: boundary(start.getUTCFullYear(), start.getUTCMonth() + 1) };
 }
 
 export function sleep(ms: number): Promise<void> {

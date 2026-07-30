@@ -4,10 +4,12 @@ import { SERVICE_PLAN_INTERVALS, SERVICE_PLAN_KEYS, SUPPORTED_TLDS } from './con
 export type SupportedTld = (typeof SUPPORTED_TLDS)[number];
 export type ServicePlanKey = (typeof SERVICE_PLAN_KEYS)[number];
 export type ServicePlanInterval = (typeof SERVICE_PLAN_INTERVALS)[number];
+export type EnterpriseEmailTier = (typeof import('./constants.js').ENTERPRISE_EMAIL_TIERS)[number];
+export type ServicePlanSku = 'included' | 'starter' | 'pro' | `enterprise-${EnterpriseEmailTier}`;
 
 export interface ServicePlanLimits {
-  emailPerHour: number;
-  emailPerDay: number;
+  monthlyEmails: number;
+  requestsPerSecond: number;
   apiKeys: number;
   dnsRecords: number;
   emailAliases: number;
@@ -16,6 +18,7 @@ export interface ServicePlanLimits {
 
 export interface ServicePlanEntitlement {
   plan: ServicePlanKey;
+  planSku?: ServicePlanSku;
   status: 'included' | 'active' | 'expired' | 'canceled';
   interval: ServicePlanInterval | null;
   autoRenew: boolean;
@@ -37,6 +40,7 @@ export interface RegistrationParams {
   emailEnabled: boolean;
   emailUsername?: string;
   premiumPlan?: ServicePlanKey;
+  premiumPlanSku?: ServicePlanSku;
   years: number;
   autoRenew: boolean;
   dnsTarget?: string;
@@ -78,6 +82,7 @@ export interface PricingBreakdown {
   serviceFeeUsdc: string;
   platformFeeUsdc: string;
   premiumPlan: ServicePlanKey;
+  premiumPlanSku?: ServicePlanSku;
   premiumPlanLabel: string;
   premiumPlanFeeUsdc: string;
   emailFeeUsdc: string;
@@ -91,13 +96,7 @@ export interface PricingBreakdown {
 }
 
 export type RenewalSnapshotItemKey =
-  | 'domain'
-  | 'platform'
-  | 'premium_plan'
-  | 'ssl'
-  | 'email'
-  | 'basename'
-  | 'ens';
+  'domain' | 'platform' | 'premium_plan' | 'ssl' | 'email' | 'basename' | 'ens';
 
 export interface RenewalPriceSnapshotItem {
   key: RenewalSnapshotItemKey;

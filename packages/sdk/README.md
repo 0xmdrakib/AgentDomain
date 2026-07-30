@@ -68,9 +68,31 @@ await agent.sendEmail(agentId, {
 
 The full key is returned only once. A scoped key can manage only its own agent ID.
 
+## Monthly usage, batch send, and inbound webhooks
+
+All plans combine sent recipients and accepted inbound messages into one monthly
+quota. Send up to 100 message objects in one batch request, inspect current
+usage, and configure a signed inbound webhook:
+
+```ts
+await agent.sendEmailBatch(agentId, {
+  messages: [
+    { to: 'ops@example.com', subject: 'Status', text: 'Agent online.' },
+  ],
+});
+
+const usage = await agent.getEmailUsage(agentId);
+const webhook = await agent.setEmailWebhook(agentId, {
+  url: 'https://example.com/webhooks/agentdomain',
+  payloadMode: 'metadata',
+  enabled: true,
+});
+```
+
 ## Email addresses
 
-Every agent gets one editable primary email address. Pro agents can create 5 aliases and Enterprise agents can create 20 aliases.
+Every agent gets one editable primary email address. Starter agents can create 5
+aliases, Pro agents 10, and Enterprise agents 20.
 
 ```ts
 await ad.updatePrimaryEmail(agentId, 'support');

@@ -49,7 +49,7 @@ Agents can manage their own scoped mailbox after registration:
 
 ```ts
 await agentDomain.updatePrimaryEmail(agentId, 'support');
-await agentDomain.createEmailAlias(agentId, 'billing'); // Pro/Enterprise only
+await agentDomain.createEmailAlias(agentId, 'billing'); // Starter/Pro/Enterprise
 await agentDomain.sendEmail(agentId, {
   fromAddress: 'billing@example.com',
   to: 'operator@example.com',

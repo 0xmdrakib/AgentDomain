@@ -30,15 +30,27 @@ PATCH /api/v1/agents/:id/email
 POST /api/v1/agents/:id/email/aliases
 DELETE /api/v1/agents/:id/email/aliases?emailAddress=billing@example.com
 POST /api/v1/agents/:id/email/send
+POST /api/v1/agents/:id/email/batch
+GET /api/v1/agents/:id/email/usage
+GET|PUT|PATCH|DELETE /api/v1/agents/:id/email/webhook
 ```
 
 Responses include text fields and extracted `verificationCodes`; HTML, raw MIME,
 and attachments are not stored.
 
 Primary address changes disable the old primary lookup for future inbound mail
-while preserving historical messages. Pro agents can create `5` receive/send
-aliases and Enterprise agents can create `20`; Included agents keep one editable
-primary address and no aliases.
+while preserving historical messages. Starter agents can create `5`, Pro agents
+`10`, and Enterprise agents `20` receive/send aliases; Included agents keep one
+editable primary address and no aliases.
+
+All plans use one monthly quota combining sent recipients and accepted inbound
+messages. Included has 3,000, Starter 25,000, Pro 50,000, and Enterprise offers
+100,000 through 5,000,000 per month. Each agent may make 12 send API requests
+per second; one batch request can contain up to 100 message objects.
+
+Messages and webhook delivery records are retained for 30 days. Inbound
+webhooks are HMAC-signed and can deliver metadata plus an authenticated content
+URL, with optional inline plain text up to 256KB.
 
 ## Spam controls
 

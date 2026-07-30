@@ -1,6 +1,6 @@
 {
   "name": "@agentdomain/eliza-plugin",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "ElizaOS plugin for AgentDomain - give your Eliza agent a complete identity stack",
   "license": "Apache-2.0",
   "repository": "https://github.com/0xmdrakib/AgentDomain.git",

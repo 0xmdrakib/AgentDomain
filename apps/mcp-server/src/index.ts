@@ -63,7 +63,7 @@ function getClient(): AgentDomain {
 }
 
 const server = new Server(
-  { name: 'agentdomain-mcp', version: '0.3.0' },
+  { name: 'agentdomain-mcp', version: '0.2.1' },
   { capabilities: { tools: {} } },
 );
 
@@ -200,7 +200,8 @@ const TOOLS = [
   },
   {
     name: 'get_agent',
-    description: 'Get one agent identity by AgentDomain agent ID. Works with an agent-scoped API key.',
+    description:
+      'Get one agent identity by AgentDomain agent ID. Works with an agent-scoped API key.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -257,9 +258,58 @@ const TOOLS = [
     },
   },
   {
-    name: 'create_email_alias',
+    name: 'send_agent_email_batch',
     description:
-      'Create an extra receive-and-send email alias. Requires Pro or Enterprise Premium Plan capacity.',
+      'Queue up to 100 emails in one request; each recipient counts toward monthly usage.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agentId: { type: 'string' },
+        messages: {
+          type: 'array',
+          maxItems: 100,
+          items: {
+            type: 'object',
+            properties: {
+              to: { type: 'string' },
+              subject: { type: 'string' },
+              text: { type: 'string' },
+              fromAddress: { type: 'string' },
+            },
+            required: ['to', 'subject', 'text'],
+          },
+        },
+        idempotencyKey: { type: 'string' },
+      },
+      required: ['agentId', 'messages'],
+    },
+  },
+  {
+    name: 'get_agent_email_usage',
+    description: 'Get combined sent and received monthly quota usage and reset date.',
+    inputSchema: {
+      type: 'object',
+      properties: { agentId: { type: 'string' } },
+      required: ['agentId'],
+    },
+  },
+  {
+    name: 'configure_email_webhook',
+    description: 'Configure the signed email.received webhook for an agent.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agentId: { type: 'string' },
+        url: { type: 'string' },
+        payloadMode: { type: 'string', enum: ['metadata', 'inline_text'] },
+        enabled: { type: 'boolean' },
+      },
+      required: ['agentId', 'url'],
+    },
+  },
+  {
+    name: 'create_email_alias',
+    description: 'Create an extra receive-and-send email alias. Requires paid-plan alias capacity.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -414,12 +464,16 @@ const TOOLS = [
   {
     name: 'purchase_service_plan',
     description:
-      'Upgrade one agent to a Pro or Enterprise Premium Plan with x402 USDC. Requires AGENT_PRIVATE_KEY for the owner wallet.',
+      'Upgrade one agent to Starter, Pro, or Enterprise with x402 USDC. Requires AGENT_PRIVATE_KEY for the owner wallet.',
     inputSchema: {
       type: 'object',
       properties: {
         agentId: { type: 'string' },
-        plan: { type: 'string', enum: ['pro', 'enterprise'] },
+        plan: { type: 'string', enum: ['starter', 'pro', 'enterprise'] },
+        planSku: {
+          type: 'string',
+          description: 'For Enterprise, e.g. enterprise-100000 through enterprise-5000000.',
+        },
       },
       required: ['agentId', 'plan'],
     },
@@ -427,7 +481,7 @@ const TOOLS = [
   {
     name: 'set_registry_visibility',
     description:
-      'Hide or show one agent in the public AgentDomain registry. Hiding requires an active Pro or Enterprise Premium Plan.',
+      'Hide or show one agent in the public AgentDomain registry. Hiding requires an active paid Premium Plan.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -586,6 +640,47 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       }
 
+      case 'send_agent_email_batch': {
+        const a = z
+          .object({
+            agentId: z.string(),
+            messages: z
+              .array(
+                z.object({
+                  to: z.string().email(),
+                  subject: z.string(),
+                  text: z.string(),
+                  fromAddress: z.string().email().optional(),
+                }),
+              )
+              .max(100),
+            idempotencyKey: z.string().optional(),
+          })
+          .parse(args);
+        const result = await client.sendEmailBatch(a.agentId, {
+          messages: a.messages,
+          idempotencyKey: a.idempotencyKey,
+        });
+        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      }
+      case 'get_agent_email_usage': {
+        const a = z.object({ agentId: z.string() }).parse(args);
+        const result = await client.getEmailUsage(a.agentId);
+        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      }
+      case 'configure_email_webhook': {
+        const a = z
+          .object({
+            agentId: z.string(),
+            url: z.string().url(),
+            payloadMode: z.enum(['metadata', 'inline_text']).default('metadata'),
+            enabled: z.boolean().default(true),
+          })
+          .parse(args);
+        const result = await client.setEmailWebhook(a.agentId, a);
+        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      }
+
       case 'update_primary_email': {
         const a = z.object({ agentId: z.string(), username: z.string() }).parse(args);
         const result = await client.updatePrimaryEmail(a.agentId, a.username);
@@ -699,7 +794,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const a = z
           .object({
             agentId: z.string(),
-            plan: z.enum(['pro', 'enterprise']),
+            plan: z.enum(['starter', 'pro', 'enterprise']),
+            planSku: z.custom<import('@agentdomain/shared').ServicePlanSku>().optional(),
           })
           .parse(args);
         const result = await client.purchaseServicePlan(a);

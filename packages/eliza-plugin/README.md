@@ -10,7 +10,7 @@ The plugin gives Eliza agents a complete AgentDomain lifecycle surface:
 
 - Registration quote and x402 registration
 - Registry discovery
-- Agent email send/list, primary address update, and Pro/Enterprise aliases
+- Agent email send/list/batch, monthly usage, signed inbound webhooks, primary address updates, and Starter/Pro/Enterprise aliases
 - DNS management
 - SSL repair/reconfiguration
 - RenewalVault status, funding, and auto-renew

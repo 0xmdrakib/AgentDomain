@@ -10,10 +10,10 @@ The provider exposes actions for:
 
 - Agent identity registration and quote
 - Registry search
-- Email send/list, primary address update, and Pro/Enterprise aliases
+- Email send/list/batch, monthly usage, signed inbound webhooks, primary address updates, and Starter/Pro/Enterprise aliases
 - DNS list/create/update/delete
 - SSL reconfiguration
 - RenewalVault status, funding, auto-renew, and withdrawal
-- Per-agent Pro and Enterprise Premium Plans
+- Per-agent Starter, Pro, and Enterprise Premium Plans
 
 Default API base: `https://agentdomain.app/api/v1`.

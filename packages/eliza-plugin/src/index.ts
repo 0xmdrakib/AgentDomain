@@ -67,12 +67,7 @@ const registerSchema = z.object({
   registerBasename: z.boolean().default(true),
   registerEns: z.boolean().default(false),
   emailEnabled: z.boolean().default(true),
-  emailUsername: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .regex(EMAIL_USERNAME_PATTERN)
-    .default('agent'),
+  emailUsername: z.string().trim().toLowerCase().regex(EMAIL_USERNAME_PATTERN).default('agent'),
   years: z.number().int().min(1).max(10).default(1),
   autoRenew: z.boolean().default(false),
   premiumPlan: z.enum(SERVICE_PLAN_KEYS).default('included'),
@@ -136,13 +131,26 @@ function parseAmountUsdc(text: string): string {
 function parseRegistrationPlan(lower: string): ServicePlanKey {
   if (lower.includes('enterprise')) return 'enterprise';
   if (lower.includes('pro')) return 'pro';
+  if (lower.includes('starter')) return 'starter';
   return 'included';
 }
 
-function parsePlan(text: string): { plan: 'pro' | 'enterprise' } {
+function parsePlan(text: string): {
+  plan: 'starter' | 'pro' | 'enterprise';
+  planSku?: import('@agentdomain/shared').ServicePlanSku;
+} {
   const lower = text.toLowerCase();
-  const plan = lower.includes('enterprise') ? 'enterprise' : 'pro';
-  return { plan };
+  if (lower.includes('enterprise')) {
+    const match = lower.match(/(\d+(?:\.\d+)?)\s*(k|m)/);
+    const monthly = match
+      ? Math.round(Number(match[1]) * (match[2] === 'm' ? 1_000_000 : 1_000))
+      : 100_000;
+    return {
+      plan: 'enterprise',
+      planSku: `enterprise-${monthly}` as import('@agentdomain/shared').ServicePlanSku,
+    };
+  }
+  return { plan: lower.includes('starter') ? 'starter' : 'pro' };
 }
 
 function parseDnsRecord(text: string) {
@@ -164,8 +172,9 @@ function parseDnsRecord(text: string) {
 
 function parseEmailUsername(text: string): string | null {
   const explicit =
-    text.match(/\b(?:email\s+username|primary\s+email|username|alias)[:=]?\s*([a-z0-9._+-]{1,64})/i)?.[1] ??
-    text.match(EMAIL_PATTERN)?.[0]?.split('@')[0];
+    text.match(
+      /\b(?:email\s+username|primary\s+email|username|alias)[:=]?\s*([a-z0-9._+-]{1,64})/i,
+    )?.[1] ?? text.match(EMAIL_PATTERN)?.[0]?.split('@')[0];
   const username = explicit?.trim().toLowerCase();
   return username && EMAIL_USERNAME_PATTERN.test(username) ? username : null;
 }
@@ -174,7 +183,8 @@ function parseEmailRequest(text: string) {
   const fromAddress = text.match(/\bfrom[:=]\s*([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i)?.[1];
   const explicitTo = text.match(/\bto[:=]\s*([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i)?.[1];
   const emails = text.match(EMAIL_GLOBAL_PATTERN) ?? [];
-  const to = explicitTo ?? emails.find((email) => email.toLowerCase() !== fromAddress?.toLowerCase());
+  const to =
+    explicitTo ?? emails.find((email) => email.toLowerCase() !== fromAddress?.toLowerCase());
   if (!to) throw new Error('Recipient email address is required');
   const subject = text.match(/\bsubject[:=]\s*([^|]+)/i)?.[1]?.trim() ?? 'AgentDomain message';
   const body =
@@ -315,7 +325,62 @@ export const sendEmailAction = {
     const agentId = requireAgentId(message.content.text);
     const payload = parseEmailRequest(message.content.text);
     const result = await ad.sendEmail(agentId, payload);
-    return { text: `Email sent: ${result.id}.`, data: result };
+    return { text: `Email queued: ${result.id}.`, data: result };
+  },
+};
+
+export const emailUsageAction = {
+  name: 'GET_AGENT_EMAIL_USAGE',
+  description: 'Get combined monthly sent and received email usage.',
+  similes: ['EMAIL_USAGE', 'EMAIL_QUOTA'],
+  examples: [],
+  validate: async (runtime: IAgentRuntime) =>
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY') || runtime.getSetting('AGENTDOMAIN_API_KEY')),
+  handler: async (runtime: IAgentRuntime, message: Memory) => {
+    const { ad } = getClients(runtime);
+    const result = await ad.getEmailUsage(requireAgentId(message.content.text));
+    return {
+      text: `Used ${result.used} of ${result.limit} emails; ${result.remaining} remain.`,
+      data: result,
+    };
+  },
+};
+export const configureEmailWebhookAction = {
+  name: 'CONFIGURE_EMAIL_WEBHOOK',
+  description: 'Configure a signed inbound email webhook. Include an HTTPS URL in the request.',
+  similes: ['SET_EMAIL_WEBHOOK'],
+  examples: [],
+  validate: async (runtime: IAgentRuntime) =>
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY') || runtime.getSetting('AGENTDOMAIN_API_KEY')),
+  handler: async (runtime: IAgentRuntime, message: Memory) => {
+    const { ad } = getClients(runtime);
+    const agentId = requireAgentId(message.content.text);
+    const url = message.content.text.match(/https:\/\/[^\s]+/)?.[0];
+    if (!url) throw new Error('HTTPS webhook URL is required');
+    const result = await ad.setEmailWebhook(agentId, {
+      url,
+      payloadMode: /inline/i.test(message.content.text) ? 'inline_text' : 'metadata',
+      enabled: true,
+    });
+    return { text: 'Inbound email webhook configured.', data: result };
+  },
+};
+export const sendEmailBatchAction = {
+  name: 'SEND_AGENT_EMAIL_BATCH',
+  description: 'Queue up to 100 emails supplied as a JSON messages array.',
+  similes: ['BATCH_EMAIL'],
+  examples: [],
+  validate: async (runtime: IAgentRuntime) =>
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY') || runtime.getSetting('AGENTDOMAIN_API_KEY')),
+  handler: async (runtime: IAgentRuntime, message: Memory) => {
+    const { ad } = getClients(runtime);
+    const agentId = requireAgentId(message.content.text);
+    const json = message.content.text.slice(message.content.text.indexOf('{'));
+    const parsed = JSON.parse(json) as {
+      messages: Array<{ to: string; subject: string; text: string }>;
+    };
+    const result = await ad.sendEmailBatch(agentId, { messages: parsed.messages });
+    return { text: `Queued ${result.jobs.length} email jobs.`, data: result };
   },
 };
 
@@ -340,7 +405,7 @@ export const updatePrimaryEmailAction = {
 export const createEmailAliasAction = {
   name: 'CREATE_EMAIL_ALIAS',
   description:
-    'Create a receive-and-send email alias for an AgentDomain identity. Requires available Pro or Enterprise alias capacity.',
+    'Create a receive-and-send email alias for an AgentDomain identity. Requires available paid-plan alias capacity.',
   similes: ['ADD_EMAIL_ALIAS', 'CREATE_ALIAS'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
@@ -525,7 +590,7 @@ export const servicePlanStatusAction = {
     const agentId = requireAgentId(message.content.text);
     const result = await ad.getServicePlan(agentId);
     return {
-      text: `${result.domain} is on ${result.entitlement.plan}. Email limit ${result.entitlement.limits.emailPerHour}/hour, DNS limit ${result.entitlement.limits.dnsRecords}, registry hidden ${result.registryVisibility.hidden}.`,
+      text: `${result.domain} is on ${result.entitlement.plan}. Email limit ${result.entitlement.limits.monthlyEmails}/month combined, DNS limit ${result.entitlement.limits.dnsRecords}, registry hidden ${result.registryVisibility.hidden}.`,
       data: result,
     };
   },
@@ -534,7 +599,7 @@ export const servicePlanStatusAction = {
 export const setRegistryVisibilityAction = {
   name: 'SET_REGISTRY_VISIBILITY',
   description:
-    'Hide or show an agent in the public AgentDomain registry. Hiding requires an active Pro or Enterprise Premium Plan.',
+    'Hide or show an agent in the public AgentDomain registry. Hiding requires an active paid Premium Plan.',
   similes: ['HIDE_AGENT_REGISTRY', 'SHOW_AGENT_REGISTRY', 'REGISTRY_VISIBILITY'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
@@ -559,7 +624,7 @@ export const setRegistryVisibilityAction = {
 
 export const purchaseServicePlanAction = {
   name: 'PURCHASE_SERVICE_PLAN',
-  description: 'Upgrade an agent to AgentDomain Pro or Enterprise Premium Plan using x402 USDC.',
+  description: 'Upgrade an agent to AgentDomain Starter, Pro, or Enterprise using x402 USDC.',
   similes: ['BUY_PLAN', 'UPGRADE_PLAN'],
   examples: [],
   validate: async (runtime: IAgentRuntime) => Boolean(runtime.getSetting('AGENT_PRIVATE_KEY')),
@@ -587,6 +652,9 @@ export const agentDomainPlugin = {
     registerIdentityAction,
     searchAgentsAction,
     sendEmailAction,
+    sendEmailBatchAction,
+    emailUsageAction,
+    configureEmailWebhookAction,
     listEmailAction,
     updatePrimaryEmailAction,
     createEmailAliasAction,
