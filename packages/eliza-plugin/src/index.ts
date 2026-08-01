@@ -313,6 +313,22 @@ export const listEmailAction = {
   },
 };
 
+export const deleteEmailMessageAction = {
+  name: 'DELETE_AGENT_EMAIL',
+  description: 'Permanently delete one AgentDomain email message.',
+  similes: ['DELETE_EMAIL_MESSAGE', 'REMOVE_EMAIL_MESSAGE'],
+  examples: [],
+  validate: async (runtime: IAgentRuntime) =>
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY') || runtime.getSetting('AGENTDOMAIN_API_KEY')),
+  handler: async (runtime: IAgentRuntime, message: Memory) => {
+    const { ad } = getClients(runtime);
+    const ids = message.content.text.match(new RegExp(UUID_PATTERN.source, 'gi')) ?? [];
+    if (!ids[0] || !ids[1]) throw new Error('Agent ID and message ID UUIDs are required');
+    const result = await ad.deleteEmailMessage(ids[0], ids[1]);
+    return { text: `Deleted email message ${ids[1]}.`, data: result };
+  },
+};
+
 export const sendEmailAction = {
   name: 'SEND_AGENT_EMAIL',
   description: 'Send text-only email from an AgentDomain primary address or active alias.',
@@ -527,7 +543,7 @@ export const listDnsAction = {
 export const createDnsAction = {
   name: 'CREATE_DNS_RECORD',
   description:
-    'Create a user-managed DNS record. An apex routing record activates external hosting; use text like: agentId type A name @ value 1.2.3.4.',
+    'Create a user-managed DNS record. Use text like: agentId type A name @ value 1.2.3.4.',
   similes: ['ADD_DNS', 'CREATE_DNS'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
@@ -622,6 +638,28 @@ export const setRegistryVisibilityAction = {
   },
 };
 
+export const scheduleServicePlanRenewalAction = {
+  name: 'SCHEDULE_SERVICE_PLAN_RENEWAL',
+  description:
+    'Choose the exact AgentDomain Premium Plan SKU for the next identity renewal.',
+  similes: ['CHANGE_RENEWAL_PLAN', 'SET_NEXT_RENEWAL_PLAN'],
+  examples: [],
+  validate: async (runtime: IAgentRuntime) =>
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY') || runtime.getSetting('AGENTDOMAIN_API_KEY')),
+  handler: async (runtime: IAgentRuntime, message: Memory) => {
+    const { ad } = getClients(runtime);
+    const agentId = requireAgentId(message.content.text);
+    const lower = message.content.text.toLowerCase();
+    const plan = parseRegistrationPlan(lower);
+    const parsed = plan === 'enterprise' ? parsePlan(lower) : { plan, planSku: plan };
+    const result = await ad.scheduleServicePlanRenewal(agentId, parsed);
+    return {
+      text: `Scheduled ${result.renewalPlanSku} for the next identity renewal.`,
+      data: result,
+    };
+  },
+};
+
 export const purchaseServicePlanAction = {
   name: 'PURCHASE_SERVICE_PLAN',
   description: 'Upgrade an agent to AgentDomain Starter, Pro, or Enterprise using x402 USDC.',
@@ -656,6 +694,7 @@ export const agentDomainPlugin = {
     emailUsageAction,
     configureEmailWebhookAction,
     listEmailAction,
+    deleteEmailMessageAction,
     updatePrimaryEmailAction,
     createEmailAliasAction,
     deleteEmailAliasAction,
@@ -669,6 +708,7 @@ export const agentDomainPlugin = {
     deleteDnsAction,
     servicePlanStatusAction,
     setRegistryVisibilityAction,
+    scheduleServicePlanRenewalAction,
     purchaseServicePlanAction,
   ],
   evaluators: [],

@@ -19,6 +19,7 @@ import type {
   RenewalPriceSnapshot,
   ServicePlanEntitlement,
   ServicePlanKey,
+  ServicePlanSku,
 } from '@agentdomain/shared';
 import {
   AGENTDOMAIN_API_BASE_URL,
@@ -254,6 +255,7 @@ export interface ServicePlanStatusResult {
   purchases: unknown[];
   catalog: Record<string, unknown>;
   renewalPlan: ServicePlanKey;
+  renewalPlanSku: ServicePlanSku;
   upgradeQuotes?: Record<string, unknown>;
   registryVisibility: RegistryVisibilityStatus;
 }
@@ -267,6 +269,15 @@ export interface ServicePlanPurchaseResult {
   subscription: unknown;
   purchase: unknown;
   entitlement: ServicePlanEntitlement;
+}
+
+export interface ServicePlanRenewalResult {
+  success: true;
+  agentId: string;
+  renewalPlan: ServicePlanKey;
+  renewalPlanSku: ServicePlanSku;
+  entitlement: ServicePlanEntitlement;
+  registryVisibility: RegistryVisibilityStatus;
 }
 
 export interface RegistryVisibilityStatus {
@@ -691,6 +702,18 @@ export class AgentDomain {
     return res.json();
   }
 
+  async deleteEmailMessage(
+    agentId: string,
+    messageId: string,
+  ): Promise<{ deleted: true; messageId: string }> {
+    const res = await fetch(`${this.apiUrl}/agents/${agentId}/email/${messageId}`, {
+      method: 'DELETE',
+      headers: await this.authHeaders(),
+    });
+    if (!res.ok) throw new Error(await responseError(res));
+    return res.json();
+  }
+
   async listDnsRecords(agentId: string): Promise<DnsRecord[]> {
     const res = await fetch(`${this.apiUrl}/agents/${agentId}/dns`, {
       headers: await this.authHeaders(),
@@ -942,6 +965,20 @@ export class AgentDomain {
     return res.json();
   }
 
+  async scheduleServicePlanRenewal(
+    agentId: string,
+    args: { plan: ServicePlanKey; planSku?: ServicePlanSku },
+  ): Promise<ServicePlanRenewalResult> {
+    const planSku = args.planSku ?? args.plan;
+    const res = await fetch(`${this.apiUrl}/agents/${agentId}/plan`, {
+      method: 'PATCH',
+      headers: await this.authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ renewalPlan: args.plan, renewalPlanSku: planSku }),
+    });
+    if (!res.ok) throw new Error(await responseError(res));
+    return res.json();
+  }
+
   async listApiKeys(agentId: string): Promise<ApiKeySummary[]> {
     const params = new URLSearchParams({ agentId });
     const res = await fetch(`${this.apiUrl}/keys?${params.toString()}`, {
@@ -1185,6 +1222,21 @@ export function createOpenAITools(): Array<{
     {
       type: 'function' as const,
       function: {
+        name: 'delete_agent_email',
+        description: 'Permanently delete one email message from an agent inbox',
+        parameters: {
+          type: 'object',
+          properties: {
+            agentId: { type: 'string', description: 'AgentDomain agent ID (UUID)' },
+            messageId: { type: 'string', description: 'Email message ID (UUID)' },
+          },
+          required: ['agentId', 'messageId'],
+        },
+      },
+    },
+    {
+      type: 'function' as const,
+      function: {
         name: 'update_primary_email',
         description:
           'Change one agent primary email username. The old primary address stops receiving new mail.',
@@ -1310,6 +1362,28 @@ export function createOpenAITools(): Array<{
             },
           },
           required: ['agentId', 'registryHidden'],
+        },
+      },
+    },
+    {
+      type: 'function' as const,
+      function: {
+        name: 'schedule_service_plan_renewal',
+        description: 'Choose the exact Premium Plan SKU for the next identity renewal',
+        parameters: {
+          type: 'object',
+          properties: {
+            agentId: { type: 'string', description: 'AgentDomain agent ID (UUID)' },
+            plan: {
+              type: 'string',
+              enum: ['included', 'starter', 'pro', 'enterprise'],
+            },
+            planSku: {
+              type: 'string',
+              description: 'Exact SKU, including Enterprise email volume tier',
+            },
+          },
+          required: ['agentId', 'plan', 'planSku'],
         },
       },
     },
@@ -1482,6 +1556,18 @@ export function createAnthropicTools(): Array<{
       },
     },
     {
+      name: 'delete_agent_email',
+      description: 'Permanently delete one email message from an agent inbox',
+      input_schema: {
+        type: 'object',
+        properties: {
+          agentId: { type: 'string', description: 'AgentDomain agent ID (UUID)' },
+          messageId: { type: 'string', description: 'Email message ID (UUID)' },
+        },
+        required: ['agentId', 'messageId'],
+      },
+    },
+    {
       name: 'update_primary_email',
       description:
         'Change one agent primary email username. The old primary address stops receiving new mail.',
@@ -1587,6 +1673,25 @@ export function createAnthropicTools(): Array<{
         required: ['agentId', 'registryHidden'],
       },
     },
+    {
+      name: 'schedule_service_plan_renewal',
+      description: 'Choose the exact Premium Plan SKU for the next identity renewal',
+      input_schema: {
+        type: 'object',
+        properties: {
+          agentId: { type: 'string', description: 'AgentDomain agent ID (UUID)' },
+          plan: {
+            type: 'string',
+            enum: ['included', 'starter', 'pro', 'enterprise'],
+          },
+          planSku: {
+            type: 'string',
+            description: 'Exact SKU, including Enterprise email volume tier',
+          },
+        },
+        required: ['agentId', 'plan', 'planSku'],
+      },
+    },
   ];
 }
 
@@ -1645,6 +1750,8 @@ export async function runAgentDomainTool(
       });
     case 'list_agent_email':
       return ad.listEmail(args.agentId as string, { limit: (args.limit as number) ?? 20 });
+    case 'delete_agent_email':
+      return ad.deleteEmailMessage(args.agentId as string, args.messageId as string);
     case 'update_primary_email':
       return ad.updatePrimaryEmail(args.agentId as string, args.username as string);
     case 'create_email_alias':
@@ -1688,6 +1795,11 @@ export async function runAgentDomainTool(
         args.agentId as string,
         Boolean(args.registryHidden ?? args.hidden),
       );
+    case 'schedule_service_plan_renewal':
+      return ad.scheduleServicePlanRenewal(args.agentId as string, {
+        plan: args.plan as ServicePlanKey,
+        planSku: args.planSku as ServicePlanSku,
+      });
     default:
       throw new Error(`Unknown tool: ${name}`);
   }

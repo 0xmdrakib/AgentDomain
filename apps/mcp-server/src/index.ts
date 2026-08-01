@@ -345,6 +345,18 @@ const TOOLS = [
     },
   },
   {
+    name: 'delete_agent_email',
+    description: 'Permanently delete one email message from an agent inbox.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agentId: { type: 'string', description: 'AgentDomain agent ID (UUID)' },
+        messageId: { type: 'string', description: 'Email message ID (UUID)' },
+      },
+      required: ['agentId', 'messageId'],
+    },
+  },
+  {
     name: 'list_dns_records',
     description: 'List Spaceship-backed DNS records for an agent domain.',
     inputSchema: {
@@ -357,8 +369,7 @@ const TOOLS = [
   },
   {
     name: 'create_dns_record',
-    description:
-      'Create a user-managed DNS record and sync it to Spaceship. An apex A, AAAA, ALIAS, or CNAME switches web routing and SSL ownership to the external provider without removing email records.',
+    description: 'Create a user-managed DNS record and sync the full DNS state to Spaceship.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -374,8 +385,7 @@ const TOOLS = [
   },
   {
     name: 'update_dns_record',
-    description:
-      'Update a user-managed DNS record and reconcile AgentDomain-managed versus external apex hosting.',
+    description: 'Update a user-managed DNS record and sync the DNS state to Spaceship.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -392,8 +402,7 @@ const TOOLS = [
   },
   {
     name: 'delete_dns_record',
-    description:
-      'Delete a user-managed DNS record. Removing the final external apex route restores AgentDomain-managed routing and SSL.',
+    description: 'Delete a user-managed DNS record and sync the DNS state to Spaceship.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -406,7 +415,7 @@ const TOOLS = [
   {
     name: 'reconfigure_ssl',
     description:
-      'Rebuild AgentDomain Cloudflare SaaS SSL when managed hosting is active. External apex hosting uses the external provider SSL instead.',
+      'Rebuild the Cloudflare SaaS SSL hostname and sync required DNS validation records.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -495,6 +504,23 @@ const TOOLS = [
         },
       },
       required: ['agentId', 'registryHidden'],
+    },
+  },
+  {
+    name: 'schedule_service_plan_renewal',
+    description:
+      'Choose the exact Premium Plan SKU to charge at the next identity renewal, including any Enterprise email tier.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agentId: { type: 'string' },
+        plan: { type: 'string', enum: ['included', 'starter', 'pro', 'enterprise'] },
+        planSku: {
+          type: 'string',
+          description: 'Exact SKU; Enterprise examples range from enterprise-100000 to enterprise-5000000.',
+        },
+      },
+      required: ['agentId', 'plan', 'planSku'],
     },
   },
   {
@@ -640,6 +666,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'list_agent_email': {
         const a = z.object({ agentId: z.string(), limit: z.number().default(20) }).parse(args);
         const result = await client.listEmail(a.agentId, { limit: a.limit });
+        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      }
+
+      case 'delete_agent_email': {
+        const a = z.object({ agentId: z.string().uuid(), messageId: z.string().uuid() }).parse(args);
+        const result = await client.deleteEmailMessage(a.agentId, a.messageId);
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       }
 
@@ -808,6 +840,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'set_registry_visibility': {
         const a = z.object({ agentId: z.string(), registryHidden: z.boolean() }).parse(args);
         const result = await client.setRegistryVisibility(a.agentId, a.registryHidden);
+        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      }
+
+      case 'schedule_service_plan_renewal': {
+        const a = z
+          .object({
+            agentId: z.string().uuid(),
+            plan: z.enum(['included', 'starter', 'pro', 'enterprise']),
+            planSku: z.custom<import('@agentdomain/shared').ServicePlanSku>(),
+          })
+          .parse(args);
+        const result = await client.scheduleServicePlanRenewal(a.agentId, {
+          plan: a.plan,
+          planSku: a.planSku,
+        });
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       }
 

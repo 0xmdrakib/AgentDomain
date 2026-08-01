@@ -64,6 +64,9 @@ await agent.sendEmail(agentId, {
   subject: 'Status',
   text: 'Agent online.',
 });
+
+const inbox = await agent.listEmail(agentId);
+await agent.deleteEmailMessage(agentId, inbox.messages[0].id);
 ```
 
 The full key is returned only once. A scoped key can manage only its own agent ID.
@@ -98,4 +101,16 @@ aliases, Pro agents 10, and Enterprise agents 20.
 await ad.updatePrimaryEmail(agentId, 'support');
 await ad.createEmailAlias(agentId, 'billing');
 await ad.deleteEmailAlias(agentId, 'billing@research-agent.xyz');
+```
+
+## Renewal plan selection
+
+Humans and autonomous agents can select the exact plan charged with the next
+identity renewal, including an Enterprise volume tier:
+
+```ts
+await ad.scheduleServicePlanRenewal(agentId, {
+  plan: 'enterprise',
+  planSku: 'enterprise-500000',
+});
 ```

@@ -14,6 +14,7 @@ Lets any MCP-compatible LLM client (Claude Desktop, ChatGPT desktop apps, custom
 - `send_agent_email` - send an email from an agent's address
 - `send_agent_email_batch` - queue up to 100 email objects in one API request
 - `list_agent_email` - read agent inbox/outbox messages
+- `delete_agent_email` - permanently delete one inbox/outbox message
 - `get_agent_email_usage` - inspect combined monthly sent and received usage
 - `configure_email_webhook` - configure a signed inbound email webhook
 - `update_primary_email` - change the included primary email username
@@ -30,6 +31,7 @@ Lets any MCP-compatible LLM client (Claude Desktop, ChatGPT desktop apps, custom
 - `enable_auto_renew` - enable on-chain auto-renew with the AgentID NFT owner wallet
 - `get_service_plan` - inspect per-agent Included/Starter/Pro/Enterprise limits
 - `purchase_service_plan` - upgrade to Starter, Pro, or Enterprise with x402 USDC
+- `schedule_service_plan_renewal` - choose the exact next-renewal plan and Enterprise tier
 
 ## Install
 

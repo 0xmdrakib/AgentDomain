@@ -76,6 +76,10 @@ const ListEmailSchema = z.object({
   agentId: z.string(),
   limit: z.number().int().min(1).max(100).default(20),
 });
+const DeleteEmailMessageSchema = z.object({
+  agentId: z.string().uuid(),
+  messageId: z.string().uuid(),
+});
 const BatchEmailSchema = z.object({
   agentId: z.string(),
   messages: z.array(SendEmailSchema.omit({ agentId: true })).max(100),
@@ -150,6 +154,11 @@ const PurchaseServicePlanSchema = z.object({
 const SetRegistryVisibilitySchema = z.object({
   agentId: z.string().min(1),
   registryHidden: z.boolean(),
+});
+const ScheduleServicePlanRenewalSchema = z.object({
+  agentId: z.string().uuid(),
+  plan: z.enum(['included', 'starter', 'pro', 'enterprise']),
+  planSku: z.custom<import('@agentdomain/shared').ServicePlanSku>(),
 });
 
 const UpdatePrimaryEmailSchema = z.object({
@@ -266,6 +275,12 @@ export class AgentDomainActionProvider {
         invoke: this.listEmail.bind(this),
       },
       {
+        name: 'delete_agent_email',
+        description: 'Permanently delete one email message from an agent inbox.',
+        schema: DeleteEmailMessageSchema,
+        invoke: this.deleteEmailMessage.bind(this),
+      },
+      {
         name: 'send_agent_email_batch',
         description: 'Queue up to 100 emails in one API request.',
         schema: BatchEmailSchema,
@@ -307,7 +322,7 @@ export class AgentDomainActionProvider {
       {
         name: 'reconfigure_ssl',
         description:
-          'Rebuild AgentDomain Cloudflare SaaS SSL for managed hosting. External apex hosting uses the external provider SSL.',
+          'Rebuild the Cloudflare SaaS SSL hostname and sync the required Spaceship DNS validation records for an existing agent.',
         schema: SslReconfigureSchema,
         invoke: this.reconfigureSsl.bind(this),
       },
@@ -319,8 +334,7 @@ export class AgentDomainActionProvider {
       },
       {
         name: 'create_dns_record',
-        description:
-          'Create a user-managed DNS record. An apex routing record activates external hosting without removing email records.',
+        description: 'Create a user-managed DNS record and sync it to the domain provider.',
         schema: CreateDnsSchema,
         invoke: this.createDns.bind(this),
       },
@@ -362,6 +376,13 @@ export class AgentDomainActionProvider {
           'Hide or show one agent in the public AgentDomain registry. Hiding requires an active paid Premium Plan.',
         schema: SetRegistryVisibilitySchema,
         invoke: this.setRegistryVisibility.bind(this),
+      },
+      {
+        name: 'schedule_service_plan_renewal',
+        description:
+          'Choose the exact Premium Plan SKU for the next identity renewal, including Enterprise tiers.',
+        schema: ScheduleServicePlanRenewalSchema,
+        invoke: this.scheduleServicePlanRenewal.bind(this),
       },
       {
         name: 'update_primary_email',
@@ -567,6 +588,15 @@ export class AgentDomainActionProvider {
     return `${result.domain} is now ${result.registryVisibility.hidden ? 'hidden from' : 'visible in'} the public registry.`;
   }
 
+  private async scheduleServicePlanRenewal(
+    walletProvider: WalletProvider,
+    args: z.infer<typeof ScheduleServicePlanRenewalSchema>,
+  ) {
+    const { ad } = this.createAgentDomain(walletProvider);
+    const result = await ad.scheduleServicePlanRenewal(args.agentId, args);
+    return `Scheduled ${result.renewalPlanSku} for the next identity renewal.`;
+  }
+
   private async quote(walletProvider: WalletProvider, args: z.infer<typeof QuoteSchema>) {
     const { ad } = this.createAgentDomain(walletProvider);
     const q = await ad.quote(args);
@@ -602,6 +632,15 @@ export class AgentDomainActionProvider {
     const { ad } = this.createAgentDomain(walletProvider);
     const result = await ad.listEmail(args.agentId, { limit: args.limit });
     return JSON.stringify(result, null, 2);
+  }
+
+  private async deleteEmailMessage(
+    walletProvider: WalletProvider,
+    args: z.infer<typeof DeleteEmailMessageSchema>,
+  ) {
+    const { ad } = this.createAgentDomain(walletProvider);
+    await ad.deleteEmailMessage(args.agentId, args.messageId);
+    return `Deleted email message ${args.messageId}.`;
   }
 
   private async sendEmailBatch(
