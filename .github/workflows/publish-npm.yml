@@ -12,16 +12,17 @@ jobs:
     name: Build and publish public packages
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 10.33.2
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22.14.0
           registry-url: https://registry.npmjs.org
+          package-manager-cache: false
 
       - name: Install an OIDC-capable npm CLI
         run: npm install --global 'npm@^11.5.1'
