@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   publish:
@@ -19,9 +20,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: pnpm
+          node-version: 22.14.0
           registry-url: https://registry.npmjs.org
+
+      - name: Install an OIDC-capable npm CLI
+        run: npm install --global 'npm@^11.5.1'
 
       - run: pnpm install --frozen-lockfile
 
@@ -32,11 +35,33 @@ jobs:
       - run: pnpm --filter @agentdomain/eliza-plugin build
 
       - name: Publish packages
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          pnpm --filter @agentdomain/shared publish --no-git-checks
-          pnpm --filter @agentdomain/sdk publish --no-git-checks
-          pnpm --filter @agentdomain/mcp-server publish --no-git-checks
-          pnpm --filter @agentdomain/agentkit-plugin publish --no-git-checks
-          pnpm --filter @agentdomain/eliza-plugin publish --no-git-checks
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/.release"
+
+          publish_if_needed() {
+            local package_dir="$1"
+            local name
+            local version
+            local slug
+            local archive
+
+            name="$(node -p "require('./${package_dir}/package.json').name")"
+            version="$(node -p "require('./${package_dir}/package.json').version")"
+            if npm view "${name}@${version}" version >/dev/null 2>&1; then
+              echo "Skipping ${name}@${version}; it is already published."
+              return
+            fi
+
+            pnpm --dir "$package_dir" pack --pack-destination "$GITHUB_WORKSPACE/.release"
+            slug="${name#@}"
+            slug="${slug//\//-}"
+            archive="$GITHUB_WORKSPACE/.release/${slug}-${version}.tgz"
+            npm publish "$archive" --access public
+          }
+
+          publish_if_needed packages/shared
+          publish_if_needed packages/sdk
+          publish_if_needed apps/mcp-server
+          publish_if_needed packages/agentkit-plugin
+          publish_if_needed packages/eliza-plugin
