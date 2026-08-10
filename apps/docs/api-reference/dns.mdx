@@ -1,6 +1,6 @@
 ---
 title: DNS API
-description: 'List, create, update, and delete DNS records for an agent domain.'
+description: "List, create, update, and delete DNS records for an agent domain."
 ---
 
 # DNS API
@@ -25,6 +25,23 @@ POST /api/v1/agents/:id/dns
   "ttl": 3600
 }
 ```
+
+Only user-managed records count toward the per-agent plan limit. System-managed
+records used for SSL, routing, and email do not consume this allowance.
+
+| Plan       | User-managed DNS records |
+| ---------- | -----------------------: |
+| Included   |                       20 |
+| Starter    |                       50 |
+| Pro        |                      100 |
+| Enterprise |                      200 |
+
+DNS mutations are serialized per agent so simultaneous API calls cannot bypass
+the plan limit. A create request beyond the allowance returns
+`402 PLAN_LIMIT_REACHED`. A concurrent mutation returns
+`409 DNS_UPDATE_IN_PROGRESS`; retry it after the active mutation completes. If
+distributed quota enforcement is unavailable, writes fail closed with
+`503 DNS_LOCK_UNAVAILABLE`.
 
 Creating or updating a user-managed apex `A`, `AAAA`, `ALIAS`, or `CNAME`
 record switches the domain to external hosting. AgentDomain removes its

@@ -1,6 +1,6 @@
 ---
 title: DNS Automation
-description: 'How Spaceship Basic DNS is provisioned for every agent domain.'
+description: "How Spaceship Basic DNS is provisioned for every agent domain."
 ---
 
 # DNS Automation
@@ -25,6 +25,11 @@ POST /api/v1/agents/:id/dns
 Supported record types are `A`, `AAAA`, `ALIAS`, `CNAME`, `MX`, `TXT`, `NS`, and `SRV`.
 System-managed apex, Cloudflare validation, and SES mail records cannot be
 edited or deleted by users.
+
+User-managed records are limited per agent: Included supports 20, Starter 50,
+Pro 100, and Enterprise 200. AgentDomain enforces the allowance in the API and
+serializes DNS mutations per agent; system-managed records do not count against
+the plan limit.
 
 ## External apex hosting
 
