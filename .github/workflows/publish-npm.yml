@@ -58,7 +58,7 @@ jobs:
             slug="${name#@}"
             slug="${slug//\//-}"
             archive="$GITHUB_WORKSPACE/.release/${slug}-${version}.tgz"
-            npm publish "$archive" --access public
+            npm publish "$archive" --access public --provenance
           }
 
           publish_if_needed packages/shared
