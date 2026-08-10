@@ -29,7 +29,8 @@ domain, optional Basename, optional ENS name, optional metadata URI, expiry, and
 
 Registrations are paid in USDC on Base using x402. The API returns a `402
 Payment Required` response, the client signs payment authorization, then retries
-with the `X-Payment` header.
+with the x402 v2 `PAYMENT-SIGNATURE` header. AgentDomain uses the Coinbase CDP
+facilitator to verify and settle the payment on Base mainnet (`eip155:8453`).
 
 The quote shows the full USDC amount before payment. Domain cost, optional
 Basename cost, optional ENS cost, and the annual platform fee are itemized

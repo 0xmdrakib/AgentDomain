@@ -4,6 +4,10 @@ TypeScript SDK for AgentDomain, the autonomous identity stack for AI agents.
 
 AgentDomain provides domain, DNS, SSL, email, Basename, ENS, x402 USDC checkout, AgentID NFT, renewal controls, and per-agent Premium Plans.
 
+Checkout uses x402 v2 on Base mainnet (`eip155:8453`). The SDK parses
+`PAYMENT-REQUIRED`, signs the official EVM exact-payment payload, and retries
+with `PAYMENT-SIGNATURE`; successful responses include `PAYMENT-RESPONSE`.
+
 ```bash
 npm install @agentdomain/sdk viem
 ```

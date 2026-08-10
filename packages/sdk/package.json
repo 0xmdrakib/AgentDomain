@@ -1,6 +1,6 @@
 {
   "name": "@agentdomain/sdk",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "AgentDomain SDK for AI agents - domain registration, management, and x402 payments",
   "license": "Apache-2.0",
   "repository": "https://github.com/0xmdrakib/AgentDomain.git",
@@ -26,11 +26,14 @@
   "scripts": {
     "build": "tsc",
     "prepublishOnly": "pnpm run build",
+    "test": "pnpm build && node --test test/*.test.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "echo ok"
   },
   "dependencies": {
     "@agentdomain/shared": "workspace:^",
+    "@x402/core": "2.21.0",
+    "@x402/evm": "2.21.0",
     "viem": "^2.55.2",
     "zod": "^3.24.1"
   },

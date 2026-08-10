@@ -38,8 +38,8 @@ AgentDomain fills that gap with a single, composable, agent-native API.
 ```
 1. Agent calls /agents/register
 2. Server returns 402 Payment Required (x402 challenge)
-3. SDK signs USDC EIP-3009 transferWithAuthorization
-4. Agent retries with X-Payment header
+3. SDK creates and signs an x402 v2 USDC payment payload
+4. Agent retries with the PAYMENT-SIGNATURE header
 5. Server provisions the selected services with recovery checkpoints:
    domain -> DNS -> SSL -> email -> Basename -> AgentID NFT -> DynamoDB,
    with ENS commit/reveal handled when selected

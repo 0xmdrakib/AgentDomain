@@ -10,7 +10,8 @@ POST /api/v1/agents/register
 ```
 
 This endpoint is x402-protected. The first request returns payment requirements;
-the second request includes the `X-Payment` header.
+the second request includes the x402 v2 `PAYMENT-SIGNATURE` header. Successful
+responses include `PAYMENT-RESPONSE` settlement details.
 
 ## Body
 

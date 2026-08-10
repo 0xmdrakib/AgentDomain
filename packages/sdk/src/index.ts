@@ -11,6 +11,8 @@ import {
   getAddress,
 } from 'viem';
 import { base, baseSepolia } from 'viem/chains';
+import { x402Client, x402HTTPClient } from '@x402/core/client';
+import { registerExactEvmScheme } from '@x402/evm/exact/client';
 import type {
   DnsRecord,
   RegistrationParams,
@@ -21,11 +23,7 @@ import type {
   ServicePlanKey,
   ServicePlanSku,
 } from '@agentdomain/shared';
-import {
-  AGENTDOMAIN_API_BASE_URL,
-  X402_PAYMENT_HEADER,
-  X402_PAYMENT_REQUIRED_HEADER,
-} from '@agentdomain/shared/constants';
+import { AGENTDOMAIN_API_BASE_URL, X402_NETWORK } from '@agentdomain/shared/constants';
 
 const EIP3009_TYPES = {
   TransferWithAuthorization: [
@@ -312,18 +310,58 @@ export interface CreatedApiKey extends ApiKeySummary {
   warning?: string;
 }
 
-interface X402RequirementForClient {
-  scheme?: string;
-  network?: string;
+interface Eip3009RequirementForClient {
   maxAmountRequired: string;
-  resource?: string;
-  description?: string;
-  mimeType?: string;
   payTo: string;
   maxTimeoutSeconds: number;
   asset: string;
   chainId?: number;
-  extensions?: Record<string, unknown>;
+}
+
+export async function createX402PaymentHeaders(
+  response: Response,
+  walletClient: WalletClient<Transport, Chain, Account>,
+): Promise<Record<string, string>> {
+  if (!walletClient.account) {
+    throw new Error('A connected wallet account is required for x402 payment.');
+  }
+
+  const signer = {
+    address: walletClient.account.address,
+    signTypedData: async (message: {
+      domain: Record<string, unknown>;
+      types: Record<string, unknown>;
+      primaryType: string;
+      message: Record<string, unknown>;
+    }) =>
+      walletClient.signTypedData({
+        account: walletClient.account,
+        ...message,
+      } as Parameters<typeof walletClient.signTypedData>[0]),
+  };
+
+  const client = new x402Client();
+  registerExactEvmScheme(client, { signer, networks: [X402_NETWORK] });
+  const httpClient = new x402HTTPClient(client);
+
+  let body: unknown;
+  try {
+    body = await response.clone().json();
+  } catch {
+    body = undefined;
+  }
+  const paymentRequired = httpClient.getPaymentRequiredResponse(
+    (name) => response.headers.get(name),
+    body,
+  );
+  if (paymentRequired.x402Version !== 2) {
+    throw new Error(
+      `AgentDomain requires x402 v2; server returned v${paymentRequired.x402Version}.`,
+    );
+  }
+
+  const payload = await httpClient.createPaymentPayload(paymentRequired);
+  return httpClient.encodePaymentSignatureHeader(payload);
 }
 
 export class AgentDomain {
@@ -418,27 +456,16 @@ export class AgentDomain {
         );
       }
 
-      const paymentRequiredHeader = res.headers.get(X402_PAYMENT_REQUIRED_HEADER);
-      if (!paymentRequiredHeader) {
-        throw new Error('Payment required but server returned no X-Payment-Required header');
+      if (this.network !== 'base') {
+        throw new Error('AgentDomain x402 payments are supported only on Base mainnet.');
       }
-
-      let requirement: X402RequirementForClient;
-      try {
-        requirement = JSON.parse(paymentRequiredHeader);
-      } catch {
-        throw new Error('Failed to parse X-Payment-Required header');
-      }
-
-      const paymentPayload = await this.buildX402Payment(requirement, walletAddress);
-
-      const paymentHeader = base64Encode(JSON.stringify(paymentPayload));
+      const paymentHeaders = await createX402PaymentHeaders(res, this.walletClient);
 
       res = await fetch(url, {
         method: 'POST',
         headers: await this.authHeaders({
           'Content-Type': 'application/json',
-          [X402_PAYMENT_HEADER]: paymentHeader,
+          ...paymentHeaders,
         }),
         body,
       });
@@ -457,22 +484,7 @@ export class AgentDomain {
     return res.json();
   }
 
-  private async buildX402Payment(requirement: X402RequirementForClient, from: Address) {
-    const authorization = await this.buildEip3009Authorization(requirement, from);
-
-    return {
-      x402Version: 1,
-      scheme: 'exact',
-      network: this.network === 'base-sepolia' ? 'base-sepolia' : 'base',
-      payload: {
-        signature: authorization.signature,
-        authorization: authorization.authorization,
-      },
-      ...(requirement.extensions ? { extensions: requirement.extensions } : {}),
-    };
-  }
-
-  private async buildEip3009Authorization(requirement: X402RequirementForClient, from: Address) {
+  private async buildEip3009Authorization(requirement: Eip3009RequirementForClient, from: Address) {
     const chain = this.network === 'base-sepolia' ? baseSepolia : base;
     const now = BigInt(Math.floor(Date.now() / 1000));
     const validBefore = now + BigInt(requirement.maxTimeoutSeconds || 300);
@@ -922,26 +934,16 @@ export class AgentDomain {
     });
 
     if (res.status === 402) {
-      const paymentRequiredHeader = res.headers.get(X402_PAYMENT_REQUIRED_HEADER);
-      if (!paymentRequiredHeader) {
-        throw new Error('Payment required but server returned no X-Payment-Required header');
+      if (this.network !== 'base') {
+        throw new Error('AgentDomain x402 payments are supported only on Base mainnet.');
       }
-
-      let requirement: X402RequirementForClient;
-      try {
-        requirement = JSON.parse(paymentRequiredHeader);
-      } catch {
-        throw new Error('Failed to parse X-Payment-Required header');
-      }
-
-      const paymentPayload = await this.buildX402Payment(requirement, walletAddress);
-      const paymentHeader = base64Encode(JSON.stringify(paymentPayload));
+      const paymentHeaders = await createX402PaymentHeaders(res, this.walletClient);
 
       res = await fetch(url, {
         method: 'POST',
         headers: await this.authHeaders({
           'Content-Type': 'application/json',
-          [X402_PAYMENT_HEADER]: paymentHeader,
+          ...paymentHeaders,
         }),
         body,
       });
@@ -1821,26 +1823,6 @@ function readDnsRecordArgs(args: Record<string, unknown>): Partial<DnsRecord> {
 
 export function formatAgentDomainToolResult(result: unknown): string {
   return typeof result === 'string' ? result : JSON.stringify(result, null, 2);
-}
-
-function base64Encode(value: string): string {
-  if (typeof btoa === 'function') {
-    return btoa(unescape(encodeURIComponent(value)));
-  }
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-  const bytes = new TextEncoder().encode(value);
-  let output = '';
-  for (let i = 0; i < bytes.length; i += 3) {
-    const a = bytes[i] ?? 0;
-    const b = bytes[i + 1] ?? 0;
-    const c = bytes[i + 2] ?? 0;
-    const triplet = (a << 16) | (b << 8) | c;
-    output += alphabet[(triplet >> 18) & 63];
-    output += alphabet[(triplet >> 12) & 63];
-    output += i + 1 < bytes.length ? alphabet[(triplet >> 6) & 63] : '=';
-    output += i + 2 < bytes.length ? alphabet[triplet & 63] : '=';
-  }
-  return output;
 }
 
 async function responseError(res: Response): Promise<string> {

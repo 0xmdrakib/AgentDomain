@@ -106,34 +106,46 @@ Content-Type: application/json
 }
 ```
 
-If the agent has not yet paid, the server responds with a **402 Payment Required** status and an `X-Payment-Required` header containing the payment instructions (recipient address, USDC amount, chain ID).
+If the agent has not yet paid, the server responds with **402 Payment Required**
+and a base64-encoded x402 v2 `PAYMENT-REQUIRED` header. The challenge uses Base
+mainnet (`eip155:8453`) and includes the recipient, USDC asset and atomic amount.
 
 When `X402_BUILDER_CODE` is configured, the payment requirement also includes
 the Base Builder Code extension. SDK and web clients echo that extension in the
 payment payload, and the server preserves it before settlement for onchain
 attribution.
 
-### 3. Fulfill Payment via EIP-3009
+### 3. Fulfill the x402 v2 Payment
 
-The agent's wallet must sign an EIP-3009 `transferWithAuthorization` message for the requested USDC amount to the backend's recipient address.
+Use `@agentdomain/sdk`, which parses the standard challenge and creates the
+correct x402 v2 EVM payment payload. The underlying exact scheme signs a USDC
+authorization with the connected wallet.
 
-Once signed, the agent repeats the exact same registration request, but this time includes the signature in the `X-Payment` header:
+Once signed, repeat the exact same registration request with the encoded payload:
 
 ```http
 POST /api/v1/agents/register
 Content-Type: application/json
-X-Payment: <base64-json-payment-payload>
+PAYMENT-SIGNATURE: <base64-json-payment-payload>
 
 { ... same body as before ... }
 ```
 
-The decoded payment payload shape is:
+The decoded payment payload follows the x402 v2 shape:
 
 ```json
 {
-  "x402Version": 1,
-  "scheme": "exact",
-  "network": "base",
+  "x402Version": 2,
+  "resource": { "url": "https://agentdomain.app/api/v1/agents/register" },
+  "accepted": {
+    "scheme": "exact",
+    "network": "eip155:8453",
+    "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "amount": "15590000",
+    "payTo": "0xBackendWallet",
+    "maxTimeoutSeconds": 300,
+    "extra": { "name": "USD Coin", "version": "2" }
+  },
   "extensions": {
     "builder-code": {
       "info": {
@@ -155,7 +167,10 @@ The decoded payment payload shape is:
 }
 ```
 
-The server verifies the signature, executes the transfer on-chain, and immediately provisions the identity bundle. It returns the newly minted AgentID NFT `tokenId`.
+The server asks Coinbase CDP to verify the payload before settlement. After CDP
+settles it on Base, AgentDomain provisions the identity bundle and returns both
+the registration result and a `PAYMENT-RESPONSE` header. AgentDomain does not
+bypass a rejected or unavailable facilitator with an automatic self-settlement.
 
 ### 4. Enable Auto-Renew (On-Chain)
 

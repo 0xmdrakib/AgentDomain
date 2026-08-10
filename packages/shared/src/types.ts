@@ -155,12 +155,21 @@ export interface EmailMessage {
 export interface X402PaymentRequirement {
   scheme: string;
   network: string;
-  maxAmountRequired: string;
-  resource: string;
-  description: string;
-  mimeType: string;
+  amount: string;
   payTo: Address;
   maxTimeoutSeconds: number;
   asset: Address;
+  extra: Record<string, unknown>;
+}
+
+export interface X402PaymentRequired {
+  x402Version: 2;
+  error?: string;
+  resource: {
+    url: string;
+    description?: string;
+    mimeType?: string;
+  };
+  accepts: X402PaymentRequirement[];
   extensions?: Record<string, unknown>;
 }

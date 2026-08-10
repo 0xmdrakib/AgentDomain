@@ -30,7 +30,7 @@
     {
       "name": "GitHub",
       "icon": "github",
-      "url": "https://github.com/0xmdrakib/AgentDomain"
+      "url": "https://github.com/agentdomain/agentdomain"
     }
   ],
   "navigation": [
@@ -40,7 +40,7 @@
     },
     {
       "group": "Guides",
-      "pages": ["guides/registration", "guides/dns", "guides/email", "guides/ssl", "guides/renewal"]
+      "pages": ["guides/registration", "guides/x402-payments", "guides/dns", "guides/email", "guides/ssl", "guides/renewal"]
     },
     {
       "group": "SDK",
@@ -58,6 +58,7 @@
     {
       "group": "API Reference",
       "pages": [
+        "api-reference/overview",
         "api-reference/register",
         "api-reference/agents",
         "api-reference/dns",
@@ -67,7 +68,7 @@
   ],
   "footerSocials": {
     "twitter": "https://twitter.com/agentdomain",
-    "github": "https://github.com/0xmdrakib/AgentDomain",
+    "github": "https://github.com/agentdomain",
     "farcaster": "https://warpcast.com/agentdomain"
   }
 }

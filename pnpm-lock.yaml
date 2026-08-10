@@ -106,6 +106,12 @@ importers:
       '@agentdomain/shared':
         specifier: workspace:^
         version: link:../shared
+      '@x402/core':
+        specifier: 2.21.0
+        version: 2.21.0
+      '@x402/evm':
+        specifier: 2.21.0
+        version: 2.21.0(typescript@5.9.3)
       viem:
         specifier: ^2.55.2
         version: 2.55.8(typescript@5.9.3)(zod@3.25.76)
@@ -476,6 +482,12 @@ packages:
 
   '@ungap/structured-clone@1.2.0':
     resolution: {integrity: sha512-zuVdFrMJiuCDQUMCzQaD6KL28MjnqqN8XnAqiEq9PNm/hCPTSGfrXCOfwj1ow4LFb/tNymJPwsNbVePc1xFqrQ==}
+
+  '@x402/core@2.21.0':
+    resolution: {integrity: sha512-0djKE7V5/JKDMrjRe5he3DoMFzlbVnUcvMmLAb2j6OoAJDamupkFh6fFrXeoHwjkBIxOFUzjGI4FVixz2dMxSA==}
+
+  '@x402/evm@2.21.0':
+    resolution: {integrity: sha512-VZtPz26IxhfAQbHHmyG7nCY/0jLH9QIgNqRztT1ae93dc9uSGUyn5bofzA3Wxq7lND3WDFir0QAQ2LBqoFeMrg==}
 
   abitype@1.2.3:
     resolution: {integrity: sha512-Ofer5QUnuUdTFsBRwARMoWKOH1ND5ehwYhJ3OJ/BQO+StkwQjHw0XyVh4vDttzHB7QOFhPHa/o413PJ82gU/Tg==}
@@ -1718,6 +1730,20 @@ snapshots:
       undici-types: 6.19.8
 
   '@ungap/structured-clone@1.2.0': {}
+
+  '@x402/core@2.21.0':
+    dependencies:
+      zod: 3.25.76
+
+  '@x402/evm@2.21.0(typescript@5.9.3)':
+    dependencies:
+      '@x402/core': 2.21.0
+      viem: 2.55.8(typescript@5.9.3)(zod@3.25.76)
+      zod: 3.25.76
+    transitivePeerDependencies:
+      - bufferutil
+      - typescript
+      - utf-8-validate
 
   abitype@1.2.3(typescript@5.9.3)(zod@3.25.76):
     optionalDependencies:
