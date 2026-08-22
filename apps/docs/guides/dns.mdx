@@ -1,46 +1,46 @@
 ---
 title: DNS Automation
-description: "How Spaceship Basic DNS is provisioned for every agent domain."
+description: "Safe DNS lifecycle management through Spaceship Basic DNS."
 ---
 
 # DNS Automation
 
-AgentDomain uses Spaceship Basic DNS as the authoritative DNS provider and writes the
-baseline records required for web routing, email, and SSL challenges.
+AgentDomain keeps Spaceship Basic DNS authoritative and separates two ownership
+classes:
 
-## Baseline records
+- **System-managed records** support managed routing, Cloudflare SSL,
+  verification, and professional email. They are visible but read-only.
+- **User-managed records** are controlled from the dashboard, REST API,
+  TypeScript SDK, MCP, AgentKit, or ElizaOS and count toward the plan allowance.
 
-- Apex `ALIAS` pointing to `CLOUDFLARE_SAAS_FALLBACK_HOSTNAME`
-- Cloudflare for SaaS validation TXT records when required
-- MX, SPF, DKIM, and DMARC records when email is enabled
+All Spaceship-writable types are available: `A`, `AAAA`, `ALIAS`, `CAA`,
+`CNAME`, `HTTPS`, `MX`, `NS`, `PTR`, `SRV`, `SVCB`, `TLSA`, and `TXT`.
 
-## Custom DNS records
+## Safe reconciliation
 
-Agents can add DNS records through:
+AgentDomain reads the current provider snapshot and applies only changed,
+removed, or added managed records. Provider-only records are preserved. The
+platform does not use Spaceship force replacement.
 
-```http
-POST /api/v1/agents/:id/dns
-```
+Bulk changes require a dry-run preview and revision token. If DNS changes after
+the preview, apply stops with `DNS_REVISION_CONFLICT`. If a provider operation
+partially fails, AgentDomain attempts to restore the previous snapshot and
+records the failure without exposing provider credentials or raw internal
+responses.
 
-Supported record types are `A`, `AAAA`, `ALIAS`, `CNAME`, `MX`, `TXT`, `NS`, and `SRV`.
-System-managed apex, Cloudflare validation, and SES mail records cannot be
-edited or deleted by users.
+## Import and export
 
-User-managed records are limited per agent: Included supports 20, Starter 50,
-Pro 100, and Enterprise 200. AgentDomain enforces the allowance in the API and
-serializes DNS mutations per agent; system-managed records do not count against
-the plan limit.
+The dashboard and API accept standard BIND zone text up to 256 KiB and 200
+records. The dashboard also provides structured JSON multi-record entry using
+the same typed contract as the API and SDK. Import and batch operations support
+merge and replace modes. Replace never removes system-managed records and
+requires explicit confirmation in the dashboard.
 
-## External apex hosting
+Use `GET /api/v1/agents/:id/dns/capabilities` as the machine-readable contract
+for autonomous clients.
 
-Adding a user-managed apex `A`, `AAAA`, `ALIAS`, or `CNAME` transfers web
-routing ownership to the external hosting provider. AgentDomain then:
+## Plan allowances
 
-- removes its managed apex route;
-- deletes the Cloudflare for SaaS custom hostname and DCV records;
-- preserves MX, SPF, DKIM, DMARC, and all other user records; and
-- blocks AgentDomain SSL reconfiguration while external apex routing is active.
-
-Deleting the last external apex route reverses the transition and provisions
-AgentDomain-managed routing and Cloudflare SSL again. Both transitions are
-idempotent and reconciled if a provider is temporarily unavailable.
+Included supports 20 user records, Starter 50, Pro 100, and Enterprise 200.
+System-managed records do not consume this allowance. All plans receive the
+same validation, locking, rollback, and provider-preservation behavior.

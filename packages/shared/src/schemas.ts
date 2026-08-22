@@ -1,17 +1,29 @@
-import { z } from 'zod';
-import { ENTERPRISE_EMAIL_TIERS, SERVICE_PLAN_KEYS } from './constants.js';
-import type { Address } from 'viem';
-import type { ServicePlanSku } from './types.js';
-import { isServicePlanSkuForPlan } from './utils.js';
+import { z } from "zod";
+import { ENTERPRISE_EMAIL_TIERS, SERVICE_PLAN_KEYS } from "./constants.js";
+import type { Address } from "viem";
+import type { ServicePlanSku } from "./types.js";
+import { isServicePlanSkuForPlan } from "./utils.js";
+export {
+  dnsBatchSchema,
+  dnsImportSchema,
+  dnsRecordSchema,
+  dnsRecordTypeSchema,
+} from "./dns.js";
 
 const emptyStringToUndefined = (value: unknown) =>
-  typeof value === 'string' && value.trim() === '' ? undefined : value;
+  typeof value === "string" && value.trim() === "" ? undefined : value;
 
 const optionalMetadataString = (maxLength: number) =>
-  z.preprocess(emptyStringToUndefined, z.string().trim().max(maxLength).optional());
+  z.preprocess(
+    emptyStringToUndefined,
+    z.string().trim().max(maxLength).optional(),
+  );
 
 const optionalMetadataUrl = (maxLength: number) =>
-  z.preprocess(emptyStringToUndefined, z.string().trim().url().max(maxLength).optional());
+  z.preprocess(
+    emptyStringToUndefined,
+    z.string().trim().url().max(maxLength).optional(),
+  );
 
 export const addressSchema = z
   .string()
@@ -24,7 +36,7 @@ export const domainLabelSchema = z
   .max(63)
   .regex(
     /^[a-z0-9][a-z0-9-]*[a-z0-9]$/,
-    'Must be lowercase alphanumeric with hyphens, no leading/trailing hyphens',
+    "Must be lowercase alphanumeric with hyphens, no leading/trailing hyphens",
   );
 
 export const emailUsernameSchema = z
@@ -35,11 +47,23 @@ export const emailUsernameSchema = z
   .max(64)
   .regex(
     /^[a-z0-9](?:[a-z0-9._+-]*[a-z0-9])?$/,
-    'Use lowercase letters, numbers, dot, underscore, plus, or hyphen',
+    "Use lowercase letters, numbers, dot, underscore, plus, or hyphen",
   )
-  .refine((value) => !value.includes('..'), 'Email username cannot contain consecutive dots');
+  .refine(
+    (value) => !value.includes(".."),
+    "Email username cannot contain consecutive dots",
+  );
 
-export const tldSchema = z.enum(['xyz', 'com', 'ai', 'org', 'io', 'net', 'co', 'app']);
+export const tldSchema = z.enum([
+  "xyz",
+  "com",
+  "ai",
+  "org",
+  "io",
+  "net",
+  "co",
+  "app",
+]);
 
 export const registrationParamsSchema = z
   .object({
@@ -51,16 +75,16 @@ export const registrationParamsSchema = z
     ensLabel: domainLabelSchema.optional(),
     ownerAddress: addressSchema.optional(),
     emailEnabled: z.boolean().default(true),
-    emailUsername: emailUsernameSchema.default('agent'),
-    premiumPlan: z.enum(SERVICE_PLAN_KEYS).default('included'),
+    emailUsername: emailUsernameSchema.default("agent"),
+    premiumPlan: z.enum(SERVICE_PLAN_KEYS).default("included"),
     premiumPlanSku: z
       .union([
-        z.enum(['included', 'starter', 'pro']),
+        z.enum(["included", "starter", "pro"]),
         z
           .string()
           .refine(
             (value) =>
-              value.startsWith('enterprise-') &&
+              value.startsWith("enterprise-") &&
               ENTERPRISE_EMAIL_TIERS.includes(Number(value.slice(11)) as never),
           )
           .transform((value) => value as ServicePlanSku),
@@ -75,7 +99,10 @@ export const registrationParamsSchema = z
         description: optionalMetadataString(1000),
         imageUri: optionalMetadataUrl(2048),
         framework: optionalMetadataString(80),
-        capabilities: z.array(z.string().trim().min(1).max(64)).max(20).optional(),
+        capabilities: z
+          .array(z.string().trim().min(1).max(64))
+          .max(20)
+          .optional(),
         x402Endpoint: optionalMetadataUrl(2048),
         socials: z.record(z.string().trim().max(2048)).optional(),
       })
@@ -87,8 +114,8 @@ export const registrationParamsSchema = z
     if (!isServicePlanSkuForPlan(value.premiumPlan, value.premiumPlanSku))
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['premiumPlanSku'],
-        message: 'premiumPlanSku must match premiumPlan',
+        path: ["premiumPlanSku"],
+        message: "premiumPlanSku must match premiumPlan",
       });
   });
 
@@ -98,12 +125,4 @@ export const searchQuerySchema = z.object({
   capability: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   offset: z.coerce.number().int().min(0).default(0),
-});
-
-export const dnsRecordSchema = z.object({
-  type: z.enum(['A', 'AAAA', 'ALIAS', 'CNAME', 'MX', 'TXT', 'NS', 'SRV']),
-  name: z.string().min(1).max(253),
-  value: z.string().min(1).max(4096),
-  ttl: z.number().int().min(60).max(3600).default(3600).optional(),
-  priority: z.number().int().min(0).optional(),
 });

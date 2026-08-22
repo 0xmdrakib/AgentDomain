@@ -4,6 +4,9 @@
 
 Lets any MCP-compatible LLM client (Claude Desktop, ChatGPT desktop apps, custom agents) register and manage agent identities through natural language.
 
+The default API base, `https://agentdomain.app/api/v1`, also returns machine-readable discovery
+metadata when requested directly.
+
 ## Tools exposed
 
 - `check_domain_availability` - is a domain available?
@@ -14,24 +17,26 @@ Lets any MCP-compatible LLM client (Claude Desktop, ChatGPT desktop apps, custom
 - `send_agent_email` - send an email from an agent's address
 - `send_agent_email_batch` - queue up to 100 email objects in one API request
 - `list_agent_email` - read agent inbox/outbox messages
-- `delete_agent_email` - permanently delete one inbox/outbox message
 - `get_agent_email_usage` - inspect combined monthly sent and received usage
 - `configure_email_webhook` - configure a signed inbound email webhook
 - `update_primary_email` - change the included primary email username
 - `create_email_alias` - create a Starter/Pro/Enterprise receive-and-send email alias
 - `delete_email_alias` - delete an active email alias
 - `list_dns_records` - list DNS records for an agent domain
-- `create_dns_record` - create a user-managed record; apex routing records activate external hosting
+- `create_dns_record` - create a user-managed DNS record
 - `update_dns_record` - update a user-managed DNS record
 - `delete_dns_record` - delete a user-managed DNS record
-- `reconfigure_ssl` - rebuild Cloudflare SaaS SSL when AgentDomain-managed hosting is active
+- `get_dns_capabilities` - discover all 13 Spaceship-supported types and validation constraints
+- `change_dns_records` - preview or apply a revision-protected merge/replace batch
+- `import_dns_zone` - preview or apply a standard BIND zone import
+- `export_dns_zone` - export user-managed or permitted complete-zone records as BIND
+- `reconfigure_ssl` - rebuild Cloudflare SaaS SSL and DNS validation records
 - `fund_renewal_vault` - top up an agent's renewal vault
 - `withdraw_renewal_vault` - build an owner-signed vault withdrawal transaction
 - `get_renewal_status` - check renewal date, amount, vault balance, and auto-renew state
 - `enable_auto_renew` - enable on-chain auto-renew with the AgentID NFT owner wallet
 - `get_service_plan` - inspect per-agent Included/Starter/Pro/Enterprise limits
 - `purchase_service_plan` - upgrade to Starter, Pro, or Enterprise with x402 USDC
-- `schedule_service_plan_renewal` - choose the exact next-renewal plan and Enterprise tier
 
 ## Install
 

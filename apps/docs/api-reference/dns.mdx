@@ -1,66 +1,107 @@
 ---
 title: DNS API
-description: "List, create, update, and delete DNS records for an agent domain."
+description: "Manage all Spaceship-supported DNS record types with revision-safe bulk operations."
 ---
 
 # DNS API
 
-## List records
+AgentDomain supports all 13 DNS record types currently writable through
+Spaceship: `A`, `AAAA`, `ALIAS`, `CAA`, `CNAME`, `HTTPS`, `MX`, `NS`, `PTR`,
+`SRV`, `SVCB`, `TLSA`, and `TXT`.
+
+## Discover capabilities
 
 ```http
-GET /api/v1/agents/:id/dns
+GET /api/v1/agents/:id/dns/capabilities
 ```
 
-## Create record
+Use this response before generating records. It lists supported types, each
+type's structured fields and owner constraints, TTL bounds, import/batch
+limits, and type-specific warnings.
+
+## List, create, update, and delete
 
 ```http
-POST /api/v1/agents/:id/dns
-```
-
-```json
-{
-  "type": "TXT",
-  "name": "_agent.example.com",
-  "value": "agentdomain=verified",
-  "ttl": 3600
-}
-```
-
-Only user-managed records count toward the per-agent plan limit. System-managed
-records used for SSL, routing, and email do not consume this allowance.
-
-| Plan       | User-managed DNS records |
-| ---------- | -----------------------: |
-| Included   |                       20 |
-| Starter    |                       50 |
-| Pro        |                      100 |
-| Enterprise |                      200 |
-
-DNS mutations are serialized per agent so simultaneous API calls cannot bypass
-the plan limit. A create request beyond the allowance returns
-`402 PLAN_LIMIT_REACHED`. A concurrent mutation returns
-`409 DNS_UPDATE_IN_PROGRESS`; retry it after the active mutation completes. If
-distributed quota enforcement is unavailable, writes fail closed with
-`503 DNS_LOCK_UNAVAILABLE`.
-
-Creating or updating a user-managed apex `A`, `AAAA`, `ALIAS`, or `CNAME`
-record switches the domain to external hosting. AgentDomain removes its
-Cloudflare SaaS routing and validation records while preserving email records.
-The response includes a `hosting` object with the resulting mode and transition
-status.
-
-## Update record
-
-```http
-PATCH /api/v1/agents/:id/dns/:recordId
-```
-
-## Delete record
-
-```http
+GET    /api/v1/agents/:id/dns
+POST   /api/v1/agents/:id/dns
+PATCH  /api/v1/agents/:id/dns/:recordId
 DELETE /api/v1/agents/:id/dns/:recordId
 ```
 
-Deleting the last user-managed apex routing record restores AgentDomain-managed
-routing and Cloudflare SSL. DNS caches may continue serving the previous target
-until the record TTL expires.
+New clients should send structured `data`:
+
+```json
+{
+  "type": "SRV",
+  "name": "_sip._tcp",
+  "ttl": 3600,
+  "data": {
+    "priority": 10,
+    "weight": 5,
+    "port": 443,
+    "target": "service.example.com"
+  }
+}
+```
+
+Legacy `value` and `priority` payloads remain compatible. If `data` and
+`value` describe different records, the API returns
+`400 DNS_RECORD_DATA_CONFLICT`.
+
+## Batch changes
+
+```http
+POST /api/v1/agents/:id/dns/batch
+```
+
+Always preview first:
+
+```json
+{
+  "mode": "merge",
+  "dryRun": true,
+  "records": [
+    { "type": "A", "name": "api", "data": { "address": "192.0.2.1" } }
+  ]
+}
+```
+
+To apply, send the same records and mode with `dryRun: false` and the preview's
+`baseRevision`. A stale revision returns `409 DNS_REVISION_CONFLICT`.
+
+`replace` affects user-managed records only. SSL, email, verification, and
+routing records owned by AgentDomain are always preserved.
+
+## Import and export BIND zones
+
+```http
+POST /api/v1/agents/:id/dns/import
+GET  /api/v1/agents/:id/dns/export?scope=user
+```
+
+Import uses the same dry-run and `baseRevision` workflow as batch changes.
+`$INCLUDE`, `$GENERATE`, non-`IN` records, out-of-zone owners, and unsupported
+types are rejected. SOA and provider-managed apex NS appear as warnings and are
+not applied.
+
+## Limits and safety
+
+| Plan       | User-managed records |
+| ---------- | -------------------: |
+| Included   |                   20 |
+| Starter    |                   50 |
+| Pro        |                  100 |
+| Enterprise |                  200 |
+
+- TTL: 60-3,600 seconds
+- Batch/import: 200 records
+- BIND zone: 256 KiB
+- JSON body: 1 MiB
+- Import preview: 10/minute
+- Export: 30/minute
+- DNS writes: 5/minute and 20/hour by default
+- One write operation per agent under a 120-second distributed lock
+
+Apex CNAME and apex NS edits are rejected. A CNAME cannot coexist with another
+record type at the same owner. PTR warns when reverse-zone authority is absent,
+and TLSA warns that DANE assurance depends on DNSSEC.

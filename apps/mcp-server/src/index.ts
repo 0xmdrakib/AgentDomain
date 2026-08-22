@@ -22,26 +22,42 @@
  *   }
  */
 
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { z } from 'zod';
-import { AgentDomain } from '@agentdomain/sdk';
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+} from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
+import { AgentDomain } from "@agentdomain/sdk";
+import {
+  DNS_RECORD_TYPES,
+  dnsRecordSchema,
+  dnsRecordObjectSchema,
+  type DnsRecordInput,
+} from "@agentdomain/shared";
 import {
   AGENTDOMAIN_API_BASE_URL,
   SERVICE_PLAN_KEYS,
   SUPPORTED_FRAMEWORKS,
   SUPPORTED_TLDS,
-} from '@agentdomain/shared/constants';
-import { createPublicClient, createWalletClient, http, type Address } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
-import { base, baseSepolia } from 'viem/chains';
+} from "@agentdomain/shared/constants";
+import {
+  createPublicClient,
+  createWalletClient,
+  http,
+  type Address,
+} from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import { base, baseSepolia } from "viem/chains";
 
 const API_URL = process.env.AGENTDOMAIN_API_URL ?? AGENTDOMAIN_API_BASE_URL;
-const NETWORK = (process.env.AGENTDOMAIN_NETWORK ?? 'base') as 'base' | 'base-sepolia';
+const NETWORK = (process.env.AGENTDOMAIN_NETWORK ?? "base") as
+  "base" | "base-sepolia";
 const AGENT_PRIVATE_KEY = process.env.AGENT_PRIVATE_KEY;
 const AGENTDOMAIN_API_KEY = process.env.AGENTDOMAIN_API_KEY;
-const RENEWAL_VAULT_ADDRESS = process.env.RENEWAL_VAULT_ADDRESS as Address | undefined;
+const RENEWAL_VAULT_ADDRESS = process.env.RENEWAL_VAULT_ADDRESS as
+  Address | undefined;
 
 function getClient(): AgentDomain {
   const config: ConstructorParameters<typeof AgentDomain>[0] = {
@@ -52,18 +68,28 @@ function getClient(): AgentDomain {
   };
   if (AGENT_PRIVATE_KEY) {
     const account = privateKeyToAccount(AGENT_PRIVATE_KEY as `0x${string}`);
-    const chain = NETWORK === 'base' ? base : baseSepolia;
-    const rpc = NETWORK === 'base' ? 'https://mainnet.base.org' : 'https://sepolia.base.org';
+    const chain = NETWORK === "base" ? base : baseSepolia;
+    const rpc =
+      NETWORK === "base"
+        ? "https://mainnet.base.org"
+        : "https://sepolia.base.org";
     // Cast: viem's deeply-generic types do not always match cleanly across
     // duplicated installs in monorepos. Behaviour is identical at runtime.
-    config.walletClient = createWalletClient({ account, chain, transport: http(rpc) }) as never;
-    config.publicClient = createPublicClient({ chain, transport: http(rpc) }) as never;
+    config.walletClient = createWalletClient({
+      account,
+      chain,
+      transport: http(rpc),
+    }) as never;
+    config.publicClient = createPublicClient({
+      chain,
+      transport: http(rpc),
+    }) as never;
   }
   return new AgentDomain(config);
 }
 
 const server = new Server(
-  { name: 'agentdomain-mcp', version: '0.2.1' },
+  { name: "agentdomain-mcp", version: "0.2.1" },
   { capabilities: { tools: {} } },
 );
 
@@ -73,466 +99,585 @@ const server = new Server(
 
 const TOOLS = [
   {
-    name: 'check_domain_availability',
+    name: "check_domain_availability",
     description:
-      'Check whether an agent domain (name + tld) is available for registration. Returns availability status and pricing.',
+      "Check whether an agent domain (name + tld) is available for registration. Returns availability status and pricing.",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        name: { type: 'string', description: 'The desired label, e.g. "myagent"' },
+        name: {
+          type: "string",
+          description: 'The desired label, e.g. "myagent"',
+        },
         tld: {
-          type: 'string',
+          type: "string",
           enum: SUPPORTED_TLDS,
-          description: 'TLD',
+          description: "TLD",
         },
       },
-      required: ['name'],
+      required: ["name"],
     },
   },
   {
-    name: 'quote_registration',
+    name: "quote_registration",
     description:
-      'Get a price quote for registering an agent identity bundle. Domain, DNS, email, SSL, AgentID NFT orchestration, and platform fee are included by default. Basename and ENS are optional.',
+      "Get a price quote for registering an agent identity bundle. Domain, DNS, email, SSL, AgentID NFT orchestration, and platform fee are included by default. Basename and ENS are optional.",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        preferredName: { type: 'string' },
-        tld: { type: 'string', enum: SUPPORTED_TLDS },
+        preferredName: { type: "string" },
+        tld: { type: "string", enum: SUPPORTED_TLDS },
         registerBasename: {
-          type: 'boolean',
-          description: 'Set false to skip Basename registration and cost.',
+          type: "boolean",
+          description: "Set false to skip Basename registration and cost.",
           default: true,
         },
         registerEns: {
-          type: 'boolean',
-          description: 'Set true to add ENS; false skips ENS cost.',
+          type: "boolean",
+          description: "Set true to add ENS; false skips ENS cost.",
           default: false,
         },
         emailEnabled: {
-          type: 'boolean',
-          description: 'Deprecated compatibility flag. Email is now always included.',
+          type: "boolean",
+          description:
+            "Deprecated compatibility flag. Email is now always included.",
           default: true,
         },
         emailUsername: {
-          type: 'string',
-          description: 'Primary email username. Defaults to agent, producing agent@domain.',
-          default: 'agent',
+          type: "string",
+          description:
+            "Primary email username. Defaults to agent, producing agent@domain.",
+          default: "agent",
         },
         premiumPlan: {
-          type: 'string',
+          type: "string",
           enum: SERVICE_PLAN_KEYS,
-          default: 'included',
-          description: 'Premium Plan to buy with registration.',
+          default: "included",
+          description: "Premium Plan to buy with registration.",
         },
-        years: { type: 'integer', default: 1, minimum: 1, maximum: 10 },
+        years: { type: "integer", default: 1, minimum: 1, maximum: 10 },
       },
-      required: ['preferredName'],
+      required: ["preferredName"],
     },
   },
   {
-    name: 'register_agent_identity',
+    name: "register_agent_identity",
     description:
-      'Register a complete agent identity bundle. Domain, DNS, email, SSL, AgentID NFT orchestration, and platform fee are included by default. Basename and ENS are optional. Pays in USDC on Base. Requires AGENT_PRIVATE_KEY env var.',
+      "Register a complete agent identity bundle. Domain, DNS, email, SSL, AgentID NFT orchestration, and platform fee are included by default. Basename and ENS are optional. Pays in USDC on Base. Requires AGENT_PRIVATE_KEY env var.",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        preferredName: { type: 'string' },
-        tld: { type: 'string', enum: SUPPORTED_TLDS },
+        preferredName: { type: "string" },
+        tld: { type: "string", enum: SUPPORTED_TLDS },
         registerBasename: {
-          type: 'boolean',
-          description: 'Set false to skip Basename registration and cost.',
+          type: "boolean",
+          description: "Set false to skip Basename registration and cost.",
           default: true,
         },
-        basenameLabel: { type: 'string', description: 'Optional alternate Basename label' },
+        basenameLabel: {
+          type: "string",
+          description: "Optional alternate Basename label",
+        },
         registerEns: {
-          type: 'boolean',
-          description: 'Set true to add ENS; false skips ENS cost.',
+          type: "boolean",
+          description: "Set true to add ENS; false skips ENS cost.",
           default: false,
         },
-        ensLabel: { type: 'string', description: 'Optional alternate ENS label' },
+        ensLabel: {
+          type: "string",
+          description: "Optional alternate ENS label",
+        },
         ownerAddress: {
-          type: 'string',
-          description: 'Optional EVM address to receive NFT ownership',
+          type: "string",
+          description: "Optional EVM address to receive NFT ownership",
         },
         emailEnabled: {
-          type: 'boolean',
-          description: 'Deprecated compatibility flag. Email is now always included.',
+          type: "boolean",
+          description:
+            "Deprecated compatibility flag. Email is now always included.",
           default: true,
         },
         emailUsername: {
-          type: 'string',
-          description: 'Primary email username. Defaults to agent, producing agent@domain.',
-          default: 'agent',
+          type: "string",
+          description:
+            "Primary email username. Defaults to agent, producing agent@domain.",
+          default: "agent",
         },
         premiumPlan: {
-          type: 'string',
+          type: "string",
           enum: SERVICE_PLAN_KEYS,
-          default: 'included',
-          description: 'Premium Plan to buy with registration.',
+          default: "included",
+          description: "Premium Plan to buy with registration.",
         },
-        years: { type: 'integer', default: 1, minimum: 1, maximum: 10 },
-        autoRenew: { type: 'boolean', default: false },
-        dnsTarget: { type: 'string', description: 'URL or IP to point the domain at' },
+        years: { type: "integer", default: 1, minimum: 1, maximum: 10 },
+        autoRenew: { type: "boolean", default: false },
+        dnsTarget: {
+          type: "string",
+          description: "URL or IP to point the domain at",
+        },
         metadata: {
-          type: 'object',
+          type: "object",
           properties: {
-            name: { type: 'string' },
-            description: { type: 'string' },
-            capabilities: { type: 'array', items: { type: 'string' } },
-            framework: { type: 'string', enum: SUPPORTED_FRAMEWORKS },
-            x402Endpoint: { type: 'string' },
+            name: { type: "string" },
+            description: { type: "string" },
+            capabilities: { type: "array", items: { type: "string" } },
+            framework: { type: "string", enum: SUPPORTED_FRAMEWORKS },
+            x402Endpoint: { type: "string" },
           },
         },
       },
-      required: ['preferredName'],
+      required: ["preferredName"],
     },
   },
   {
-    name: 'lookup_agent',
-    description: 'Look up agent identities by wallet address.',
+    name: "lookup_agent",
+    description: "Look up agent identities by wallet address.",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        wallet: { type: 'string', description: '0x wallet address' },
+        wallet: { type: "string", description: "0x wallet address" },
       },
-      required: ['wallet'],
+      required: ["wallet"],
     },
   },
   {
-    name: 'get_agent',
+    name: "get_agent",
     description:
-      'Get one agent identity by AgentDomain agent ID. Works with an agent-scoped API key.',
+      "Get one agent identity by AgentDomain agent ID. Works with an agent-scoped API key.",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        agentId: { type: 'string', description: 'AgentDomain agent ID (UUID)' },
+        agentId: { type: "string", description: "AgentDomain agent ID (UUID)" },
       },
-      required: ['agentId'],
+      required: ["agentId"],
     },
   },
   {
-    name: 'search_agents',
-    description: 'Search the public agent registry by name, capability, or framework.',
+    name: "search_agents",
+    description:
+      "Search the public agent registry by name, capability, or framework.",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        q: { type: 'string', description: 'Free-text query' },
-        capability: { type: 'string' },
+        q: { type: "string", description: "Free-text query" },
+        capability: { type: "string" },
         framework: {
-          type: 'string',
+          type: "string",
           enum: SUPPORTED_FRAMEWORKS,
         },
-        limit: { type: 'number', default: 20 },
+        limit: { type: "number", default: 20 },
       },
     },
   },
   {
-    name: 'send_agent_email',
-    description: "Send an email from an agent's address (requires email-enabled identity).",
+    name: "send_agent_email",
+    description:
+      "Send an email from an agent's address (requires email-enabled identity).",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        agentId: { type: 'string', description: 'AgentDomain agent ID (UUID)' },
-        to: { type: 'string' },
-        subject: { type: 'string' },
-        text: { type: 'string' },
+        agentId: { type: "string", description: "AgentDomain agent ID (UUID)" },
+        to: { type: "string" },
+        subject: { type: "string" },
+        text: { type: "string" },
         fromAddress: {
-          type: 'string',
-          description: 'Optional primary or active alias address to send from.',
+          type: "string",
+          description: "Optional primary or active alias address to send from.",
         },
       },
-      required: ['agentId', 'to', 'subject'],
+      required: ["agentId", "to", "subject"],
     },
   },
   {
-    name: 'update_primary_email',
+    name: "update_primary_email",
     description:
-      'Change the primary email username for an agent. The old primary address stops receiving new mail.',
+      "Change the primary email username for an agent. The old primary address stops receiving new mail.",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        agentId: { type: 'string', description: 'AgentDomain agent ID (UUID)' },
-        username: { type: 'string', description: 'New primary local-part, e.g. agent or support' },
+        agentId: { type: "string", description: "AgentDomain agent ID (UUID)" },
+        username: {
+          type: "string",
+          description: "New primary local-part, e.g. agent or support",
+        },
       },
-      required: ['agentId', 'username'],
+      required: ["agentId", "username"],
     },
   },
   {
-    name: 'send_agent_email_batch',
+    name: "send_agent_email_batch",
     description:
-      'Queue up to 100 emails in one request; each recipient counts toward monthly usage.',
+      "Queue up to 100 emails in one request; each recipient counts toward monthly usage.",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        agentId: { type: 'string' },
+        agentId: { type: "string" },
         messages: {
-          type: 'array',
+          type: "array",
           maxItems: 100,
           items: {
-            type: 'object',
+            type: "object",
             properties: {
-              to: { type: 'string' },
-              subject: { type: 'string' },
-              text: { type: 'string' },
-              fromAddress: { type: 'string' },
+              to: { type: "string" },
+              subject: { type: "string" },
+              text: { type: "string" },
+              fromAddress: { type: "string" },
             },
-            required: ['to', 'subject', 'text'],
+            required: ["to", "subject", "text"],
           },
         },
-        idempotencyKey: { type: 'string' },
+        idempotencyKey: { type: "string" },
       },
-      required: ['agentId', 'messages'],
+      required: ["agentId", "messages"],
     },
   },
   {
-    name: 'get_agent_email_usage',
-    description: 'Get combined sent and received monthly quota usage and reset date.',
-    inputSchema: {
-      type: 'object',
-      properties: { agentId: { type: 'string' } },
-      required: ['agentId'],
-    },
-  },
-  {
-    name: 'configure_email_webhook',
-    description: 'Configure the signed email.received webhook for an agent.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        agentId: { type: 'string' },
-        url: { type: 'string' },
-        payloadMode: { type: 'string', enum: ['metadata', 'inline_text'] },
-        enabled: { type: 'boolean' },
-      },
-      required: ['agentId', 'url'],
-    },
-  },
-  {
-    name: 'create_email_alias',
-    description: 'Create an extra receive-and-send email alias. Requires paid-plan alias capacity.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        agentId: { type: 'string', description: 'AgentDomain agent ID (UUID)' },
-        username: { type: 'string', description: 'Alias local-part, e.g. billing' },
-      },
-      required: ['agentId', 'username'],
-    },
-  },
-  {
-    name: 'delete_email_alias',
-    description: 'Delete an active email alias from an agent.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        agentId: { type: 'string', description: 'AgentDomain agent ID (UUID)' },
-        emailAddress: { type: 'string', description: 'Full alias address to delete' },
-      },
-      required: ['agentId', 'emailAddress'],
-    },
-  },
-  {
-    name: 'list_agent_email',
+    name: "get_agent_email_usage",
     description:
-      'List received/sent text-only email messages for an email-enabled agent, including extracted verification codes.',
+      "Get combined sent and received monthly quota usage and reset date.",
     inputSchema: {
-      type: 'object',
-      properties: {
-        agentId: { type: 'string', description: 'AgentDomain agent ID (UUID)' },
-        limit: { type: 'number', default: 20 },
-      },
-      required: ['agentId'],
+      type: "object",
+      properties: { agentId: { type: "string" } },
+      required: ["agentId"],
     },
   },
   {
-    name: 'delete_agent_email',
-    description: 'Permanently delete one email message from an agent inbox.',
+    name: "configure_email_webhook",
+    description: "Configure the signed email.received webhook for an agent.",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        agentId: { type: 'string', description: 'AgentDomain agent ID (UUID)' },
-        messageId: { type: 'string', description: 'Email message ID (UUID)' },
+        agentId: { type: "string" },
+        url: { type: "string" },
+        payloadMode: { type: "string", enum: ["metadata", "inline_text"] },
+        enabled: { type: "boolean" },
       },
-      required: ['agentId', 'messageId'],
+      required: ["agentId", "url"],
     },
   },
   {
-    name: 'list_dns_records',
-    description: 'List Spaceship-backed DNS records for an agent domain.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        agentId: { type: 'string', description: 'AgentDomain agent ID (UUID)' },
-      },
-      required: ['agentId'],
-    },
-  },
-  {
-    name: 'create_dns_record',
-    description: 'Create a user-managed DNS record and sync the full DNS state to Spaceship.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        agentId: { type: 'string' },
-        type: { type: 'string', enum: ['A', 'AAAA', 'ALIAS', 'CNAME', 'MX', 'TXT', 'NS', 'SRV'] },
-        name: { type: 'string' },
-        value: { type: 'string' },
-        ttl: { type: 'number', default: 3600 },
-        priority: { type: 'number' },
-      },
-      required: ['agentId', 'type', 'name', 'value'],
-    },
-  },
-  {
-    name: 'update_dns_record',
-    description: 'Update a user-managed DNS record and sync the DNS state to Spaceship.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        agentId: { type: 'string' },
-        recordId: { type: 'string' },
-        type: { type: 'string', enum: ['A', 'AAAA', 'ALIAS', 'CNAME', 'MX', 'TXT', 'NS', 'SRV'] },
-        name: { type: 'string' },
-        value: { type: 'string' },
-        ttl: { type: 'number' },
-        priority: { type: 'number' },
-      },
-      required: ['agentId', 'recordId'],
-    },
-  },
-  {
-    name: 'delete_dns_record',
-    description: 'Delete a user-managed DNS record and sync the DNS state to Spaceship.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        agentId: { type: 'string' },
-        recordId: { type: 'string' },
-      },
-      required: ['agentId', 'recordId'],
-    },
-  },
-  {
-    name: 'reconfigure_ssl',
+    name: "create_email_alias",
     description:
-      'Rebuild the Cloudflare SaaS SSL hostname and sync required DNS validation records.',
+      "Create an extra receive-and-send email alias. Requires paid-plan alias capacity.",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        agentId: { type: 'string' },
-      },
-      required: ['agentId'],
-    },
-  },
-  {
-    name: 'fund_renewal_vault',
-    description: "Deposit USDC into an agent's renewal vault to keep its domain alive.",
-    inputSchema: {
-      type: 'object',
-      properties: {
-        agentId: { type: 'string' },
-        amountUsdc: { type: 'string', description: 'USDC amount, e.g. "10.00"' },
-      },
-      required: ['agentId', 'amountUsdc'],
-    },
-  },
-  {
-    name: 'withdraw_renewal_vault',
-    description:
-      'Build the owner-signed withdrawal transaction for unused funds in an AgentID renewal vault.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        agentId: { type: 'string' },
-        amountUsdc: { type: 'string', description: 'USDC amount, e.g. "5.00"' },
-      },
-      required: ['agentId', 'amountUsdc'],
-    },
-  },
-  {
-    name: 'get_renewal_status',
-    description:
-      'Get renewal vault status for an agent, including exact renewal amount, vault balance, missing deposit, expiry, and auto-renew readiness.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        agentId: { type: 'string', description: 'AgentDomain agent ID (UUID)' },
-      },
-      required: ['agentId'],
-    },
-  },
-  {
-    name: 'get_service_plan',
-    description:
-      'Get the current AgentDomain Premium Plan, entitlement limits, billing interval, registry privacy, and recent purchases for one agent.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        agentId: { type: 'string', description: 'AgentDomain agent ID (UUID)' },
-      },
-      required: ['agentId'],
-    },
-  },
-  {
-    name: 'purchase_service_plan',
-    description:
-      'Upgrade one agent to Starter, Pro, or Enterprise with x402 USDC. Requires AGENT_PRIVATE_KEY for the owner wallet.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        agentId: { type: 'string' },
-        plan: { type: 'string', enum: ['starter', 'pro', 'enterprise'] },
-        planSku: {
-          type: 'string',
-          description: 'For Enterprise, e.g. enterprise-100000 through enterprise-5000000.',
+        agentId: { type: "string", description: "AgentDomain agent ID (UUID)" },
+        username: {
+          type: "string",
+          description: "Alias local-part, e.g. billing",
         },
       },
-      required: ['agentId', 'plan'],
+      required: ["agentId", "username"],
     },
   },
   {
-    name: 'set_registry_visibility',
-    description:
-      'Hide or show one agent in the public AgentDomain registry. Hiding requires an active paid Premium Plan.',
+    name: "delete_email_alias",
+    description: "Delete an active email alias from an agent.",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        agentId: { type: 'string' },
+        agentId: { type: "string", description: "AgentDomain agent ID (UUID)" },
+        emailAddress: {
+          type: "string",
+          description: "Full alias address to delete",
+        },
+      },
+      required: ["agentId", "emailAddress"],
+    },
+  },
+  {
+    name: "list_agent_email",
+    description:
+      "List received/sent text-only email messages for an email-enabled agent, including extracted verification codes.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agentId: { type: "string", description: "AgentDomain agent ID (UUID)" },
+        limit: { type: "number", default: 20 },
+      },
+      required: ["agentId"],
+    },
+  },
+  {
+    name: "delete_agent_email",
+    description: "Permanently delete one email message from an agent inbox.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agentId: { type: "string", description: "AgentDomain agent ID (UUID)" },
+        messageId: { type: "string", description: "Email message ID (UUID)" },
+      },
+      required: ["agentId", "messageId"],
+    },
+  },
+  {
+    name: "get_dns_capabilities",
+    description:
+      "Get the machine-readable Spaceship DNS types, fields, limits, and safety warnings supported by AgentDomain.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agentId: { type: "string", description: "AgentDomain agent ID (UUID)" },
+      },
+      required: ["agentId"],
+    },
+  },
+  {
+    name: "list_dns_records",
+    description: "List Spaceship-backed DNS records for an agent domain.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agentId: { type: "string", description: "AgentDomain agent ID (UUID)" },
+      },
+      required: ["agentId"],
+    },
+  },
+  {
+    name: "create_dns_record",
+    description:
+      "Create a user-managed DNS record and sync the full DNS state to Spaceship.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agentId: { type: "string" },
+        type: { type: "string", enum: DNS_RECORD_TYPES },
+        name: { type: "string" },
+        value: {
+          type: "string",
+          description: "Legacy format; structured data is preferred",
+        },
+        data: {
+          type: "object",
+          description: "Type-specific structured DNS record data",
+        },
+        ttl: { type: "number", default: 3600 },
+        priority: { type: "number" },
+      },
+      required: ["agentId", "type", "name"],
+    },
+  },
+  {
+    name: "update_dns_record",
+    description:
+      "Update a user-managed DNS record and sync the DNS state to Spaceship.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agentId: { type: "string" },
+        recordId: { type: "string" },
+        type: { type: "string", enum: DNS_RECORD_TYPES },
+        name: { type: "string" },
+        value: { type: "string" },
+        data: {
+          type: "object",
+          description: "Type-specific structured DNS record data",
+        },
+        ttl: { type: "number" },
+        priority: { type: "number" },
+      },
+      required: ["agentId", "recordId"],
+    },
+  },
+  {
+    name: "delete_dns_record",
+    description:
+      "Delete a user-managed DNS record and sync the DNS state to Spaceship.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agentId: { type: "string" },
+        recordId: { type: "string" },
+      },
+      required: ["agentId", "recordId"],
+    },
+  },
+  {
+    name: "change_dns_records",
+    description:
+      "Preview or apply an atomic DNS merge/replace batch. Apply requires the baseRevision returned by preview.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agentId: { type: "string" },
+        records: { type: "array", maxItems: 200, items: { type: "object" } },
+        mode: { type: "string", enum: ["merge", "replace"], default: "merge" },
+        dryRun: { type: "boolean", default: true },
+        baseRevision: {
+          type: "string",
+          description: "Required when dryRun is false",
+        },
+      },
+      required: ["agentId", "records"],
+    },
+  },
+  {
+    name: "import_dns_zone",
+    description:
+      "Preview or apply a BIND zone import. System-managed records remain protected.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agentId: { type: "string" },
+        zoneFile: {
+          type: "string",
+          description: "BIND zone text, maximum 256 KiB",
+        },
+        mode: { type: "string", enum: ["merge", "replace"], default: "merge" },
+        dryRun: { type: "boolean", default: true },
+        baseRevision: {
+          type: "string",
+          description: "Required when dryRun is false",
+        },
+      },
+      required: ["agentId", "zoneFile"],
+    },
+  },
+  {
+    name: "export_dns_zone",
+    description:
+      "Export user-managed or permitted complete DNS state as a standard BIND zone file.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agentId: { type: "string" },
+        scope: { type: "string", enum: ["user", "all"], default: "user" },
+      },
+      required: ["agentId"],
+    },
+  },
+  {
+    name: "reconfigure_ssl",
+    description:
+      "Rebuild the Cloudflare SaaS SSL hostname and sync required DNS validation records.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agentId: { type: "string" },
+      },
+      required: ["agentId"],
+    },
+  },
+  {
+    name: "fund_renewal_vault",
+    description:
+      "Deposit USDC into an agent's renewal vault to keep its domain alive.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agentId: { type: "string" },
+        amountUsdc: {
+          type: "string",
+          description: 'USDC amount, e.g. "10.00"',
+        },
+      },
+      required: ["agentId", "amountUsdc"],
+    },
+  },
+  {
+    name: "withdraw_renewal_vault",
+    description:
+      "Build the owner-signed withdrawal transaction for unused funds in an AgentID renewal vault.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agentId: { type: "string" },
+        amountUsdc: { type: "string", description: 'USDC amount, e.g. "5.00"' },
+      },
+      required: ["agentId", "amountUsdc"],
+    },
+  },
+  {
+    name: "get_renewal_status",
+    description:
+      "Get renewal vault status for an agent, including exact renewal amount, vault balance, missing deposit, expiry, and auto-renew readiness.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agentId: { type: "string", description: "AgentDomain agent ID (UUID)" },
+      },
+      required: ["agentId"],
+    },
+  },
+  {
+    name: "get_service_plan",
+    description:
+      "Get the current AgentDomain Premium Plan, entitlement limits, billing interval, registry privacy, and recent purchases for one agent.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agentId: { type: "string", description: "AgentDomain agent ID (UUID)" },
+      },
+      required: ["agentId"],
+    },
+  },
+  {
+    name: "purchase_service_plan",
+    description:
+      "Upgrade one agent to Starter, Pro, or Enterprise with x402 USDC. Requires AGENT_PRIVATE_KEY for the owner wallet.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agentId: { type: "string" },
+        plan: { type: "string", enum: ["starter", "pro", "enterprise"] },
+        planSku: {
+          type: "string",
+          description:
+            "For Enterprise, e.g. enterprise-100000 through enterprise-5000000.",
+        },
+      },
+      required: ["agentId", "plan"],
+    },
+  },
+  {
+    name: "set_registry_visibility",
+    description:
+      "Hide or show one agent in the public AgentDomain registry. Hiding requires an active paid Premium Plan.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agentId: { type: "string" },
         registryHidden: {
-          type: 'boolean',
-          description: 'true hides the agent from public registry/search; false makes it public',
+          type: "boolean",
+          description:
+            "true hides the agent from public registry/search; false makes it public",
         },
       },
-      required: ['agentId', 'registryHidden'],
+      required: ["agentId", "registryHidden"],
     },
   },
   {
-    name: 'schedule_service_plan_renewal',
+    name: "schedule_service_plan_renewal",
     description:
-      'Choose the exact Premium Plan SKU to charge at the next identity renewal, including any Enterprise email tier.',
+      "Choose the exact Premium Plan SKU to charge at the next identity renewal, including any Enterprise email tier.",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        agentId: { type: 'string' },
-        plan: { type: 'string', enum: ['included', 'starter', 'pro', 'enterprise'] },
+        agentId: { type: "string" },
+        plan: {
+          type: "string",
+          enum: ["included", "starter", "pro", "enterprise"],
+        },
         planSku: {
-          type: 'string',
-          description: 'Exact SKU; Enterprise examples range from enterprise-100000 to enterprise-5000000.',
+          type: "string",
+          description:
+            "Exact SKU; Enterprise examples range from enterprise-100000 to enterprise-5000000.",
         },
       },
-      required: ['agentId', 'plan', 'planSku'],
+      required: ["agentId", "plan", "planSku"],
     },
   },
   {
-    name: 'enable_auto_renew',
+    name: "enable_auto_renew",
     description:
-      'Enable on-chain auto-renew for an agent. Requires the owner wallet private key and the RenewalVault contract address.',
+      "Enable on-chain auto-renew for an agent. Requires the owner wallet private key and the RenewalVault contract address.",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        agentId: { type: 'string', description: 'AgentDomain agent ID (UUID)' },
+        agentId: { type: "string", description: "AgentDomain agent ID (UUID)" },
       },
-      required: ['agentId'],
+      required: ["agentId"],
     },
   },
 ];
@@ -551,38 +696,45 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   try {
     switch (name) {
-      case 'check_domain_availability': {
+      case "check_domain_availability": {
         const a = z
-          .object({ name: z.string(), tld: z.enum(SUPPORTED_TLDS).default('xyz') })
+          .object({
+            name: z.string(),
+            tld: z.enum(SUPPORTED_TLDS).default("xyz"),
+          })
           .parse(args);
         const result = await client.checkAvailability(a.name, { tld: a.tld });
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
-      case 'quote_registration': {
+      case "quote_registration": {
         const a = z
           .object({
             preferredName: z.string(),
-            tld: z.enum(SUPPORTED_TLDS).default('xyz'),
+            tld: z.enum(SUPPORTED_TLDS).default("xyz"),
             registerBasename: z.boolean().default(true),
             registerEns: z.boolean().default(false),
             emailEnabled: z.boolean().default(true),
             emailUsername: z.string().optional(),
-            premiumPlan: z.enum(SERVICE_PLAN_KEYS).default('included'),
+            premiumPlan: z.enum(SERVICE_PLAN_KEYS).default("included"),
             years: z.number().int().min(1).max(10).default(1),
           })
           .parse(args);
         const result = await client.quote(a);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
-      case 'register_agent_identity': {
+      case "register_agent_identity": {
         if (!AGENT_PRIVATE_KEY) {
           return {
             isError: true,
             content: [
               {
-                type: 'text',
+                type: "text",
                 text: "AGENT_PRIVATE_KEY env var is required for registration. Set it to your agent's wallet private key.",
               },
             ],
@@ -591,7 +743,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const a = z
           .object({
             preferredName: z.string(),
-            tld: z.enum(SUPPORTED_TLDS).default('xyz'),
+            tld: z.enum(SUPPORTED_TLDS).default("xyz"),
             registerBasename: z.boolean().default(true),
             basenameLabel: z.string().optional(),
             registerEns: z.boolean().default(false),
@@ -602,7 +754,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               .optional(),
             emailEnabled: z.boolean().default(true),
             emailUsername: z.string().optional(),
-            premiumPlan: z.enum(SERVICE_PLAN_KEYS).default('included'),
+            premiumPlan: z.enum(SERVICE_PLAN_KEYS).default("included"),
             years: z.number().int().min(1).max(10).default(1),
             autoRenew: z.boolean().default(false),
             dnsTarget: z.string().optional(),
@@ -616,22 +768,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           ownerAddress: a.ownerAddress as `0x${string}` | undefined,
           metadata: a.metadata as never,
         });
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
-      case 'lookup_agent': {
+      case "lookup_agent": {
         const a = z.object({ wallet: z.string() }).parse(args);
-        const result = await client.getAgentsByWallet(a.wallet as `0x${string}`);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        const result = await client.getAgentsByWallet(
+          a.wallet as `0x${string}`,
+        );
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
-      case 'get_agent': {
+      case "get_agent": {
         const a = z.object({ agentId: z.string() }).parse(args);
         const result = await client.getAgentById(a.agentId);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
-      case 'search_agents': {
+      case "search_agents": {
         const a = z
           .object({
             q: z.string().optional(),
@@ -641,10 +801,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           })
           .parse(args);
         const result = await client.search(a);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
-      case 'send_agent_email': {
+      case "send_agent_email": {
         const a = z
           .object({
             agentId: z.string(),
@@ -660,22 +822,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           subject: a.subject,
           text: a.text,
         });
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
-      case 'list_agent_email': {
-        const a = z.object({ agentId: z.string(), limit: z.number().default(20) }).parse(args);
+      case "list_agent_email": {
+        const a = z
+          .object({ agentId: z.string(), limit: z.number().default(20) })
+          .parse(args);
         const result = await client.listEmail(a.agentId, { limit: a.limit });
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
-      case 'delete_agent_email': {
-        const a = z.object({ agentId: z.string().uuid(), messageId: z.string().uuid() }).parse(args);
+      case "delete_agent_email": {
+        const a = z
+          .object({ agentId: z.string().uuid(), messageId: z.string().uuid() })
+          .parse(args);
         const result = await client.deleteEmailMessage(a.agentId, a.messageId);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
-      case 'send_agent_email_batch': {
+      case "send_agent_email_batch": {
         const a = z
           .object({
             agentId: z.string(),
@@ -696,132 +868,251 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           messages: a.messages,
           idempotencyKey: a.idempotencyKey,
         });
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
-      case 'get_agent_email_usage': {
+      case "get_agent_email_usage": {
         const a = z.object({ agentId: z.string() }).parse(args);
         const result = await client.getEmailUsage(a.agentId);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
-      case 'configure_email_webhook': {
+      case "configure_email_webhook": {
         const a = z
           .object({
             agentId: z.string(),
             url: z.string().url(),
-            payloadMode: z.enum(['metadata', 'inline_text']).default('metadata'),
+            payloadMode: z
+              .enum(["metadata", "inline_text"])
+              .default("metadata"),
             enabled: z.boolean().default(true),
           })
           .parse(args);
         const result = await client.setEmailWebhook(a.agentId, a);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
-      case 'update_primary_email': {
-        const a = z.object({ agentId: z.string(), username: z.string() }).parse(args);
+      case "update_primary_email": {
+        const a = z
+          .object({ agentId: z.string(), username: z.string() })
+          .parse(args);
         const result = await client.updatePrimaryEmail(a.agentId, a.username);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
-      case 'create_email_alias': {
-        const a = z.object({ agentId: z.string(), username: z.string() }).parse(args);
+      case "create_email_alias": {
+        const a = z
+          .object({ agentId: z.string(), username: z.string() })
+          .parse(args);
         const result = await client.createEmailAlias(a.agentId, a.username);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
-      case 'delete_email_alias': {
-        const a = z.object({ agentId: z.string(), emailAddress: z.string().email() }).parse(args);
+      case "delete_email_alias": {
+        const a = z
+          .object({ agentId: z.string(), emailAddress: z.string().email() })
+          .parse(args);
         const result = await client.deleteEmailAlias(a.agentId, a.emailAddress);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
-      case 'list_dns_records': {
+      case "get_dns_capabilities": {
+        const a = z.object({ agentId: z.string() }).parse(args);
+        const result = await client.getDnsCapabilities(a.agentId);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "list_dns_records": {
         const a = z.object({ agentId: z.string() }).parse(args);
         const result = await client.listDnsRecords(a.agentId);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
-      case 'create_dns_record': {
+      case "create_dns_record": {
         const a = z
           .object({
             agentId: z.string(),
-            type: z.enum(['A', 'AAAA', 'ALIAS', 'CNAME', 'MX', 'TXT', 'NS', 'SRV']),
+            type: z.enum(DNS_RECORD_TYPES),
             name: z.string(),
-            value: z.string(),
+            value: z.string().optional(),
+            data: z.record(z.unknown()).optional(),
             ttl: z.number().default(3600),
             priority: z.number().optional(),
           })
           .parse(args);
-        const result = await client.createDnsRecord(a.agentId, {
-          type: a.type,
-          name: a.name,
-          value: a.value,
-          ttl: a.ttl,
-          priority: a.priority,
-        });
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        const { agentId, ...record } = a;
+        const result = await client.createDnsRecord(
+          agentId,
+          dnsRecordSchema.parse(record) as DnsRecordInput,
+        );
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
-      case 'update_dns_record': {
+      case "update_dns_record": {
         const a = z
           .object({
             agentId: z.string(),
             recordId: z.string(),
-            type: z.enum(['A', 'AAAA', 'ALIAS', 'CNAME', 'MX', 'TXT', 'NS', 'SRV']).optional(),
+            type: z.enum(DNS_RECORD_TYPES).optional(),
             name: z.string().optional(),
             value: z.string().optional(),
+            data: z.record(z.unknown()).optional(),
             ttl: z.number().optional(),
             priority: z.number().optional(),
           })
           .parse(args);
         const { agentId, recordId, ...record } = a;
-        const result = await client.updateDnsRecord(agentId, recordId, record);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        const result = await client.updateDnsRecord(
+          agentId,
+          recordId,
+          dnsRecordObjectSchema
+            .partial()
+            .parse(record) as Partial<DnsRecordInput>,
+        );
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
-      case 'delete_dns_record': {
-        const a = z.object({ agentId: z.string(), recordId: z.string() }).parse(args);
+      case "delete_dns_record": {
+        const a = z
+          .object({ agentId: z.string(), recordId: z.string() })
+          .parse(args);
         const result = await client.deleteDnsRecord(a.agentId, a.recordId);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
-      case 'reconfigure_ssl': {
+      case "change_dns_records": {
+        const a = z
+          .object({
+            agentId: z.string(),
+            records: z.array(dnsRecordSchema).min(1).max(200),
+            mode: z.enum(["merge", "replace"]).default("merge"),
+            dryRun: z.boolean().default(true),
+            baseRevision: z.string().length(64).optional(),
+          })
+          .parse(args);
+        const result = a.dryRun
+          ? await client.previewDnsBatch(
+              a.agentId,
+              a.records as DnsRecordInput[],
+              a.mode,
+            )
+          : await client.applyDnsBatch(
+              a.agentId,
+              a.records as DnsRecordInput[],
+              requireDnsRevision(a.baseRevision),
+              a.mode,
+            );
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "import_dns_zone": {
+        const a = z
+          .object({
+            agentId: z.string(),
+            zoneFile: z.string().min(1).max(262_144),
+            mode: z.enum(["merge", "replace"]).default("merge"),
+            dryRun: z.boolean().default(true),
+            baseRevision: z.string().length(64).optional(),
+          })
+          .parse(args);
+        const result = a.dryRun
+          ? await client.previewDnsImport(a.agentId, a.zoneFile, a.mode)
+          : await client.applyDnsImport(
+              a.agentId,
+              a.zoneFile,
+              requireDnsRevision(a.baseRevision),
+              a.mode,
+            );
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      }
+
+      case "export_dns_zone": {
+        const a = z
+          .object({
+            agentId: z.string(),
+            scope: z.enum(["user", "all"]).default("user"),
+          })
+          .parse(args);
+        const result = await client.exportDnsZone(a.agentId, a.scope);
+        return { content: [{ type: "text", text: result }] };
+      }
+
+      case "reconfigure_ssl": {
         const a = z.object({ agentId: z.string() }).parse(args);
         const result = await client.reconfigureSsl(a.agentId);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
-      case 'fund_renewal_vault': {
-        const a = z.object({ agentId: z.string(), amountUsdc: z.string() }).parse(args);
+      case "fund_renewal_vault": {
+        const a = z
+          .object({ agentId: z.string(), amountUsdc: z.string() })
+          .parse(args);
         const result = await client.fundRenewalVault(a.agentId, a.amountUsdc);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
-      case 'withdraw_renewal_vault': {
-        const a = z.object({ agentId: z.string(), amountUsdc: z.string() }).parse(args);
+      case "withdraw_renewal_vault": {
+        const a = z
+          .object({ agentId: z.string(), amountUsdc: z.string() })
+          .parse(args);
         const result = await client.withdrawFromVault(a.agentId, a.amountUsdc);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
-      case 'get_renewal_status': {
+      case "get_renewal_status": {
         const a = z.object({ agentId: z.string() }).parse(args);
         const result = await client.getRenewalStatus(a.agentId);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
-      case 'get_service_plan': {
+      case "get_service_plan": {
         const a = z.object({ agentId: z.string() }).parse(args);
         const result = await client.getServicePlan(a.agentId);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
-      case 'purchase_service_plan': {
+      case "purchase_service_plan": {
         if (!AGENT_PRIVATE_KEY) {
           return {
             isError: true,
             content: [
               {
-                type: 'text',
-                text: 'AGENT_PRIVATE_KEY env var is required to purchase a Premium Plan.',
+                type: "text",
+                text: "AGENT_PRIVATE_KEY env var is required to purchase a Premium Plan.",
               },
             ],
           };
@@ -829,43 +1120,56 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const a = z
           .object({
             agentId: z.string(),
-            plan: z.enum(['starter', 'pro', 'enterprise']),
-            planSku: z.custom<import('@agentdomain/shared').ServicePlanSku>().optional(),
+            plan: z.enum(["starter", "pro", "enterprise"]),
+            planSku: z
+              .custom<import("@agentdomain/shared").ServicePlanSku>()
+              .optional(),
           })
           .parse(args);
         const result = await client.purchaseServicePlan(a);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
-      case 'set_registry_visibility': {
-        const a = z.object({ agentId: z.string(), registryHidden: z.boolean() }).parse(args);
-        const result = await client.setRegistryVisibility(a.agentId, a.registryHidden);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      case "set_registry_visibility": {
+        const a = z
+          .object({ agentId: z.string(), registryHidden: z.boolean() })
+          .parse(args);
+        const result = await client.setRegistryVisibility(
+          a.agentId,
+          a.registryHidden,
+        );
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
-      case 'schedule_service_plan_renewal': {
+      case "schedule_service_plan_renewal": {
         const a = z
           .object({
             agentId: z.string().uuid(),
-            plan: z.enum(['included', 'starter', 'pro', 'enterprise']),
-            planSku: z.custom<import('@agentdomain/shared').ServicePlanSku>(),
+            plan: z.enum(["included", "starter", "pro", "enterprise"]),
+            planSku: z.custom<import("@agentdomain/shared").ServicePlanSku>(),
           })
           .parse(args);
         const result = await client.scheduleServicePlanRenewal(a.agentId, {
           plan: a.plan,
           planSku: a.planSku,
         });
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
-      case 'enable_auto_renew': {
+      case "enable_auto_renew": {
         if (!AGENT_PRIVATE_KEY) {
           return {
             isError: true,
             content: [
               {
-                type: 'text',
-                text: 'AGENT_PRIVATE_KEY env var is required to enable auto-renew. Use the owner wallet private key.',
+                type: "text",
+                text: "AGENT_PRIVATE_KEY env var is required to enable auto-renew. Use the owner wallet private key.",
               },
             ],
           };
@@ -875,27 +1179,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             isError: true,
             content: [
               {
-                type: 'text',
-                text: 'RENEWAL_VAULT_ADDRESS env var is required to enable auto-renew on-chain.',
+                type: "text",
+                text: "RENEWAL_VAULT_ADDRESS env var is required to enable auto-renew on-chain.",
               },
             ],
           };
         }
         const a = z.object({ agentId: z.string() }).parse(args);
         const result = await client.setAutoRenew(a.agentId, true);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
       }
 
       default:
         return {
           isError: true,
-          content: [{ type: 'text', text: `Unknown tool: ${name}` }],
+          content: [{ type: "text", text: `Unknown tool: ${name}` }],
         };
     }
   } catch (e) {
     return {
       isError: true,
-      content: [{ type: 'text', text: `Error: ${e instanceof Error ? e.message : String(e)}` }],
+      content: [
+        {
+          type: "text",
+          text: `Error: ${e instanceof Error ? e.message : String(e)}`,
+        },
+      ],
     };
   }
 });
@@ -904,13 +1215,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // MAIN
 // ----------------------------------------------------------------------
 
+function requireDnsRevision(value: string | undefined): string {
+  if (!value)
+    throw new Error(
+      "Apply requires baseRevision from a fresh DNS dry-run preview.",
+    );
+  return value;
+}
+
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('AgentDomain MCP server running on stdio');
+  console.error("AgentDomain MCP server running on stdio");
 }
 
 main().catch((e) => {
-  console.error('Fatal:', e);
+  console.error("Fatal:", e);
   process.exit(1);
 });

@@ -4,29 +4,29 @@ TypeScript SDK for AgentDomain, the autonomous identity stack for AI agents.
 
 AgentDomain provides domain, DNS, SSL, email, Basename, ENS, x402 USDC checkout, AgentID NFT, renewal controls, and per-agent Premium Plans.
 
-Checkout uses x402 v2 on Base mainnet (`eip155:8453`). The SDK parses
-`PAYMENT-REQUIRED`, signs the official EVM exact-payment payload, and retries
-with `PAYMENT-SIGNATURE`; successful responses include `PAYMENT-RESPONSE`.
+The production API base is `https://agentdomain.app/api/v1`. A direct `GET` request returns the
+machine-readable service discovery document; human documentation is available at
+`https://agentdomain.app/docs`.
 
 ```bash
 npm install @agentdomain/sdk viem
 ```
 
 ```ts
-import { AgentDomain } from '@agentdomain/sdk';
+import { AgentDomain } from "@agentdomain/sdk";
 
 const ad = new AgentDomain({
-  apiUrl: 'https://agentdomain.app/api/v1',
+  apiUrl: "https://agentdomain.app/api/v1",
   walletClient,
 });
 
 const quote = await ad.quote({
-  preferredName: 'research-agent',
-  tld: 'xyz',
+  preferredName: "research-agent",
+  tld: "xyz",
   registerBasename: true,
   registerEns: false,
-  emailUsername: 'agent',
-  premiumPlan: 'pro',
+  emailUsername: "agent",
+  premiumPlan: "pro",
 });
 ```
 
@@ -38,15 +38,15 @@ An agent can buy or upgrade its Premium Plan autonomously only when its runtime 
 
 ```ts
 const identity = await ad.register({
-  preferredName: 'research-agent',
-  tld: 'xyz',
+  preferredName: "research-agent",
+  tld: "xyz",
   years: 1,
-  premiumPlan: 'pro',
+  premiumPlan: "pro",
 });
 
 await ad.purchaseServicePlan({
   agentId: identity.agentId,
-  plan: 'enterprise',
+  plan: "enterprise",
 });
 ```
 
@@ -56,24 +56,48 @@ API keys are scoped to one agent identity and count against that agent's Premium
 
 ```ts
 const owner = new AgentDomain({ walletClient });
-const key = await owner.createApiKey(agentId, 'Production key');
+const key = await owner.createApiKey(agentId, "Production key");
 
 const agent = new AgentDomain({
   apiKey: key.fullKey,
 });
 
 await agent.sendEmail(agentId, {
-  to: 'admin@example.com',
-  fromAddress: 'agent@research-agent.xyz',
-  subject: 'Status',
-  text: 'Agent online.',
+  to: "admin@example.com",
+  fromAddress: "agent@research-agent.xyz",
+  subject: "Status",
+  text: "Agent online.",
 });
-
-const inbox = await agent.listEmail(agentId);
-await agent.deleteEmailMessage(agentId, inbox.messages[0].id);
 ```
 
 The full key is returned only once. A scoped key can manage only its own agent ID.
+
+## Professional DNS management
+
+The SDK supports every DNS record type writable through Spaceship: `A`, `AAAA`,
+`ALIAS`, `CAA`, `CNAME`, `HTTPS`, `MX`, `NS`, `PTR`, `SRV`, `SVCB`, `TLSA`, and
+`TXT`. Structured record data is preferred; legacy `value` and `priority`
+payloads remain compatible.
+
+```ts
+const capabilities = await agent.getDnsCapabilities(agentId);
+const preview = await agent.previewDnsBatch(agentId, [
+  {
+    type: "SRV",
+    name: "_https._tcp.api",
+    ttl: 300,
+    data: { priority: 10, weight: 5, port: 443, target: "edge.example.com" },
+  },
+]);
+
+await agent.applyDnsBatch(agentId, preview.changes.add, preview.baseRevision);
+const zoneFile = await agent.exportDnsZone(agentId);
+```
+
+Batch and BIND imports must be previewed first. Apply calls require the
+`baseRevision` from that preview, preventing stale changes from overwriting a
+newer zone. System-managed SSL, email, verification, and routing records remain
+read-only and are preserved during replace operations.
 
 ## Monthly usage, batch send, and inbound webhooks
 
@@ -84,14 +108,14 @@ usage, and configure a signed inbound webhook:
 ```ts
 await agent.sendEmailBatch(agentId, {
   messages: [
-    { to: 'ops@example.com', subject: 'Status', text: 'Agent online.' },
+    { to: "ops@example.com", subject: "Status", text: "Agent online." },
   ],
 });
 
 const usage = await agent.getEmailUsage(agentId);
 const webhook = await agent.setEmailWebhook(agentId, {
-  url: 'https://example.com/webhooks/agentdomain',
-  payloadMode: 'metadata',
+  url: "https://example.com/webhooks/agentdomain",
+  payloadMode: "metadata",
   enabled: true,
 });
 ```
@@ -102,19 +126,7 @@ Every agent gets one editable primary email address. Starter agents can create 5
 aliases, Pro agents 10, and Enterprise agents 20.
 
 ```ts
-await ad.updatePrimaryEmail(agentId, 'support');
-await ad.createEmailAlias(agentId, 'billing');
-await ad.deleteEmailAlias(agentId, 'billing@research-agent.xyz');
-```
-
-## Renewal plan selection
-
-Humans and autonomous agents can select the exact plan charged with the next
-identity renewal, including an Enterprise volume tier:
-
-```ts
-await ad.scheduleServicePlanRenewal(agentId, {
-  plan: 'enterprise',
-  planSku: 'enterprise-500000',
-});
+await ad.updatePrimaryEmail(agentId, "support");
+await ad.createEmailAlias(agentId, "billing");
+await ad.deleteEmailAlias(agentId, "billing@research-agent.xyz");
 ```

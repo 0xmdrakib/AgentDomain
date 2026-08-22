@@ -1,6 +1,6 @@
 # AgentDomain
 
-AgentDomain 0.4 adds per-agent monthly send-and-receive quotas, Starter and self-serve Enterprise tiers, 100-message batch sending, usage APIs, and signed inbound email webhooks across the SDK, MCP, AgentKit, and Eliza integrations.
+AgentDomain 0.6 adds typed support for all 13 Spaceship-writable DNS record types, revision-safe batch changes, BIND zone import/export, and machine-readable DNS capabilities across the SDK, MCP, AgentKit, and Eliza integrations.
 
 Public developer tools for autonomous identity on Base.
 

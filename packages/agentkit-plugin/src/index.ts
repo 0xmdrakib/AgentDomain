@@ -1,23 +1,28 @@
-import { z } from 'zod';
-import { AgentDomain } from '@agentdomain/sdk';
+import { z } from "zod";
+import { AgentDomain } from "@agentdomain/sdk";
+import {
+  DNS_RECORD_TYPES,
+  dnsRecordSchema,
+  type DnsRecordInput,
+} from "@agentdomain/shared";
 import {
   AGENTDOMAIN_API_BASE_URL,
   SERVICE_PLAN_KEYS,
   SUPPORTED_FRAMEWORKS,
   SUPPORTED_TLDS,
-} from '@agentdomain/shared/constants';
+} from "@agentdomain/shared/constants";
 import {
   createPublicClient,
   createWalletClient,
   http,
   encodeFunctionData,
   type Address,
-} from 'viem';
-import { base, baseSepolia } from 'viem/chains';
+} from "viem";
+import { base, baseSepolia } from "viem/chains";
 
 const RegisterSchema = z.object({
   preferredName: z.string().min(3).max(63),
-  tld: z.enum(SUPPORTED_TLDS).default('xyz'),
+  tld: z.enum(SUPPORTED_TLDS).default("xyz"),
   registerBasename: z.boolean().default(true),
   basenameLabel: z.string().min(3).max(63).optional(),
   registerEns: z.boolean().default(false),
@@ -36,12 +41,12 @@ const RegisterSchema = z.object({
   dnsTarget: z.string().url().optional(),
   years: z.number().int().min(1).max(10).default(1),
   autoRenew: z.boolean().default(false),
-  premiumPlan: z.enum(SERVICE_PLAN_KEYS).default('included'),
+  premiumPlan: z.enum(SERVICE_PLAN_KEYS).default("included"),
 });
 
 const QuoteSchema = z.object({
   preferredName: z.string(),
-  tld: z.enum(SUPPORTED_TLDS).default('xyz'),
+  tld: z.enum(SUPPORTED_TLDS).default("xyz"),
   registerBasename: z.boolean().default(true),
   basenameLabel: z.string().min(3).max(63).optional(),
   registerEns: z.boolean().default(false),
@@ -54,7 +59,7 @@ const QuoteSchema = z.object({
     .regex(/^[a-z0-9](?:[a-z0-9._+-]{0,62}[a-z0-9])?$/)
     .optional(),
   years: z.number().int().min(1).max(10).default(1),
-  premiumPlan: z.enum(SERVICE_PLAN_KEYS).default('included'),
+  premiumPlan: z.enum(SERVICE_PLAN_KEYS).default("included"),
 });
 
 const SearchSchema = z.object({
@@ -89,7 +94,7 @@ const EmailUsageSchema = z.object({ agentId: z.string() });
 const EmailWebhookSchema = z.object({
   agentId: z.string(),
   url: z.string().url(),
-  payloadMode: z.enum(['metadata', 'inline_text']).default('metadata'),
+  payloadMode: z.enum(["metadata", "inline_text"]).default("metadata"),
   enabled: z.boolean().default(true),
 });
 
@@ -99,7 +104,9 @@ const RenewalStatusSchema = z.object({
 
 const FundRenewalSchema = z.object({
   agentId: z.string().min(1),
-  amountUsdc: z.string().regex(/^\d+(\.\d{1,6})?$/, 'Use a USDC amount with up to 6 decimals'),
+  amountUsdc: z
+    .string()
+    .regex(/^\d+(\.\d{1,6})?$/, "Use a USDC amount with up to 6 decimals"),
   enableAutoRenew: z.boolean().default(false),
 });
 
@@ -111,24 +118,36 @@ const SslReconfigureSchema = z.object({
   agentId: z.string().min(1),
 });
 
-const DnsRecordTypeSchema = z.enum(['A', 'AAAA', 'ALIAS', 'CNAME', 'MX', 'TXT', 'NS', 'SRV']);
+const DnsRecordTypeSchema = z.enum(DNS_RECORD_TYPES);
 
 const ListDnsSchema = z.object({
   agentId: z.string().min(1),
 });
 
-const CreateDnsSchema = z.object({
-  agentId: z.string().min(1),
-  type: DnsRecordTypeSchema,
-  name: z.string().min(1).max(253),
-  value: z.string().min(1).max(4096),
-  ttl: z.number().int().min(60).max(3600).default(3600),
-  priority: z.number().int().min(0).optional(),
-});
+const CreateDnsSchema = z
+  .object({
+    agentId: z.string().min(1),
+    type: DnsRecordTypeSchema,
+    name: z.string().min(1).max(253),
+    value: z.string().min(1).max(65_535).optional(),
+    data: z.record(z.unknown()).optional(),
+    ttl: z.number().int().min(60).max(3600).default(3600),
+    priority: z.number().int().min(0).max(65_535).optional(),
+  })
+  .refine((record) => record.value !== undefined || record.data !== undefined, {
+    message: "Provide structured data or the legacy value field",
+    path: ["data"],
+  });
 
-const UpdateDnsSchema = CreateDnsSchema.partial().extend({
+const UpdateDnsSchema = z.object({
   agentId: z.string().min(1),
   recordId: z.string().min(1),
+  type: DnsRecordTypeSchema.optional(),
+  name: z.string().min(1).max(253).optional(),
+  value: z.string().min(1).max(65_535).optional(),
+  data: z.record(z.unknown()).optional(),
+  ttl: z.number().int().min(60).max(3600).optional(),
+  priority: z.number().int().min(0).max(65_535).optional(),
 });
 
 const DeleteDnsSchema = z.object({
@@ -136,9 +155,32 @@ const DeleteDnsSchema = z.object({
   recordId: z.string().min(1),
 });
 
+const ChangeDnsSchema = z.object({
+  agentId: z.string().min(1),
+  records: z.array(dnsRecordSchema).min(1).max(200),
+  mode: z.enum(["merge", "replace"]).default("merge"),
+  dryRun: z.boolean().default(true),
+  baseRevision: z.string().length(64).optional(),
+});
+
+const ImportDnsSchema = z.object({
+  agentId: z.string().min(1),
+  zoneFile: z.string().min(1).max(262_144),
+  mode: z.enum(["merge", "replace"]).default("merge"),
+  dryRun: z.boolean().default(true),
+  baseRevision: z.string().length(64).optional(),
+});
+
+const ExportDnsSchema = z.object({
+  agentId: z.string().min(1),
+  scope: z.enum(["user", "all"]).default("user"),
+});
+
 const WithdrawRenewalSchema = z.object({
   agentId: z.string().min(1),
-  amountUsdc: z.string().regex(/^\d+(\.\d{1,6})?$/, 'Use a USDC amount with up to 6 decimals'),
+  amountUsdc: z
+    .string()
+    .regex(/^\d+(\.\d{1,6})?$/, "Use a USDC amount with up to 6 decimals"),
 });
 
 const ServicePlanStatusSchema = z.object({
@@ -147,8 +189,8 @@ const ServicePlanStatusSchema = z.object({
 
 const PurchaseServicePlanSchema = z.object({
   agentId: z.string().min(1),
-  plan: z.enum(['starter', 'pro', 'enterprise']),
-  planSku: z.custom<import('@agentdomain/shared').ServicePlanSku>().optional(),
+  plan: z.enum(["starter", "pro", "enterprise"]),
+  planSku: z.custom<import("@agentdomain/shared").ServicePlanSku>().optional(),
 });
 
 const SetRegistryVisibilitySchema = z.object({
@@ -157,8 +199,8 @@ const SetRegistryVisibilitySchema = z.object({
 });
 const ScheduleServicePlanRenewalSchema = z.object({
   agentId: z.string().uuid(),
-  plan: z.enum(['included', 'starter', 'pro', 'enterprise']),
-  planSku: z.custom<import('@agentdomain/shared').ServicePlanSku>(),
+  plan: z.enum(["included", "starter", "pro", "enterprise"]),
+  planSku: z.custom<import("@agentdomain/shared").ServicePlanSku>(),
 });
 
 const UpdatePrimaryEmailSchema = z.object({
@@ -189,31 +231,34 @@ export interface AgentDomainActionProviderOptions {
   apiKey?: string;
   baseRpcUrl?: string;
   renewalVaultAddress?: string;
-  network?: 'base' | 'base-sepolia';
+  network?: "base" | "base-sepolia";
 }
 
 export class AgentDomainActionProvider {
-  public readonly name = 'agentdomain';
+  public readonly name = "agentdomain";
 
   private readonly apiUrl: string;
   private readonly apiKey?: string;
   private readonly baseRpcUrl: string;
   private readonly renewalVaultAddress?: string;
-  private readonly network: 'base' | 'base-sepolia';
+  private readonly network: "base" | "base-sepolia";
 
   constructor(opts: AgentDomainActionProviderOptions = {}) {
     this.apiUrl = opts.apiUrl ?? AGENTDOMAIN_API_BASE_URL;
     this.apiKey = opts.apiKey;
-    this.baseRpcUrl = opts.baseRpcUrl ?? 'https://mainnet.base.org';
+    this.baseRpcUrl = opts.baseRpcUrl ?? "https://mainnet.base.org";
     this.renewalVaultAddress = opts.renewalVaultAddress;
-    this.network = opts.network ?? 'base';
+    this.network = opts.network ?? "base";
   }
 
   private createAgentDomain(walletProvider: WalletProvider) {
     const wallet = walletProvider.getAddress() as Address;
-    const chain = this.network === 'base-sepolia' ? baseSepolia : base;
+    const chain = this.network === "base-sepolia" ? baseSepolia : base;
 
-    const publicClient = createPublicClient({ chain, transport: http(this.baseRpcUrl) });
+    const publicClient = createPublicClient({
+      chain,
+      transport: http(this.baseRpcUrl),
+    });
     const walletClient = createWalletClient({
       chain,
       transport: http(this.baseRpcUrl),
@@ -222,7 +267,8 @@ export class AgentDomainActionProvider {
         signTypedData: walletProvider.signTypedData as
           ((parameters: any) => Promise<string>) | undefined,
         signMessage: walletProvider.signMessage
-          ? (parameters: { message: string }) => walletProvider.signMessage!(parameters.message)
+          ? (parameters: { message: string }) =>
+              walletProvider.signMessage!(parameters.message)
           : undefined,
       } as never,
     });
@@ -242,192 +288,233 @@ export class AgentDomainActionProvider {
   getActions() {
     return [
       {
-        name: 'register_agent_identity',
+        name: "register_agent_identity",
         description:
-          'Register a complete agent identity bundle on AgentDomain. Domain, DNS, included email setup, SSL certification, AgentID NFT orchestration, and platform fee are included by default. Basename and ENS are optional paid add-ons. Pays in USDC on Base.',
+          "Register a complete agent identity bundle on AgentDomain. Domain, DNS, included email setup, SSL certification, AgentID NFT orchestration, and platform fee are included by default. Basename and ENS are optional paid add-ons. Pays in USDC on Base.",
         schema: RegisterSchema,
         invoke: this.register.bind(this),
       },
       {
-        name: 'quote_agent_registration',
+        name: "quote_agent_registration",
         description:
-          'Price an agent identity registration before committing. Quote includes the annual platform fee with email setup, SSL certification, and AgentID NFT orchestration; Basename and ENS only charge when enabled.',
+          "Price an agent identity registration before committing. Quote includes the annual platform fee with email setup, SSL certification, and AgentID NFT orchestration; Basename and ENS only charge when enabled.",
         schema: QuoteSchema,
         invoke: this.quote.bind(this),
       },
       {
-        name: 'search_agents',
-        description: 'Search the public AgentDomain registry.',
+        name: "search_agents",
+        description: "Search the public AgentDomain registry.",
         schema: SearchSchema,
         invoke: this.search.bind(this),
       },
       {
-        name: 'send_agent_email',
+        name: "send_agent_email",
         description:
-          'Send text-only email from an agent primary email or active alias via AWS SES.',
+          "Send text-only email from an agent primary email or active alias via AWS SES.",
         schema: SendEmailSchema,
         invoke: this.sendEmail.bind(this),
       },
       {
-        name: 'list_agent_email',
-        description: 'Query text-only agent email and extracted verification codes.',
+        name: "list_agent_email",
+        description:
+          "Query text-only agent email and extracted verification codes.",
         schema: ListEmailSchema,
         invoke: this.listEmail.bind(this),
       },
       {
-        name: 'delete_agent_email',
-        description: 'Permanently delete one email message from an agent inbox.',
+        name: "delete_agent_email",
+        description:
+          "Permanently delete one email message from an agent inbox.",
         schema: DeleteEmailMessageSchema,
         invoke: this.deleteEmailMessage.bind(this),
       },
       {
-        name: 'send_agent_email_batch',
-        description: 'Queue up to 100 emails in one API request.',
+        name: "send_agent_email_batch",
+        description: "Queue up to 100 emails in one API request.",
         schema: BatchEmailSchema,
         invoke: this.sendEmailBatch.bind(this),
       },
       {
-        name: 'get_agent_email_usage',
-        description: 'Get combined monthly sent and received email usage.',
+        name: "get_agent_email_usage",
+        description: "Get combined monthly sent and received email usage.",
         schema: EmailUsageSchema,
         invoke: this.emailUsage.bind(this),
       },
       {
-        name: 'configure_email_webhook',
-        description: 'Configure signed inbound email events for this agent.',
+        name: "configure_email_webhook",
+        description: "Configure signed inbound email events for this agent.",
         schema: EmailWebhookSchema,
         invoke: this.configureEmailWebhook.bind(this),
       },
       {
-        name: 'get_renewal_status',
+        name: "get_renewal_status",
         description:
-          'Get exact next renewal amount, shortfall, vault balance, expiry date, and auto-renew state for an AgentDomain identity.',
+          "Get exact next renewal amount, shortfall, vault balance, expiry date, and auto-renew state for an AgentDomain identity.",
         schema: RenewalStatusSchema,
         invoke: this.renewalStatus.bind(this),
       },
       {
-        name: 'fund_renewal_vault',
+        name: "fund_renewal_vault",
         description:
-          'Deposit USDC from the connected wallet into one AgentID renewal vault. Anyone can fund; only the AgentID owner can withdraw or enable auto-renew. Call get_renewal_status first and usually deposit the returned shortfall.',
+          "Deposit USDC from the connected wallet into one AgentID renewal vault. Anyone can fund; only the AgentID owner can withdraw or enable auto-renew. Call get_renewal_status first and usually deposit the returned shortfall.",
         schema: FundRenewalSchema,
         invoke: this.fundRenewal.bind(this),
       },
       {
-        name: 'enable_auto_renew',
+        name: "enable_auto_renew",
         description:
-          'Enable RenewalVault auto-renew. Requires the wallet provider to be the AgentID NFT owner and support sendTransaction.',
+          "Enable RenewalVault auto-renew. Requires the wallet provider to be the AgentID NFT owner and support sendTransaction.",
         schema: EnableAutoRenewSchema,
         invoke: this.enableAutoRenew.bind(this),
       },
       {
-        name: 'reconfigure_ssl',
+        name: "reconfigure_ssl",
         description:
-          'Rebuild the Cloudflare SaaS SSL hostname and sync the required Spaceship DNS validation records for an existing agent.',
+          "Rebuild the Cloudflare SaaS SSL hostname and sync the required Spaceship DNS validation records for an existing agent.",
         schema: SslReconfigureSchema,
         invoke: this.reconfigureSsl.bind(this),
       },
       {
-        name: 'list_dns_records',
-        description: 'List DNS records for an AgentDomain identity.',
+        name: "get_dns_capabilities",
+        description:
+          "Get machine-readable DNS types, fields, limits, and provider constraints.",
+        schema: ListDnsSchema,
+        invoke: this.getDnsCapabilities.bind(this),
+      },
+      {
+        name: "list_dns_records",
+        description: "List DNS records for an AgentDomain identity.",
         schema: ListDnsSchema,
         invoke: this.listDns.bind(this),
       },
       {
-        name: 'create_dns_record',
-        description: 'Create a user-managed DNS record and sync it to the domain provider.',
+        name: "create_dns_record",
+        description:
+          "Create a user-managed DNS record and sync it to the domain provider.",
         schema: CreateDnsSchema,
         invoke: this.createDns.bind(this),
       },
       {
-        name: 'update_dns_record',
-        description: 'Update a user-managed DNS record and sync it to the domain provider.',
+        name: "update_dns_record",
+        description:
+          "Update a user-managed DNS record and sync it to the domain provider.",
         schema: UpdateDnsSchema,
         invoke: this.updateDns.bind(this),
       },
       {
-        name: 'delete_dns_record',
-        description: 'Delete a user-managed DNS record and sync the domain provider state.',
+        name: "delete_dns_record",
+        description:
+          "Delete a user-managed DNS record and sync the domain provider state.",
         schema: DeleteDnsSchema,
         invoke: this.deleteDns.bind(this),
       },
       {
-        name: 'withdraw_renewal_vault',
+        name: "change_dns_records",
         description:
-          'Withdraw unused USDC from an AgentID renewal vault. Requires the AgentID NFT owner wallet.',
+          "Preview or apply a revision-protected DNS batch in merge or replace mode.",
+        schema: ChangeDnsSchema,
+        invoke: this.changeDns.bind(this),
+      },
+      {
+        name: "import_dns_zone",
+        description:
+          "Preview or apply a validated BIND zone import without deleting system-managed records.",
+        schema: ImportDnsSchema,
+        invoke: this.importDns.bind(this),
+      },
+      {
+        name: "export_dns_zone",
+        description:
+          "Export user or permitted complete DNS state as a BIND zone file.",
+        schema: ExportDnsSchema,
+        invoke: this.exportDns.bind(this),
+      },
+      {
+        name: "withdraw_renewal_vault",
+        description:
+          "Withdraw unused USDC from an AgentID renewal vault. Requires the AgentID NFT owner wallet.",
         schema: WithdrawRenewalSchema,
         invoke: this.withdrawRenewal.bind(this),
       },
       {
-        name: 'get_service_plan',
-        description: 'Get the current per-agent Premium Plan, limits, and billing state.',
+        name: "get_service_plan",
+        description:
+          "Get the current per-agent Premium Plan, limits, and billing state.",
         schema: ServicePlanStatusSchema,
         invoke: this.getServicePlan.bind(this),
       },
       {
-        name: 'purchase_service_plan',
+        name: "purchase_service_plan",
         description:
-          'Upgrade one agent to an AgentDomain Starter, Pro, or Enterprise Premium Plan using x402 USDC payment.',
+          "Upgrade one agent to an AgentDomain Starter, Pro, or Enterprise Premium Plan using x402 USDC payment.",
         schema: PurchaseServicePlanSchema,
         invoke: this.purchaseServicePlan.bind(this),
       },
       {
-        name: 'set_registry_visibility',
+        name: "set_registry_visibility",
         description:
-          'Hide or show one agent in the public AgentDomain registry. Hiding requires an active paid Premium Plan.',
+          "Hide or show one agent in the public AgentDomain registry. Hiding requires an active paid Premium Plan.",
         schema: SetRegistryVisibilitySchema,
         invoke: this.setRegistryVisibility.bind(this),
       },
       {
-        name: 'schedule_service_plan_renewal',
+        name: "schedule_service_plan_renewal",
         description:
-          'Choose the exact Premium Plan SKU for the next identity renewal, including Enterprise tiers.',
+          "Choose the exact Premium Plan SKU for the next identity renewal, including Enterprise tiers.",
         schema: ScheduleServicePlanRenewalSchema,
         invoke: this.scheduleServicePlanRenewal.bind(this),
       },
       {
-        name: 'update_primary_email',
+        name: "update_primary_email",
         description:
-          'Change one agent primary email username. The old primary address stops receiving new mail.',
+          "Change one agent primary email username. The old primary address stops receiving new mail.",
         schema: UpdatePrimaryEmailSchema,
         invoke: this.updatePrimaryEmail.bind(this),
       },
       {
-        name: 'create_email_alias',
+        name: "create_email_alias",
         description:
-          'Create an extra receive-and-send alias for one agent. Requires available paid-plan alias capacity.',
+          "Create an extra receive-and-send alias for one agent. Requires available paid-plan alias capacity.",
         schema: CreateEmailAliasSchema,
         invoke: this.createEmailAlias.bind(this),
       },
       {
-        name: 'delete_email_alias',
-        description: 'Delete one active email alias from an agent.',
+        name: "delete_email_alias",
+        description: "Delete one active email alias from an agent.",
         schema: DeleteEmailAliasSchema,
         invoke: this.deleteEmailAlias.bind(this),
       },
     ];
   }
 
-  private async register(walletProvider: WalletProvider, args: z.infer<typeof RegisterSchema>) {
+  private async register(
+    walletProvider: WalletProvider,
+    args: z.infer<typeof RegisterSchema>,
+  ) {
     const { ad, wallet } = this.createAgentDomain(walletProvider);
 
-    const result = await ad.register({ ...args, emailEnabled: true, wallet } as any);
+    const result = await ad.register({
+      ...args,
+      emailEnabled: true,
+      wallet,
+    } as any);
 
-    let autoRenewMsg = '';
+    let autoRenewMsg = "";
     if (args.autoRenew && this.renewalVaultAddress) {
       try {
         if (walletProvider.sendTransaction) {
           const data = encodeFunctionData({
             abi: [
               {
-                type: 'function',
-                name: 'setAutoRenew',
+                type: "function",
+                name: "setAutoRenew",
                 inputs: [
-                  { name: 'tokenId', type: 'uint256' },
-                  { name: 'enabled', type: 'bool' },
+                  { name: "tokenId", type: "uint256" },
+                  { name: "enabled", type: "bool" },
                 ],
               },
             ],
-            functionName: 'setAutoRenew',
+            functionName: "setAutoRenew",
             args: [BigInt(result.nftTokenId), true],
           });
           const txHash = await walletProvider.sendTransaction({
@@ -437,7 +524,7 @@ export class AgentDomainActionProvider {
           autoRenewMsg = ` Auto-renew enabled via tx ${txHash}.`;
         } else {
           autoRenewMsg =
-            ' (Cannot enable auto-renew because walletProvider lacks sendTransaction).';
+            " (Cannot enable auto-renew because walletProvider lacks sendTransaction).";
         }
       } catch (e) {
         autoRenewMsg = ` Failed to enable auto-renew: ${String(e)}`;
@@ -453,7 +540,7 @@ export class AgentDomainActionProvider {
   ) {
     const { ad } = this.createAgentDomain(walletProvider);
     const status = await ad.getRenewalStatus(args.agentId);
-    return `Renewal status for ${status.domain}: next renewal $${status.nextRenewalAmountUsdc}, vault balance $${status.vaultBalanceUsdc}, shortfall $${status.shortfallUsdc}, expires ${status.expiresAt ?? 'unknown'}, renewable from ${status.renewableFrom ?? 'unknown'}, auto-renew ${status.autoRenewEnabled ? 'enabled' : 'off'}.`;
+    return `Renewal status for ${status.domain}: next renewal $${status.nextRenewalAmountUsdc}, vault balance $${status.vaultBalanceUsdc}, shortfall $${status.shortfallUsdc}, expires ${status.expiresAt ?? "unknown"}, renewable from ${status.renewableFrom ?? "unknown"}, auto-renew ${status.autoRenewEnabled ? "enabled" : "off"}.`;
   }
 
   private async fundRenewal(
@@ -474,31 +561,38 @@ export class AgentDomainActionProvider {
     args: z.infer<typeof EnableAutoRenewSchema>,
   ) {
     if (!this.renewalVaultAddress) {
-      throw new Error('renewalVaultAddress is required to enable auto-renew.');
+      throw new Error("renewalVaultAddress is required to enable auto-renew.");
     }
     if (!walletProvider.sendTransaction) {
-      throw new Error('walletProvider.sendTransaction is required to enable auto-renew.');
+      throw new Error(
+        "walletProvider.sendTransaction is required to enable auto-renew.",
+      );
     }
 
     const { ad, wallet } = this.createAgentDomain(walletProvider);
     const status = await ad.getRenewalStatus(args.agentId);
-    if (!status.tokenId) throw new Error('AgentID NFT is not minted yet.');
-    if (status.ownerAddress && status.ownerAddress.toLowerCase() !== wallet.toLowerCase()) {
-      throw new Error(`Only the AgentID NFT owner (${status.ownerAddress}) can enable auto-renew.`);
+    if (!status.tokenId) throw new Error("AgentID NFT is not minted yet.");
+    if (
+      status.ownerAddress &&
+      status.ownerAddress.toLowerCase() !== wallet.toLowerCase()
+    ) {
+      throw new Error(
+        `Only the AgentID NFT owner (${status.ownerAddress}) can enable auto-renew.`,
+      );
     }
 
     const data = encodeFunctionData({
       abi: [
         {
-          type: 'function',
-          name: 'setAutoRenew',
+          type: "function",
+          name: "setAutoRenew",
           inputs: [
-            { name: 'tokenId', type: 'uint256' },
-            { name: 'enabled', type: 'bool' },
+            { name: "tokenId", type: "uint256" },
+            { name: "enabled", type: "bool" },
           ],
         },
       ],
-      functionName: 'setAutoRenew',
+      functionName: "setAutoRenew",
       args: [BigInt(status.tokenId), true],
     });
     const txHash = await walletProvider.sendTransaction({
@@ -517,30 +611,98 @@ export class AgentDomainActionProvider {
     return `SSL reconfigured for ${result.domain}. Cloudflare hostname ${result.cloudflareCustomHostnameId} is ${result.sslStatus} and ${result.validationRecordsCount} validation record(s) were synced.`;
   }
 
-  private async listDns(walletProvider: WalletProvider, args: z.infer<typeof ListDnsSchema>) {
+  private async listDns(
+    walletProvider: WalletProvider,
+    args: z.infer<typeof ListDnsSchema>,
+  ) {
     const { ad } = this.createAgentDomain(walletProvider);
     const records = await ad.listDnsRecords(args.agentId);
     return JSON.stringify(records, null, 2);
   }
 
-  private async createDns(walletProvider: WalletProvider, args: z.infer<typeof CreateDnsSchema>) {
+  private async getDnsCapabilities(
+    walletProvider: WalletProvider,
+    args: z.infer<typeof ListDnsSchema>,
+  ) {
+    const { ad } = this.createAgentDomain(walletProvider);
+    return JSON.stringify(await ad.getDnsCapabilities(args.agentId), null, 2);
+  }
+
+  private async createDns(
+    walletProvider: WalletProvider,
+    args: z.infer<typeof CreateDnsSchema>,
+  ) {
     const { ad } = this.createAgentDomain(walletProvider);
     const { agentId, ...record } = args;
-    const result = await ad.createDnsRecord(agentId, record);
+    const result = await ad.createDnsRecord(agentId, record as DnsRecordInput);
     return `Created ${result.type} record ${result.name} -> ${result.value}.`;
   }
 
-  private async updateDns(walletProvider: WalletProvider, args: z.infer<typeof UpdateDnsSchema>) {
+  private async updateDns(
+    walletProvider: WalletProvider,
+    args: z.infer<typeof UpdateDnsSchema>,
+  ) {
     const { ad } = this.createAgentDomain(walletProvider);
     const { agentId, recordId, ...record } = args;
-    const result = await ad.updateDnsRecord(agentId, recordId, record);
+    const result = await ad.updateDnsRecord(
+      agentId,
+      recordId,
+      record as Partial<DnsRecordInput>,
+    );
     return `Updated ${result.type} record ${result.name} -> ${result.value}.`;
   }
 
-  private async deleteDns(walletProvider: WalletProvider, args: z.infer<typeof DeleteDnsSchema>) {
+  private async deleteDns(
+    walletProvider: WalletProvider,
+    args: z.infer<typeof DeleteDnsSchema>,
+  ) {
     const { ad } = this.createAgentDomain(walletProvider);
     await ad.deleteDnsRecord(args.agentId, args.recordId);
     return `Deleted DNS record ${args.recordId}.`;
+  }
+
+  private async changeDns(
+    walletProvider: WalletProvider,
+    args: z.infer<typeof ChangeDnsSchema>,
+  ) {
+    const { ad } = this.createAgentDomain(walletProvider);
+    const result = args.dryRun
+      ? await ad.previewDnsBatch(
+          args.agentId,
+          args.records as DnsRecordInput[],
+          args.mode,
+        )
+      : await ad.applyDnsBatch(
+          args.agentId,
+          args.records as DnsRecordInput[],
+          requireDnsRevision(args.baseRevision),
+          args.mode,
+        );
+    return JSON.stringify(result, null, 2);
+  }
+
+  private async importDns(
+    walletProvider: WalletProvider,
+    args: z.infer<typeof ImportDnsSchema>,
+  ) {
+    const { ad } = this.createAgentDomain(walletProvider);
+    const result = args.dryRun
+      ? await ad.previewDnsImport(args.agentId, args.zoneFile, args.mode)
+      : await ad.applyDnsImport(
+          args.agentId,
+          args.zoneFile,
+          requireDnsRevision(args.baseRevision),
+          args.mode,
+        );
+    return JSON.stringify(result, null, 2);
+  }
+
+  private async exportDns(
+    walletProvider: WalletProvider,
+    args: z.infer<typeof ExportDnsSchema>,
+  ) {
+    const { ad } = this.createAgentDomain(walletProvider);
+    return ad.exportDnsZone(args.agentId, args.scope);
   }
 
   private async withdrawRenewal(
@@ -548,7 +710,9 @@ export class AgentDomainActionProvider {
     args: z.infer<typeof WithdrawRenewalSchema>,
   ) {
     if (!walletProvider.sendTransaction) {
-      throw new Error('walletProvider.sendTransaction is required to withdraw vault funds.');
+      throw new Error(
+        "walletProvider.sendTransaction is required to withdraw vault funds.",
+      );
     }
     const { ad } = this.createAgentDomain(walletProvider);
     const tx = await ad.withdrawFromVault(args.agentId, args.amountUsdc);
@@ -576,7 +740,7 @@ export class AgentDomainActionProvider {
   ) {
     const { ad } = this.createAgentDomain(walletProvider);
     const result = await ad.purchaseServicePlan(args);
-    return `Purchased ${result.entitlement.plan} Premium Plan for ${result.domain}. Current period ends ${result.entitlement.currentPeriodEnd ?? 'unknown'}.`;
+    return `Purchased ${result.entitlement.plan} Premium Plan for ${result.domain}. Current period ends ${result.entitlement.currentPeriodEnd ?? "unknown"}.`;
   }
 
   private async setRegistryVisibility(
@@ -584,8 +748,11 @@ export class AgentDomainActionProvider {
     args: z.infer<typeof SetRegistryVisibilitySchema>,
   ) {
     const { ad } = this.createAgentDomain(walletProvider);
-    const result = await ad.setRegistryVisibility(args.agentId, args.registryHidden);
-    return `${result.domain} is now ${result.registryVisibility.hidden ? 'hidden from' : 'visible in'} the public registry.`;
+    const result = await ad.setRegistryVisibility(
+      args.agentId,
+      args.registryHidden,
+    );
+    return `${result.domain} is now ${result.registryVisibility.hidden ? "hidden from" : "visible in"} the public registry.`;
   }
 
   private async scheduleServicePlanRenewal(
@@ -597,27 +764,39 @@ export class AgentDomainActionProvider {
     return `Scheduled ${result.renewalPlanSku} for the next identity renewal.`;
   }
 
-  private async quote(walletProvider: WalletProvider, args: z.infer<typeof QuoteSchema>) {
+  private async quote(
+    walletProvider: WalletProvider,
+    args: z.infer<typeof QuoteSchema>,
+  ) {
     const { ad } = this.createAgentDomain(walletProvider);
     const q = await ad.quote(args);
-    const basenamePart = Number(q.basenameCostUsdc) > 0 ? ` + Basename $${q.basenameCostUsdc}` : '';
-    const ensPart = Number(q.ensCostUsdc) > 0 ? ` + ENS $${q.ensCostUsdc}` : '';
+    const basenamePart =
+      Number(q.basenameCostUsdc) > 0
+        ? ` + Basename $${q.basenameCostUsdc}`
+        : "";
+    const ensPart = Number(q.ensCostUsdc) > 0 ? ` + ENS $${q.ensCostUsdc}` : "";
     const planPart =
       Number(q.premiumPlanFeeUsdc ?? 0) > 0
         ? ` + ${q.premiumPlanLabel} $${q.premiumPlanFeeUsdc}`
-        : '';
+        : "";
     return `Total: $${q.totalUsdc} USDC (domain $${q.domainCostUsdc} + platform $${q.platformFeeUsdc ?? q.serviceFeeUsdc}, email and SSL included${basenamePart}${ensPart}${planPart})`;
   }
 
-  private async search(walletProvider: WalletProvider, args: z.infer<typeof SearchSchema>) {
+  private async search(
+    walletProvider: WalletProvider,
+    args: z.infer<typeof SearchSchema>,
+  ) {
     const { ad } = this.createAgentDomain(walletProvider);
     const result = await ad.search(args);
     return `Found ${result.total} agents. First ${result.items.length}: ${result.items
       .map((a) => a.domain)
-      .join(', ')}`;
+      .join(", ")}`;
   }
 
-  private async sendEmail(walletProvider: WalletProvider, args: z.infer<typeof SendEmailSchema>) {
+  private async sendEmail(
+    walletProvider: WalletProvider,
+    args: z.infer<typeof SendEmailSchema>,
+  ) {
     const { ad } = this.createAgentDomain(walletProvider);
     const result = await ad.sendEmail(args.agentId, {
       to: args.to,
@@ -628,7 +807,10 @@ export class AgentDomainActionProvider {
     return `Email queued: ${result.id}`;
   }
 
-  private async listEmail(walletProvider: WalletProvider, args: z.infer<typeof ListEmailSchema>) {
+  private async listEmail(
+    walletProvider: WalletProvider,
+    args: z.infer<typeof ListEmailSchema>,
+  ) {
     const { ad } = this.createAgentDomain(walletProvider);
     const result = await ad.listEmail(args.agentId, { limit: args.limit });
     return JSON.stringify(result, null, 2);
@@ -657,7 +839,10 @@ export class AgentDomainActionProvider {
       2,
     );
   }
-  private async emailUsage(walletProvider: WalletProvider, args: z.infer<typeof EmailUsageSchema>) {
+  private async emailUsage(
+    walletProvider: WalletProvider,
+    args: z.infer<typeof EmailUsageSchema>,
+  ) {
     const { ad } = this.createAgentDomain(walletProvider);
     return JSON.stringify(await ad.getEmailUsage(args.agentId), null, 2);
   }
@@ -666,7 +851,11 @@ export class AgentDomainActionProvider {
     args: z.infer<typeof EmailWebhookSchema>,
   ) {
     const { ad } = this.createAgentDomain(walletProvider);
-    return JSON.stringify(await ad.setEmailWebhook(args.agentId, args), null, 2);
+    return JSON.stringify(
+      await ad.setEmailWebhook(args.agentId, args),
+      null,
+      2,
+    );
   }
 
   private async updatePrimaryEmail(
@@ -695,6 +884,14 @@ export class AgentDomainActionProvider {
     await ad.deleteEmailAlias(args.agentId, args.emailAddress);
     return `Deleted email alias ${args.emailAddress}.`;
   }
+}
+
+function requireDnsRevision(value: string | undefined): string {
+  if (!value)
+    throw new Error(
+      "Apply requires baseRevision from a fresh DNS dry-run preview.",
+    );
+  return value;
 }
 
 export default AgentDomainActionProvider;
