@@ -58,6 +58,41 @@ await agentDomain.sendEmail(agentId, {
 });
 ```
 
+## Manage DNS safely
+
+Every Spaceship-supported DNS type is available through the same typed SDK
+contract used by the dashboard. Discover the live provider constraints before
+generating records, then preview and apply the exact same desired record set:
+
+```ts
+const capabilities = await agentDomain.getDnsCapabilities(agentId);
+console.log(capabilities.supportedTypes);
+
+const records = [
+  {
+    type: 'SRV' as const,
+    name: '_https._tcp.api',
+    ttl: 300,
+    data: {
+      priority: 10,
+      weight: 5,
+      port: 443,
+      target: 'edge.example.com',
+    },
+  },
+];
+
+const preview = await agentDomain.previewDnsBatch(agentId, records, 'merge');
+console.log(preview.summary, preview.warnings);
+
+await agentDomain.applyDnsBatch(agentId, records, preview.baseRevision, 'merge');
+```
+
+Use `previewDnsImport` and `applyDnsImport` for BIND zone text, and
+`exportDnsZone` for a standard zone export. A scoped AgentDomain API key can
+perform these operations only for its own agent identity. System-managed SSL,
+email, verification, and routing records remain read-only.
+
 For renewal funding, ask for status first and deposit the shortfall:
 
 ```ts

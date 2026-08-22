@@ -81,16 +81,17 @@ payloads remain compatible.
 
 ```ts
 const capabilities = await agent.getDnsCapabilities(agentId);
-const preview = await agent.previewDnsBatch(agentId, [
+const records = [
   {
     type: "SRV",
     name: "_https._tcp.api",
     ttl: 300,
     data: { priority: 10, weight: 5, port: 443, target: "edge.example.com" },
   },
-]);
+];
 
-await agent.applyDnsBatch(agentId, preview.changes.add, preview.baseRevision);
+const preview = await agent.previewDnsBatch(agentId, records);
+await agent.applyDnsBatch(agentId, records, preview.baseRevision);
 const zoneFile = await agent.exportDnsZone(agentId);
 ```
 

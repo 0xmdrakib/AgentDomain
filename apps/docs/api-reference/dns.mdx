@@ -9,6 +9,9 @@ AgentDomain supports all 13 DNS record types currently writable through
 Spaceship: `A`, `AAAA`, `ALIAS`, `CAA`, `CNAME`, `HTTPS`, `MX`, `NS`, `PTR`,
 `SRV`, `SVCB`, `TLSA`, and `TXT`.
 
+Every endpoint requires either the authenticated owner session or an
+agent-scoped API key belonging to the requested agent identity.
+
 ## Discover capabilities
 
 ```http
@@ -105,3 +108,22 @@ not applied.
 Apex CNAME and apex NS edits are rejected. A CNAME cannot coexist with another
 record type at the same owner. PTR warns when reverse-zone authority is absent,
 and TLSA warns that DANE assurance depends on DNSSEC.
+
+## Error contract
+
+DNS failures use a stable public shape without provider credentials or raw
+provider responses:
+
+```json
+{
+  "code": "DNS_REVISION_CONFLICT",
+  "message": "DNS records changed after the preview. Generate a new preview before applying.",
+  "details": {}
+}
+```
+
+Validation errors return `400`, concurrent/stale updates return `409`, plan
+capacity returns `402`, rate limits return `429`, and temporary locking or
+provider synchronization failures return `503`. SDK and agent integrations
+surface the same code and message so callers can retry, request a fresh preview,
+or ask the owner to correct the input.

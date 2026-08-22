@@ -28,6 +28,15 @@ Eliza actions can update the primary email username, create Starter/Pro/Enterpri
 aliases, delete aliases, and send from either the primary address or an active
 alias.
 
+## DNS actions
+
+ElizaOS receives `GET_DNS_CAPABILITIES`, `LIST_DNS_RECORDS`,
+`CREATE_DNS_RECORD`, `UPDATE_DNS_RECORD`, `DELETE_DNS_RECORD`,
+`CHANGE_DNS_RECORDS`, `IMPORT_DNS_ZONE`, and `EXPORT_DNS_ZONE`. Capability
+discovery tells the agent which fields and constraints apply to each record
+type. Bulk changes must be previewed first and applied with the returned
+revision, so an agent cannot silently overwrite newer DNS state.
+
 ## Result
 
 The agent receives a domain, onchain identity, inbox, and SSL provisioning status

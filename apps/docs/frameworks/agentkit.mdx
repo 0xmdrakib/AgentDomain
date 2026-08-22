@@ -36,5 +36,15 @@ AgentKit tools can also update the primary email username and manage Pro or
 Enterprise aliases through `update_primary_email`, `create_email_alias`, and
 `delete_email_alias`.
 
+## DNS tools
+
+AgentKit exposes `get_dns_capabilities`, `list_dns_records`,
+`create_dns_record`, `update_dns_record`, `delete_dns_record`,
+`change_dns_records`, `import_dns_zone`, and `export_dns_zone`. Batch and BIND
+changes use a preview-first workflow: apply the same input only after reviewing
+the preview and include its `baseRevision`. The API rejects stale revisions and
+keeps AgentDomain-managed SSL, email, verification, and routing records
+read-only.
+
 This gives AgentKit agents a stable public internet identity and an onchain
 ownership primitive.

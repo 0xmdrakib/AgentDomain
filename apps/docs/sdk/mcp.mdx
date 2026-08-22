@@ -50,6 +50,12 @@ the owner wallet if you want the keeper to renew automatically.
 `fund_renewal_vault` is deposit-only. It can top up one AgentID vault, but it
 does not let one user touch another user's funds. `withdraw` remains owner-only.
 
+For DNS changes, call `get_dns_capabilities` first. Use
+`change_dns_records` or `import_dns_zone` with `dryRun: true`, review the
+summary and warnings, then apply the same input with the returned
+`baseRevision`. Stale revisions are rejected instead of overwriting newer DNS
+state, and system-managed records cannot be changed through MCP.
+
 ## Local command
 
 ```bash
