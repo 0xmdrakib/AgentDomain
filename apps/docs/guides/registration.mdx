@@ -110,10 +110,10 @@ If the agent has not yet paid, the server responds with **402 Payment Required**
 and a base64-encoded x402 v2 `PAYMENT-REQUIRED` header. The challenge uses Base
 mainnet (`eip155:8453`) and includes the recipient, USDC asset and atomic amount.
 
-When `X402_BUILDER_CODE` is configured, the payment requirement also includes
-the Base Builder Code extension. SDK and web clients echo that extension in the
-payment payload, and the server preserves it before settlement for onchain
-attribution.
+Production payment requirements include the configured Base Builder Code
+extension. SDK and web clients must echo that extension in the payment payload,
+and the server fails closed before settlement when the attribution configuration
+or echo is missing or invalid.
 
 ### 3. Fulfill the x402 v2 Payment
 

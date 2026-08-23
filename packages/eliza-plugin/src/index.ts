@@ -1,25 +1,19 @@
-import { AgentDomain } from "@agentdomain/sdk";
+import { AgentDomain, encodeSetAutoRenewCalldata } from '@agentdomain/sdk';
 import {
   AGENTDOMAIN_API_BASE_URL,
   SERVICE_PLAN_KEYS,
   SUPPORTED_TLDS,
-} from "@agentdomain/shared/constants";
+} from '@agentdomain/shared/constants';
 import {
   DNS_RECORD_TYPES,
   dnsRecordSchema as sharedDnsRecordSchema,
   type DnsRecordInput,
   type ServicePlanKey,
-} from "@agentdomain/shared";
-import {
-  createPublicClient,
-  createWalletClient,
-  http,
-  type Address,
-  encodeFunctionData,
-} from "viem";
-import { privateKeyToAccount } from "viem/accounts";
-import { base, baseSepolia } from "viem/chains";
-import { z } from "zod";
+} from '@agentdomain/shared';
+import { createPublicClient, createWalletClient, http, type Address } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { base, baseSepolia } from 'viem/chains';
+import { z } from 'zod';
 
 interface IAgentRuntime {
   getSetting(key: string): string | undefined;
@@ -30,40 +24,33 @@ interface Memory {
   content: { text: string };
 }
 
-function getClients(
-  runtime: IAgentRuntime,
-  opts: { requireWallet?: boolean } = {},
-) {
-  const apiUrl =
-    runtime.getSetting("AGENTDOMAIN_API_URL") ?? AGENTDOMAIN_API_BASE_URL;
-  const apiKey = runtime.getSetting("AGENTDOMAIN_API_KEY");
-  const pk = runtime.getSetting("AGENT_PRIVATE_KEY");
-  const rpc = runtime.getSetting("BASE_RPC_URL") ?? "https://mainnet.base.org";
-  const network =
-    (runtime.getSetting("AGENTDOMAIN_NETWORK") as "base" | "base-sepolia") ??
-    "base";
-  const chain = network === "base-sepolia" ? baseSepolia : base;
+/** Builds the attributed direct calldata used by Eliza's post-registration auto-renew step. */
+export function encodeElizaAutoRenewCalldata(tokenId: bigint, builderCode?: string) {
+  if (!builderCode) {
+    throw new Error(
+      'AGENTDOMAIN_BUILDER_CODE is required for attributed direct Base transactions.',
+    );
+  }
+  return encodeSetAutoRenewCalldata(tokenId, true, builderCode);
+}
+
+function getClients(runtime: IAgentRuntime, opts: { requireWallet?: boolean } = {}) {
+  const apiUrl = runtime.getSetting('AGENTDOMAIN_API_URL') ?? AGENTDOMAIN_API_BASE_URL;
+  const apiKey = runtime.getSetting('AGENTDOMAIN_API_KEY');
+  const pk = runtime.getSetting('AGENT_PRIVATE_KEY');
+  const rpc = runtime.getSetting('BASE_RPC_URL') ?? 'https://mainnet.base.org';
+  const network = (runtime.getSetting('AGENTDOMAIN_NETWORK') as 'base' | 'base-sepolia') ?? 'base';
+  const builderCode = runtime.getSetting('AGENTDOMAIN_BUILDER_CODE');
+  const chain = network === 'base-sepolia' ? baseSepolia : base;
 
   if (!pk) {
-    if (opts.requireWallet) throw new Error("AGENT_PRIVATE_KEY not set");
-    const ad = new AgentDomain({ apiUrl, apiKey, network });
-    return {
-      ad,
-      account: null,
-      walletClient: null,
-      publicClient: null,
-      network,
-      chain,
-      rpc,
-    };
+    if (opts.requireWallet) throw new Error('AGENT_PRIVATE_KEY not set');
+    const ad = new AgentDomain({ apiUrl, apiKey, network, builderCode });
+    return { ad, account: null, walletClient: null, publicClient: null, network, chain, rpc };
   }
 
   const account = privateKeyToAccount(pk as `0x${string}`);
-  const walletClient = createWalletClient({
-    account,
-    chain,
-    transport: http(rpc),
-  });
+  const walletClient = createWalletClient({ account, chain, transport: http(rpc) });
   const publicClient = createPublicClient({ chain, transport: http(rpc) });
 
   const ad = new AgentDomain({
@@ -72,17 +59,14 @@ function getClients(
     network,
     walletClient: walletClient as never,
     publicClient: publicClient as never,
+    builderCode,
   });
 
   return { ad, account, walletClient, publicClient, network, chain, rpc };
 }
 
-const TLD_PATTERN = new RegExp(
-  String.raw`([a-z0-9-]{3,63})\.([a-z]{2,20})\b`,
-  "i",
-);
-const UUID_PATTERN =
-  /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i;
+const TLD_PATTERN = new RegExp(String.raw`([a-z0-9-]{3,63})\.([a-z]{2,20})\b`, 'i');
+const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i;
 const AMOUNT_PATTERN = /\$?\s*(\d+(?:\.\d{1,6})?)\s*(?:usdc)?/i;
 const EMAIL_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
 const EMAIL_GLOBAL_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
@@ -90,19 +74,14 @@ const EMAIL_USERNAME_PATTERN = /^[a-z0-9](?:[a-z0-9._+-]{0,62}[a-z0-9])?$/;
 
 const registerSchema = z.object({
   preferredName: z.string(),
-  tld: z.enum(SUPPORTED_TLDS).default("xyz"),
+  tld: z.enum(SUPPORTED_TLDS).default('xyz'),
   registerBasename: z.boolean().default(true),
   registerEns: z.boolean().default(false),
   emailEnabled: z.boolean().default(true),
-  emailUsername: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .regex(EMAIL_USERNAME_PATTERN)
-    .default("agent"),
+  emailUsername: z.string().trim().toLowerCase().regex(EMAIL_USERNAME_PATTERN).default('agent'),
   years: z.number().int().min(1).max(10).default(1),
   autoRenew: z.boolean().default(false),
-  premiumPlan: z.enum(SERVICE_PLAN_KEYS).default("included"),
+  premiumPlan: z.enum(SERVICE_PLAN_KEYS).default('included'),
 });
 
 const dnsRecordSchema = z.object({
@@ -128,87 +107,74 @@ function parseParamsFromText(text: string): {
   const lower = text.toLowerCase();
   const yearsMatch = lower.match(/([1-9]|10)\s*years?/);
   const noBasename =
-    lower.includes("no basename") ||
-    lower.includes("without basename") ||
-    lower.includes("skip basename");
+    lower.includes('no basename') ||
+    lower.includes('without basename') ||
+    lower.includes('skip basename');
   const noEns =
-    lower.includes("no ens") ||
-    lower.includes("without ens") ||
-    lower.includes("skip ens");
+    lower.includes('no ens') || lower.includes('without ens') || lower.includes('skip ens');
   const wantsEns = /\bens\b/.test(lower);
   return {
-    preferredName: m?.[1]?.toLowerCase() ?? "agent",
-    tld: m?.[2]?.toLowerCase() ?? "xyz",
+    preferredName: m?.[1]?.toLowerCase() ?? 'agent',
+    tld: m?.[2]?.toLowerCase() ?? 'xyz',
     registerBasename: !noBasename,
     registerEns: wantsEns && !noEns,
     emailEnabled: true,
-    emailUsername: parseEmailUsername(text) ?? "agent",
+    emailUsername: parseEmailUsername(text) ?? 'agent',
     years: yearsMatch ? parseInt(yearsMatch[1]!, 10) : 1,
     autoRenew:
-      lower.includes("auto renew") ||
-      lower.includes("auto-renew") ||
-      lower.includes("autorenew"),
+      lower.includes('auto renew') || lower.includes('auto-renew') || lower.includes('autorenew'),
     premiumPlan: parseRegistrationPlan(lower),
   };
 }
 
 function requireAgentId(text: string): string {
   const agentId = text.match(UUID_PATTERN)?.[0];
-  if (!agentId) throw new Error("Agent ID UUID is required");
+  if (!agentId) throw new Error('Agent ID UUID is required');
   return agentId;
 }
 
 function parseAmountUsdc(text: string): string {
   const amount = text.match(AMOUNT_PATTERN)?.[1];
-  if (!amount) throw new Error("USDC amount is required");
+  if (!amount) throw new Error('USDC amount is required');
   return amount;
 }
 
 function parseRegistrationPlan(lower: string): ServicePlanKey {
-  if (lower.includes("enterprise")) return "enterprise";
-  if (lower.includes("pro")) return "pro";
-  if (lower.includes("starter")) return "starter";
-  return "included";
+  if (lower.includes('enterprise')) return 'enterprise';
+  if (lower.includes('pro')) return 'pro';
+  if (lower.includes('starter')) return 'starter';
+  return 'included';
 }
 
 function parsePlan(text: string): {
-  plan: "starter" | "pro" | "enterprise";
-  planSku?: import("@agentdomain/shared").ServicePlanSku;
+  plan: 'starter' | 'pro' | 'enterprise';
+  planSku?: import('@agentdomain/shared').ServicePlanSku;
 } {
   const lower = text.toLowerCase();
-  if (lower.includes("enterprise")) {
+  if (lower.includes('enterprise')) {
     const match = lower.match(/(\d+(?:\.\d+)?)\s*(k|m)/);
     const monthly = match
-      ? Math.round(Number(match[1]) * (match[2] === "m" ? 1_000_000 : 1_000))
+      ? Math.round(Number(match[1]) * (match[2] === 'm' ? 1_000_000 : 1_000))
       : 100_000;
     return {
-      plan: "enterprise",
-      planSku:
-        `enterprise-${monthly}` as import("@agentdomain/shared").ServicePlanSku,
+      plan: 'enterprise',
+      planSku: `enterprise-${monthly}` as import('@agentdomain/shared').ServicePlanSku,
     };
   }
-  return { plan: lower.includes("starter") ? "starter" : "pro" };
+  return { plan: lower.includes('starter') ? 'starter' : 'pro' };
 }
 
 function parseDnsRecord(text: string) {
   const lower = text.toLowerCase();
-  const typeMatch = text.match(
-    /\b(A|AAAA|ALIAS|CAA|CNAME|HTTPS|MX|NS|PTR|SRV|SVCB|TLSA|TXT)\b/i,
-  );
+  const typeMatch = text.match(/\b(A|AAAA|ALIAS|CAA|CNAME|HTTPS|MX|NS|PTR|SRV|SVCB|TLSA|TXT)\b/i);
   const nameMatch = text.match(/\bname[:=]\s*([^\s]+)/i);
-  const valueMatch = text.match(
-    /\bvalue[:=]\s*(.+?)(?=\s+\b(?:ttl|priority)[:=]|$)/i,
-  );
+  const valueMatch = text.match(/\bvalue[:=]\s*(.+?)(?=\s+\b(?:ttl|priority)[:=]|$)/i);
   const ttlMatch = text.match(/\bttl[:=]\s*(\d+)/i);
   const priorityMatch = text.match(/\bpriority[:=]\s*(\d+)/i);
   const parsed = dnsRecordSchema.parse({
-    type:
-      typeMatch?.[1]?.toUpperCase() ?? (lower.includes("txt") ? "TXT" : "A"),
-    name: nameMatch?.[1] ?? "@",
-    value:
-      valueMatch?.[1]?.trim() ??
-      text.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/)?.[0] ??
-      "",
+    type: typeMatch?.[1]?.toUpperCase() ?? (lower.includes('txt') ? 'TXT' : 'A'),
+    name: nameMatch?.[1] ?? '@',
+    value: valueMatch?.[1]?.trim() ?? text.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/)?.[0] ?? '',
     ttl: ttlMatch ? Number(ttlMatch[1]) : 3600,
     priority: priorityMatch ? Number(priorityMatch[1]) : undefined,
   });
@@ -217,35 +183,28 @@ function parseDnsRecord(text: string) {
 
 function parseDnsRecordsJson(text: string): DnsRecordInput[] {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
-  const json =
-    fenced ?? text.slice(text.indexOf("["), text.lastIndexOf("]") + 1);
-  if (!json) throw new Error("A JSON array of DNS records is required");
-  return z
-    .array(sharedDnsRecordSchema)
-    .min(1)
-    .max(200)
-    .parse(JSON.parse(json)) as DnsRecordInput[];
+  const json = fenced ?? text.slice(text.indexOf('['), text.lastIndexOf(']') + 1);
+  if (!json) throw new Error('A JSON array of DNS records is required');
+  return z.array(sharedDnsRecordSchema).min(1).max(200).parse(JSON.parse(json)) as DnsRecordInput[];
 }
 
 function parseZoneFile(text: string): string {
   const fenced = text.match(/```(?:bind|zone|dns)?\s*([\s\S]*?)```/i)?.[1];
-  if (!fenced?.trim())
-    throw new Error("Put the BIND zone records inside a fenced code block");
+  if (!fenced?.trim()) throw new Error('Put the BIND zone records inside a fenced code block');
   return fenced.trim();
 }
 
 function parseDnsApplyOptions(text: string) {
   const lower = text.toLowerCase();
   return {
-    mode: lower.includes("replace") ? ("replace" as const) : ("merge" as const),
+    mode: lower.includes('replace') ? ('replace' as const) : ('merge' as const),
     dryRun: !/\bapply\b/i.test(text),
     baseRevision: text.match(/\bbaseRevision[:=]\s*([a-f0-9]{64})/i)?.[1],
   };
 }
 
 function requireDnsRevision(value: string | undefined): string {
-  if (!value)
-    throw new Error("Apply requires baseRevision from a fresh DNS preview");
+  if (!value) throw new Error('Apply requires baseRevision from a fresh DNS preview');
   return value;
 }
 
@@ -253,36 +212,29 @@ function parseEmailUsername(text: string): string | null {
   const explicit =
     text.match(
       /\b(?:email\s+username|primary\s+email|username|alias)[:=]?\s*([a-z0-9._+-]{1,64})/i,
-    )?.[1] ?? text.match(EMAIL_PATTERN)?.[0]?.split("@")[0];
+    )?.[1] ?? text.match(EMAIL_PATTERN)?.[0]?.split('@')[0];
   const username = explicit?.trim().toLowerCase();
   return username && EMAIL_USERNAME_PATTERN.test(username) ? username : null;
 }
 
 function parseEmailRequest(text: string) {
-  const fromAddress = text.match(
-    /\bfrom[:=]\s*([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i,
-  )?.[1];
-  const explicitTo = text.match(
-    /\bto[:=]\s*([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i,
-  )?.[1];
+  const fromAddress = text.match(/\bfrom[:=]\s*([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i)?.[1];
+  const explicitTo = text.match(/\bto[:=]\s*([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i)?.[1];
   const emails = text.match(EMAIL_GLOBAL_PATTERN) ?? [];
   const to =
-    explicitTo ??
-    emails.find((email) => email.toLowerCase() !== fromAddress?.toLowerCase());
-  if (!to) throw new Error("Recipient email address is required");
-  const subject =
-    text.match(/\bsubject[:=]\s*([^|]+)/i)?.[1]?.trim() ??
-    "AgentDomain message";
+    explicitTo ?? emails.find((email) => email.toLowerCase() !== fromAddress?.toLowerCase());
+  if (!to) throw new Error('Recipient email address is required');
+  const subject = text.match(/\bsubject[:=]\s*([^|]+)/i)?.[1]?.trim() ?? 'AgentDomain message';
   const body =
     text.match(/\b(?:text|body|message)[:=]\s*([\s\S]+)/i)?.[1]?.trim() ??
-    text.replace(to, "").trim();
-  return { to, fromAddress, subject, text: body || "Hello from AgentDomain." };
+    text.replace(to, '').trim();
+  return { to, fromAddress, subject, text: body || 'Hello from AgentDomain.' };
 }
 
 export const quoteRegistrationAction = {
-  name: "QUOTE_AGENT_REGISTRATION",
-  description: "Quote an AgentDomain registration before paying.",
-  similes: ["PRICE_DOMAIN", "REGISTRATION_QUOTE", "QUOTE_IDENTITY"],
+  name: 'QUOTE_AGENT_REGISTRATION',
+  description: 'Quote an AgentDomain registration before paying.',
+  similes: ['PRICE_DOMAIN', 'REGISTRATION_QUOTE', 'QUOTE_IDENTITY'],
   examples: [],
   validate: async () => true,
   handler: async (runtime: IAgentRuntime, message: Memory) => {
@@ -297,37 +249,32 @@ export const quoteRegistrationAction = {
 };
 
 export const registerIdentityAction = {
-  name: "REGISTER_IDENTITY",
+  name: 'REGISTER_IDENTITY',
   description:
     'Register a complete agent identity bundle on AgentDomain. Domain, DNS, email setup, SSL certification, AgentID NFT orchestration, and platform fee are included by default. Users can say "no basename" to skip Basename, "with ENS" to add ENS, and "email username support" to customize the primary inbox.',
-  similes: ["CLAIM_DOMAIN", "CREATE_IDENTITY", "GET_DOMAIN"],
+  similes: ['CLAIM_DOMAIN', 'CREATE_IDENTITY', 'GET_DOMAIN'],
   examples: [
     [
+      { user: 'user1', content: { text: 'Register me as helpful-bot.ai email username support' } },
       {
-        user: "user1",
-        content: {
-          text: "Register me as helpful-bot.ai email username support",
-        },
-      },
-      {
-        user: "agent",
+        user: 'agent',
         content: {
           text: "I'll register helpful-bot.ai with included email and SSL infrastructure now.",
-          action: "REGISTER_IDENTITY",
+          action: 'REGISTER_IDENTITY',
         },
       },
     ],
   ],
   validate: async (runtime: IAgentRuntime, _message?: Memory) =>
-    Boolean(runtime.getSetting("AGENT_PRIVATE_KEY")),
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY')),
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const params = parseParamsFromText(message.content.text);
     const validated = registerSchema.parse(params);
 
-    const { ad, account, walletClient, chain } = getClients(runtime, {
+    const { ad, account, walletClient, publicClient, chain } = getClients(runtime, {
       requireWallet: true,
     });
-    if (!account || !walletClient) throw new Error("AGENT_PRIVATE_KEY not set");
+    if (!account || !walletClient || !publicClient) throw new Error('AGENT_PRIVATE_KEY not set');
 
     const result = await ad.register({
       ...validated,
@@ -335,50 +282,53 @@ export const registerIdentityAction = {
       wallet: account.address,
     } as any);
 
-    let autoRenewMsg = "";
+    let autoRenewMsg = '';
     if (validated.autoRenew) {
-      const vaultAddress = runtime.getSetting("RENEWAL_VAULT_ADDRESS");
+      const vaultAddress = runtime.getSetting('RENEWAL_VAULT_ADDRESS');
       if (vaultAddress) {
         try {
-          const txHash = await walletClient.writeContract({
-            address: vaultAddress as `0x${string}`,
-            abi: [
-              {
-                type: "function",
-                name: "setAutoRenew",
-                inputs: [
-                  { name: "tokenId", type: "uint256" },
-                  { name: "enabled", type: "bool" },
-                ],
-              },
-            ],
-            functionName: "setAutoRenew",
-            args: [BigInt(result.nftTokenId), true],
+          const txHash = await walletClient.sendTransaction({
+            to: vaultAddress as `0x${string}`,
+            data: encodeElizaAutoRenewCalldata(
+              BigInt(result.nftTokenId),
+              runtime.getSetting('AGENTDOMAIN_BUILDER_CODE'),
+            ),
             chain,
             account,
           });
+          let receipt;
+          try {
+            receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+          } catch (e) {
+            throw new Error(
+              `Auto-renew transaction ${txHash} was submitted but confirmation failed or remained pending: ${String(e)}`,
+            );
+          }
+          if (receipt.status !== 'success') {
+            throw new Error(
+              `Auto-renew transaction ${txHash} confirmed with status ${receipt.status}; auto-renew was not enabled.`,
+            );
+          }
           autoRenewMsg = ` Auto-renew enabled via tx ${txHash}.`;
         } catch (e) {
           autoRenewMsg = ` Failed to enable auto-renew automatically: ${String(e)}`;
         }
       } else {
-        autoRenewMsg =
-          " (Requires RENEWAL_VAULT_ADDRESS env var to enable auto-renew on-chain).";
+        autoRenewMsg = ' (Requires RENEWAL_VAULT_ADDRESS env var to enable auto-renew on-chain).';
       }
     }
 
     return {
-      text: `Registered ${result.domain}${result.basename ? ` and ${result.basename}` : ""}. Token #${result.nftTokenId}.${autoRenewMsg}`,
+      text: `Registered ${result.domain}${result.basename ? ` and ${result.basename}` : ''}. Token #${result.nftTokenId}.${autoRenewMsg}`,
       data: result,
     };
   },
 };
 
 export const searchAgentsAction = {
-  name: "SEARCH_AGENTS",
-  description:
-    "Search the public AgentDomain registry by name, capability, or framework.",
-  similes: ["FIND_AGENT", "DISCOVER_AGENT"],
+  name: 'SEARCH_AGENTS',
+  description: 'Search the public AgentDomain registry by name, capability, or framework.',
+  similes: ['FIND_AGENT', 'DISCOVER_AGENT'],
   examples: [],
   validate: async () => true,
   handler: async (runtime: IAgentRuntime, message: Memory) => {
@@ -393,54 +343,44 @@ export const searchAgentsAction = {
 };
 
 export const listEmailAction = {
-  name: "LIST_AGENT_EMAIL",
+  name: 'LIST_AGENT_EMAIL',
   description:
-    "List text-only email messages and extracted verification codes for an AgentDomain identity.",
-  similes: ["CHECK_EMAIL", "READ_INBOX"],
+    'List text-only email messages and extracted verification codes for an AgentDomain identity.',
+  similes: ['CHECK_EMAIL', 'READ_INBOX'],
   examples: [],
-  validate: async (runtime: IAgentRuntime) =>
-    Boolean(runtime.getSetting("AGENT_PRIVATE_KEY")),
+  validate: async (runtime: IAgentRuntime) => Boolean(runtime.getSetting('AGENT_PRIVATE_KEY')),
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const { ad } = getClients(runtime);
     const agentId = message.content.text.match(/[0-9a-f-]{36}/i)?.[0];
-    if (!agentId) throw new Error("Agent ID UUID is required to list email");
+    if (!agentId) throw new Error('Agent ID UUID is required to list email');
     const result = await ad.listEmail(agentId, { limit: 20 });
     return { text: `Found ${result.messages.length} messages.`, data: result };
   },
 };
 
 export const deleteEmailMessageAction = {
-  name: "DELETE_AGENT_EMAIL",
-  description: "Permanently delete one AgentDomain email message.",
-  similes: ["DELETE_EMAIL_MESSAGE", "REMOVE_EMAIL_MESSAGE"],
+  name: 'DELETE_AGENT_EMAIL',
+  description: 'Permanently delete one AgentDomain email message.',
+  similes: ['DELETE_EMAIL_MESSAGE', 'REMOVE_EMAIL_MESSAGE'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
-    Boolean(
-      runtime.getSetting("AGENT_PRIVATE_KEY") ||
-      runtime.getSetting("AGENTDOMAIN_API_KEY"),
-    ),
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY') || runtime.getSetting('AGENTDOMAIN_API_KEY')),
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const { ad } = getClients(runtime);
-    const ids =
-      message.content.text.match(new RegExp(UUID_PATTERN.source, "gi")) ?? [];
-    if (!ids[0] || !ids[1])
-      throw new Error("Agent ID and message ID UUIDs are required");
+    const ids = message.content.text.match(new RegExp(UUID_PATTERN.source, 'gi')) ?? [];
+    if (!ids[0] || !ids[1]) throw new Error('Agent ID and message ID UUIDs are required');
     const result = await ad.deleteEmailMessage(ids[0], ids[1]);
     return { text: `Deleted email message ${ids[1]}.`, data: result };
   },
 };
 
 export const sendEmailAction = {
-  name: "SEND_AGENT_EMAIL",
-  description:
-    "Send text-only email from an AgentDomain primary address or active alias.",
-  similes: ["SEND_EMAIL", "EMAIL_FROM_AGENT"],
+  name: 'SEND_AGENT_EMAIL',
+  description: 'Send text-only email from an AgentDomain primary address or active alias.',
+  similes: ['SEND_EMAIL', 'EMAIL_FROM_AGENT'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
-    Boolean(
-      runtime.getSetting("AGENT_PRIVATE_KEY") ||
-      runtime.getSetting("AGENTDOMAIN_API_KEY"),
-    ),
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY') || runtime.getSetting('AGENTDOMAIN_API_KEY')),
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const { ad } = getClients(runtime);
     const agentId = requireAgentId(message.content.text);
@@ -451,15 +391,12 @@ export const sendEmailAction = {
 };
 
 export const emailUsageAction = {
-  name: "GET_AGENT_EMAIL_USAGE",
-  description: "Get combined monthly sent and received email usage.",
-  similes: ["EMAIL_USAGE", "EMAIL_QUOTA"],
+  name: 'GET_AGENT_EMAIL_USAGE',
+  description: 'Get combined monthly sent and received email usage.',
+  similes: ['EMAIL_USAGE', 'EMAIL_QUOTA'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
-    Boolean(
-      runtime.getSetting("AGENT_PRIVATE_KEY") ||
-      runtime.getSetting("AGENTDOMAIN_API_KEY"),
-    ),
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY') || runtime.getSetting('AGENTDOMAIN_API_KEY')),
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const { ad } = getClients(runtime);
     const result = await ad.getEmailUsage(requireAgentId(message.content.text));
@@ -470,149 +407,121 @@ export const emailUsageAction = {
   },
 };
 export const configureEmailWebhookAction = {
-  name: "CONFIGURE_EMAIL_WEBHOOK",
-  description:
-    "Configure a signed inbound email webhook. Include an HTTPS URL in the request.",
-  similes: ["SET_EMAIL_WEBHOOK"],
+  name: 'CONFIGURE_EMAIL_WEBHOOK',
+  description: 'Configure a signed inbound email webhook. Include an HTTPS URL in the request.',
+  similes: ['SET_EMAIL_WEBHOOK'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
-    Boolean(
-      runtime.getSetting("AGENT_PRIVATE_KEY") ||
-      runtime.getSetting("AGENTDOMAIN_API_KEY"),
-    ),
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY') || runtime.getSetting('AGENTDOMAIN_API_KEY')),
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const { ad } = getClients(runtime);
     const agentId = requireAgentId(message.content.text);
     const url = message.content.text.match(/https:\/\/[^\s]+/)?.[0];
-    if (!url) throw new Error("HTTPS webhook URL is required");
+    if (!url) throw new Error('HTTPS webhook URL is required');
     const result = await ad.setEmailWebhook(agentId, {
       url,
-      payloadMode: /inline/i.test(message.content.text)
-        ? "inline_text"
-        : "metadata",
+      payloadMode: /inline/i.test(message.content.text) ? 'inline_text' : 'metadata',
       enabled: true,
     });
-    return { text: "Inbound email webhook configured.", data: result };
+    return { text: 'Inbound email webhook configured.', data: result };
   },
 };
 export const sendEmailBatchAction = {
-  name: "SEND_AGENT_EMAIL_BATCH",
-  description: "Queue up to 100 emails supplied as a JSON messages array.",
-  similes: ["BATCH_EMAIL"],
+  name: 'SEND_AGENT_EMAIL_BATCH',
+  description: 'Queue up to 100 emails supplied as a JSON messages array.',
+  similes: ['BATCH_EMAIL'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
-    Boolean(
-      runtime.getSetting("AGENT_PRIVATE_KEY") ||
-      runtime.getSetting("AGENTDOMAIN_API_KEY"),
-    ),
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY') || runtime.getSetting('AGENTDOMAIN_API_KEY')),
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const { ad } = getClients(runtime);
     const agentId = requireAgentId(message.content.text);
-    const json = message.content.text.slice(message.content.text.indexOf("{"));
+    const json = message.content.text.slice(message.content.text.indexOf('{'));
     const parsed = JSON.parse(json) as {
       messages: Array<{ to: string; subject: string; text: string }>;
     };
-    const result = await ad.sendEmailBatch(agentId, {
-      messages: parsed.messages,
-    });
+    const result = await ad.sendEmailBatch(agentId, { messages: parsed.messages });
     return { text: `Queued ${result.jobs.length} email jobs.`, data: result };
   },
 };
 
 export const updatePrimaryEmailAction = {
-  name: "UPDATE_PRIMARY_EMAIL",
+  name: 'UPDATE_PRIMARY_EMAIL',
   description:
-    "Change an AgentDomain primary email username. The old primary address stops receiving new mail.",
-  similes: ["CHANGE_PRIMARY_EMAIL", "RENAME_EMAIL"],
+    'Change an AgentDomain primary email username. The old primary address stops receiving new mail.',
+  similes: ['CHANGE_PRIMARY_EMAIL', 'RENAME_EMAIL'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
-    Boolean(
-      runtime.getSetting("AGENT_PRIVATE_KEY") ||
-      runtime.getSetting("AGENTDOMAIN_API_KEY"),
-    ),
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY') || runtime.getSetting('AGENTDOMAIN_API_KEY')),
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const { ad } = getClients(runtime);
     const agentId = requireAgentId(message.content.text);
     const username = parseEmailUsername(message.content.text);
-    if (!username) throw new Error("New email username is required");
+    if (!username) throw new Error('New email username is required');
     const result = await ad.updatePrimaryEmail(agentId, username);
     return { text: result.message, data: result };
   },
 };
 
 export const createEmailAliasAction = {
-  name: "CREATE_EMAIL_ALIAS",
+  name: 'CREATE_EMAIL_ALIAS',
   description:
-    "Create a receive-and-send email alias for an AgentDomain identity. Requires available paid-plan alias capacity.",
-  similes: ["ADD_EMAIL_ALIAS", "CREATE_ALIAS"],
+    'Create a receive-and-send email alias for an AgentDomain identity. Requires available paid-plan alias capacity.',
+  similes: ['ADD_EMAIL_ALIAS', 'CREATE_ALIAS'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
-    Boolean(
-      runtime.getSetting("AGENT_PRIVATE_KEY") ||
-      runtime.getSetting("AGENTDOMAIN_API_KEY"),
-    ),
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY') || runtime.getSetting('AGENTDOMAIN_API_KEY')),
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const { ad } = getClients(runtime);
     const agentId = requireAgentId(message.content.text);
     const username = parseEmailUsername(message.content.text);
-    if (!username) throw new Error("Alias username is required");
+    if (!username) throw new Error('Alias username is required');
     const result = await ad.createEmailAlias(agentId, username);
-    return {
-      text: `Created email alias ${result.address.emailAddress}.`,
-      data: result,
-    };
+    return { text: `Created email alias ${result.address.emailAddress}.`, data: result };
   },
 };
 
 export const deleteEmailAliasAction = {
-  name: "DELETE_EMAIL_ALIAS",
-  description: "Delete an active AgentDomain email alias.",
-  similes: ["REMOVE_EMAIL_ALIAS", "DELETE_ALIAS"],
+  name: 'DELETE_EMAIL_ALIAS',
+  description: 'Delete an active AgentDomain email alias.',
+  similes: ['REMOVE_EMAIL_ALIAS', 'DELETE_ALIAS'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
-    Boolean(
-      runtime.getSetting("AGENT_PRIVATE_KEY") ||
-      runtime.getSetting("AGENTDOMAIN_API_KEY"),
-    ),
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY') || runtime.getSetting('AGENTDOMAIN_API_KEY')),
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const { ad } = getClients(runtime);
     const agentId = requireAgentId(message.content.text);
     const emailAddress = message.content.text.match(EMAIL_PATTERN)?.[0];
-    if (!emailAddress) throw new Error("Full alias email address is required");
+    if (!emailAddress) throw new Error('Full alias email address is required');
     const result = await ad.deleteEmailAlias(agentId, emailAddress);
     return { text: `Deleted email alias ${emailAddress}.`, data: result };
   },
 };
 
 export const renewalStatusAction = {
-  name: "GET_RENEWAL_STATUS",
-  description:
-    "Get RenewalVault balance, shortfall, renewal amount, and auto-renew state.",
-  similes: ["RENEWAL_STATUS", "CHECK_RENEWAL", "VAULT_STATUS"],
+  name: 'GET_RENEWAL_STATUS',
+  description: 'Get RenewalVault balance, shortfall, renewal amount, and auto-renew state.',
+  similes: ['RENEWAL_STATUS', 'CHECK_RENEWAL', 'VAULT_STATUS'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
-    Boolean(
-      runtime.getSetting("AGENT_PRIVATE_KEY") ||
-      runtime.getSetting("AGENTDOMAIN_API_KEY"),
-    ),
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY') || runtime.getSetting('AGENTDOMAIN_API_KEY')),
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const { ad } = getClients(runtime);
     const agentId = requireAgentId(message.content.text);
     const status = await ad.getRenewalStatus(agentId);
     return {
-      text: `Renewal for ${status.domain}: next $${status.nextRenewalAmountUsdc}, balance $${status.vaultBalanceUsdc}, shortfall $${status.shortfallUsdc}, auto-renew ${status.autoRenewEnabled ? "enabled" : "off"}.`,
+      text: `Renewal for ${status.domain}: next $${status.nextRenewalAmountUsdc}, balance $${status.vaultBalanceUsdc}, shortfall $${status.shortfallUsdc}, auto-renew ${status.autoRenewEnabled ? 'enabled' : 'off'}.`,
       data: status,
     };
   },
 };
 
 export const fundRenewalAction = {
-  name: "FUND_RENEWAL_VAULT",
-  description: "Deposit USDC into an AgentID renewal vault.",
-  similes: ["DEPOSIT_RENEWAL", "FUND_VAULT"],
+  name: 'FUND_RENEWAL_VAULT',
+  description: 'Deposit USDC into an AgentID renewal vault.',
+  similes: ['DEPOSIT_RENEWAL', 'FUND_VAULT'],
   examples: [],
-  validate: async (runtime: IAgentRuntime) =>
-    Boolean(runtime.getSetting("AGENT_PRIVATE_KEY")),
+  validate: async (runtime: IAgentRuntime) => Boolean(runtime.getSetting('AGENT_PRIVATE_KEY')),
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const { ad } = getClients(runtime, { requireWallet: true });
     const agentId = requireAgentId(message.content.text);
@@ -626,44 +535,34 @@ export const fundRenewalAction = {
 };
 
 export const enableAutoRenewAction = {
-  name: "ENABLE_AUTO_RENEW",
-  description:
-    "Enable on-chain RenewalVault auto-renew for an AgentDomain identity.",
-  similes: ["AUTO_RENEW", "ENABLE_RENEWAL"],
+  name: 'ENABLE_AUTO_RENEW',
+  description: 'Enable on-chain RenewalVault auto-renew for an AgentDomain identity.',
+  similes: ['AUTO_RENEW', 'ENABLE_RENEWAL'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
-    Boolean(
-      runtime.getSetting("AGENT_PRIVATE_KEY") &&
-      runtime.getSetting("RENEWAL_VAULT_ADDRESS"),
-    ),
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY') && runtime.getSetting('RENEWAL_VAULT_ADDRESS')),
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const { ad } = getClients(runtime, { requireWallet: true });
     const agentId = requireAgentId(message.content.text);
     const result = await ad.setAutoRenew(agentId, true, {
-      renewalVaultAddress: runtime.getSetting(
-        "RENEWAL_VAULT_ADDRESS",
-      ) as Address,
+      renewalVaultAddress: runtime.getSetting('RENEWAL_VAULT_ADDRESS') as Address,
+      waitForReceipt: true,
     });
-    return {
-      text: `Auto-renew enabled for token #${result.tokenId}.`,
-      data: result,
-    };
+    return { text: `Auto-renew enabled for token #${result.tokenId}.`, data: result };
   },
 };
 
 export const reconfigureSslAction = {
-  name: "RECONFIGURE_SSL",
+  name: 'RECONFIGURE_SSL',
   description:
-    "Rebuild the Cloudflare SaaS SSL hostname and sync Spaceship DNS validation records for an AgentDomain identity.",
-  similes: ["FIX_SSL", "REPAIR_SSL", "SYNC_SSL"],
+    'Rebuild the Cloudflare SaaS SSL hostname and sync Spaceship DNS validation records for an AgentDomain identity.',
+  similes: ['FIX_SSL', 'REPAIR_SSL', 'SYNC_SSL'],
   examples: [],
-  validate: async (runtime: IAgentRuntime) =>
-    Boolean(runtime.getSetting("AGENT_PRIVATE_KEY")),
+  validate: async (runtime: IAgentRuntime) => Boolean(runtime.getSetting('AGENT_PRIVATE_KEY')),
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const { ad } = getClients(runtime);
     const agentId = message.content.text.match(/[0-9a-f-]{36}/i)?.[0];
-    if (!agentId)
-      throw new Error("Agent ID UUID is required to reconfigure SSL");
+    if (!agentId) throw new Error('Agent ID UUID is required to reconfigure SSL');
     const result = await ad.reconfigureSsl(agentId);
     return {
       text: `SSL reconfigured for ${result.domain}. Status: ${result.sslStatus}.`,
@@ -673,15 +572,12 @@ export const reconfigureSslAction = {
 };
 
 export const listDnsAction = {
-  name: "LIST_DNS_RECORDS",
-  description: "List DNS records for an AgentDomain identity.",
-  similes: ["DNS_RECORDS", "LIST_DNS"],
+  name: 'LIST_DNS_RECORDS',
+  description: 'List DNS records for an AgentDomain identity.',
+  similes: ['DNS_RECORDS', 'LIST_DNS'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
-    Boolean(
-      runtime.getSetting("AGENT_PRIVATE_KEY") ||
-      runtime.getSetting("AGENTDOMAIN_API_KEY"),
-    ),
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY') || runtime.getSetting('AGENTDOMAIN_API_KEY')),
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const { ad } = getClients(runtime);
     const agentId = requireAgentId(message.content.text);
@@ -691,21 +587,16 @@ export const listDnsAction = {
 };
 
 export const dnsCapabilitiesAction = {
-  name: "GET_DNS_CAPABILITIES",
+  name: 'GET_DNS_CAPABILITIES',
   description:
-    "Get AgentDomain DNS record types, validation fields, limits, and provider warnings.",
-  similes: ["DNS_CAPABILITIES", "DNS_TYPES", "DNS_LIMITS"],
+    'Get AgentDomain DNS record types, validation fields, limits, and provider warnings.',
+  similes: ['DNS_CAPABILITIES', 'DNS_TYPES', 'DNS_LIMITS'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
-    Boolean(
-      runtime.getSetting("AGENT_PRIVATE_KEY") ||
-      runtime.getSetting("AGENTDOMAIN_API_KEY"),
-    ),
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY') || runtime.getSetting('AGENTDOMAIN_API_KEY')),
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const { ad } = getClients(runtime);
-    const result = await ad.getDnsCapabilities(
-      requireAgentId(message.content.text),
-    );
+    const result = await ad.getDnsCapabilities(requireAgentId(message.content.text));
     return {
       text: `AgentDomain supports ${result.supportedTypes.length} Spaceship DNS record types.`,
       data: result,
@@ -714,91 +605,67 @@ export const dnsCapabilitiesAction = {
 };
 
 export const createDnsAction = {
-  name: "CREATE_DNS_RECORD",
+  name: 'CREATE_DNS_RECORD',
   description:
-    "Create a user-managed DNS record. Use text like: agentId type A name @ value 1.2.3.4.",
-  similes: ["ADD_DNS", "CREATE_DNS"],
+    'Create a user-managed DNS record. Use text like: agentId type A name @ value 1.2.3.4.',
+  similes: ['ADD_DNS', 'CREATE_DNS'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
-    Boolean(
-      runtime.getSetting("AGENT_PRIVATE_KEY") ||
-      runtime.getSetting("AGENTDOMAIN_API_KEY"),
-    ),
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY') || runtime.getSetting('AGENTDOMAIN_API_KEY')),
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const { ad } = getClients(runtime);
     const agentId = requireAgentId(message.content.text);
     const record = parseDnsRecord(message.content.text);
     const result = await ad.createDnsRecord(agentId, record);
-    return {
-      text: `Created ${result.type} DNS record ${result.name}.`,
-      data: result,
-    };
+    return { text: `Created ${result.type} DNS record ${result.name}.`, data: result };
   },
 };
 
 export const updateDnsAction = {
-  name: "UPDATE_DNS_RECORD",
-  description:
-    "Update a user-managed DNS record. Include agent UUID and record UUID.",
-  similes: ["EDIT_DNS", "UPDATE_DNS"],
+  name: 'UPDATE_DNS_RECORD',
+  description: 'Update a user-managed DNS record. Include agent UUID and record UUID.',
+  similes: ['EDIT_DNS', 'UPDATE_DNS'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
-    Boolean(
-      runtime.getSetting("AGENT_PRIVATE_KEY") ||
-      runtime.getSetting("AGENTDOMAIN_API_KEY"),
-    ),
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY') || runtime.getSetting('AGENTDOMAIN_API_KEY')),
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const { ad } = getClients(runtime);
-    const ids =
-      message.content.text.match(new RegExp(UUID_PATTERN.source, "gi")) ?? [];
+    const ids = message.content.text.match(new RegExp(UUID_PATTERN.source, 'gi')) ?? [];
     const agentId = ids[0];
     const recordId = ids[1];
-    if (!agentId || !recordId)
-      throw new Error("Agent ID and record ID UUIDs are required");
+    if (!agentId || !recordId) throw new Error('Agent ID and record ID UUIDs are required');
     const record = parseDnsRecord(message.content.text);
     const result = await ad.updateDnsRecord(agentId, recordId, record);
-    return {
-      text: `Updated ${result.type} DNS record ${result.name}.`,
-      data: result,
-    };
+    return { text: `Updated ${result.type} DNS record ${result.name}.`, data: result };
   },
 };
 
 export const deleteDnsAction = {
-  name: "DELETE_DNS_RECORD",
-  description:
-    "Delete a user-managed DNS record. Include agent UUID and record UUID.",
-  similes: ["REMOVE_DNS", "DELETE_DNS"],
+  name: 'DELETE_DNS_RECORD',
+  description: 'Delete a user-managed DNS record. Include agent UUID and record UUID.',
+  similes: ['REMOVE_DNS', 'DELETE_DNS'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
-    Boolean(
-      runtime.getSetting("AGENT_PRIVATE_KEY") ||
-      runtime.getSetting("AGENTDOMAIN_API_KEY"),
-    ),
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY') || runtime.getSetting('AGENTDOMAIN_API_KEY')),
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const { ad } = getClients(runtime);
-    const ids =
-      message.content.text.match(new RegExp(UUID_PATTERN.source, "gi")) ?? [];
+    const ids = message.content.text.match(new RegExp(UUID_PATTERN.source, 'gi')) ?? [];
     const agentId = ids[0];
     const recordId = ids[1];
-    if (!agentId || !recordId)
-      throw new Error("Agent ID and record ID UUIDs are required");
+    if (!agentId || !recordId) throw new Error('Agent ID and record ID UUIDs are required');
     const result = await ad.deleteDnsRecord(agentId, recordId);
     return { text: `Deleted DNS record ${recordId}.`, data: result };
   },
 };
 
 export const changeDnsRecordsAction = {
-  name: "CHANGE_DNS_RECORDS",
+  name: 'CHANGE_DNS_RECORDS',
   description:
-    "Preview or apply a revision-protected DNS batch from a JSON array of structured records.",
-  similes: ["BATCH_DNS", "PREVIEW_DNS_CHANGES", "APPLY_DNS_CHANGES"],
+    'Preview or apply a revision-protected DNS batch from a JSON array of structured records.',
+  similes: ['BATCH_DNS', 'PREVIEW_DNS_CHANGES', 'APPLY_DNS_CHANGES'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
-    Boolean(
-      runtime.getSetting("AGENT_PRIVATE_KEY") ||
-      runtime.getSetting("AGENTDOMAIN_API_KEY"),
-    ),
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY') || runtime.getSetting('AGENTDOMAIN_API_KEY')),
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const { ad } = getClients(runtime);
     const agentId = requireAgentId(message.content.text);
@@ -813,24 +680,19 @@ export const changeDnsRecordsAction = {
           options.mode,
         );
     return {
-      text: options.dryRun
-        ? "DNS preview generated."
-        : "DNS change set applied.",
+      text: options.dryRun ? 'DNS preview generated.' : 'DNS change set applied.',
       data: result,
     };
   },
 };
 
 export const importDnsZoneAction = {
-  name: "IMPORT_DNS_ZONE",
-  description: "Preview or apply a validated BIND DNS zone import.",
-  similes: ["DNS_ZONE_IMPORT", "IMPORT_BIND_ZONE"],
+  name: 'IMPORT_DNS_ZONE',
+  description: 'Preview or apply a validated BIND DNS zone import.',
+  similes: ['DNS_ZONE_IMPORT', 'IMPORT_BIND_ZONE'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
-    Boolean(
-      runtime.getSetting("AGENT_PRIVATE_KEY") ||
-      runtime.getSetting("AGENTDOMAIN_API_KEY"),
-    ),
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY') || runtime.getSetting('AGENTDOMAIN_API_KEY')),
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const { ad } = getClients(runtime);
     const agentId = requireAgentId(message.content.text);
@@ -845,45 +707,36 @@ export const importDnsZoneAction = {
           options.mode,
         );
     return {
-      text: options.dryRun
-        ? "DNS import preview generated."
-        : "DNS zone import applied.",
+      text: options.dryRun ? 'DNS import preview generated.' : 'DNS zone import applied.',
       data: result,
     };
   },
 };
 
 export const exportDnsZoneAction = {
-  name: "EXPORT_DNS_ZONE",
-  description: "Export AgentDomain DNS records as a standard BIND zone file.",
-  similes: ["DNS_ZONE_EXPORT", "EXPORT_BIND_ZONE"],
+  name: 'EXPORT_DNS_ZONE',
+  description: 'Export AgentDomain DNS records as a standard BIND zone file.',
+  similes: ['DNS_ZONE_EXPORT', 'EXPORT_BIND_ZONE'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
-    Boolean(
-      runtime.getSetting("AGENT_PRIVATE_KEY") ||
-      runtime.getSetting("AGENTDOMAIN_API_KEY"),
-    ),
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY') || runtime.getSetting('AGENTDOMAIN_API_KEY')),
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const { ad } = getClients(runtime);
     const zone = await ad.exportDnsZone(
       requireAgentId(message.content.text),
-      /\b(?:all|complete)\b/i.test(message.content.text) ? "all" : "user",
+      /\b(?:all|complete)\b/i.test(message.content.text) ? 'all' : 'user',
     );
-    return { text: zone, data: { format: "bind", zone } };
+    return { text: zone, data: { format: 'bind', zone } };
   },
 };
 
 export const servicePlanStatusAction = {
-  name: "GET_SERVICE_PLAN",
-  description:
-    "Get an agent Premium Plan, limits, current period, and billing state.",
-  similes: ["PLAN_STATUS", "CHECK_PLAN"],
+  name: 'GET_SERVICE_PLAN',
+  description: 'Get an agent Premium Plan, limits, current period, and billing state.',
+  similes: ['PLAN_STATUS', 'CHECK_PLAN'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
-    Boolean(
-      runtime.getSetting("AGENT_PRIVATE_KEY") ||
-      runtime.getSetting("AGENTDOMAIN_API_KEY"),
-    ),
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY') || runtime.getSetting('AGENTDOMAIN_API_KEY')),
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const { ad } = getClients(runtime);
     const agentId = requireAgentId(message.content.text);
@@ -896,57 +749,44 @@ export const servicePlanStatusAction = {
 };
 
 export const setRegistryVisibilityAction = {
-  name: "SET_REGISTRY_VISIBILITY",
+  name: 'SET_REGISTRY_VISIBILITY',
   description:
-    "Hide or show an agent in the public AgentDomain registry. Hiding requires an active paid Premium Plan.",
-  similes: [
-    "HIDE_AGENT_REGISTRY",
-    "SHOW_AGENT_REGISTRY",
-    "REGISTRY_VISIBILITY",
-  ],
+    'Hide or show an agent in the public AgentDomain registry. Hiding requires an active paid Premium Plan.',
+  similes: ['HIDE_AGENT_REGISTRY', 'SHOW_AGENT_REGISTRY', 'REGISTRY_VISIBILITY'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
-    Boolean(
-      runtime.getSetting("AGENT_PRIVATE_KEY") ||
-      runtime.getSetting("AGENTDOMAIN_API_KEY"),
-    ),
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY') || runtime.getSetting('AGENTDOMAIN_API_KEY')),
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const { ad } = getClients(runtime);
     const agentId = requireAgentId(message.content.text);
     const text = message.content.text.toLowerCase();
     const wantsPublic =
-      text.includes("unhide") ||
-      text.includes("show") ||
-      text.includes("visible") ||
-      text.includes("public");
-    const registryHidden =
-      !wantsPublic && (text.includes("hide") || text.includes("private"));
+      text.includes('unhide') ||
+      text.includes('show') ||
+      text.includes('visible') ||
+      text.includes('public');
+    const registryHidden = !wantsPublic && (text.includes('hide') || text.includes('private'));
     const result = await ad.setRegistryVisibility(agentId, registryHidden);
     return {
-      text: `${result.domain} is now ${result.registryVisibility.hidden ? "hidden from" : "visible in"} the public registry.`,
+      text: `${result.domain} is now ${result.registryVisibility.hidden ? 'hidden from' : 'visible in'} the public registry.`,
       data: result,
     };
   },
 };
 
 export const scheduleServicePlanRenewalAction = {
-  name: "SCHEDULE_SERVICE_PLAN_RENEWAL",
-  description:
-    "Choose the exact AgentDomain Premium Plan SKU for the next identity renewal.",
-  similes: ["CHANGE_RENEWAL_PLAN", "SET_NEXT_RENEWAL_PLAN"],
+  name: 'SCHEDULE_SERVICE_PLAN_RENEWAL',
+  description: 'Choose the exact AgentDomain Premium Plan SKU for the next identity renewal.',
+  similes: ['CHANGE_RENEWAL_PLAN', 'SET_NEXT_RENEWAL_PLAN'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
-    Boolean(
-      runtime.getSetting("AGENT_PRIVATE_KEY") ||
-      runtime.getSetting("AGENTDOMAIN_API_KEY"),
-    ),
+    Boolean(runtime.getSetting('AGENT_PRIVATE_KEY') || runtime.getSetting('AGENTDOMAIN_API_KEY')),
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const { ad } = getClients(runtime);
     const agentId = requireAgentId(message.content.text);
     const lower = message.content.text.toLowerCase();
     const plan = parseRegistrationPlan(lower);
-    const parsed =
-      plan === "enterprise" ? parsePlan(lower) : { plan, planSku: plan };
+    const parsed = plan === 'enterprise' ? parsePlan(lower) : { plan, planSku: plan };
     const result = await ad.scheduleServicePlanRenewal(agentId, parsed);
     return {
       text: `Scheduled ${result.renewalPlanSku} for the next identity renewal.`,
@@ -956,13 +796,11 @@ export const scheduleServicePlanRenewalAction = {
 };
 
 export const purchaseServicePlanAction = {
-  name: "PURCHASE_SERVICE_PLAN",
-  description:
-    "Upgrade an agent to AgentDomain Starter, Pro, or Enterprise using x402 USDC.",
-  similes: ["BUY_PLAN", "UPGRADE_PLAN"],
+  name: 'PURCHASE_SERVICE_PLAN',
+  description: 'Upgrade an agent to AgentDomain Starter, Pro, or Enterprise using x402 USDC.',
+  similes: ['BUY_PLAN', 'UPGRADE_PLAN'],
   examples: [],
-  validate: async (runtime: IAgentRuntime) =>
-    Boolean(runtime.getSetting("AGENT_PRIVATE_KEY")),
+  validate: async (runtime: IAgentRuntime) => Boolean(runtime.getSetting('AGENT_PRIVATE_KEY')),
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const { ad } = getClients(runtime, { requireWallet: true });
     const agentId = requireAgentId(message.content.text);
@@ -979,9 +817,9 @@ export const purchaseServicePlanAction = {
 };
 
 export const agentDomainPlugin = {
-  name: "agentdomain",
+  name: 'agentdomain',
   description:
-    "Identity infrastructure for AI agents on Base (domain + Basename + DNS + email + SSL).",
+    'Identity infrastructure for AI agents on Base (domain + Basename + DNS + email + SSL).',
   actions: [
     quoteRegistrationAction,
     registerIdentityAction,

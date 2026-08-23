@@ -1,6 +1,6 @@
 {
   "name": "@agentdomain/mcp-server",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "MCP server exposing AgentDomain registration and management tools to any LLM",
   "license": "Apache-2.0",
   "repository": "https://github.com/0xmdrakib/AgentDomain.git",
@@ -15,6 +15,8 @@
   "files": [
     "dist",
     "README.md",
+    "LICENSE",
+    "NOTICE",
     "package.json"
   ],
   "publishConfig": {
@@ -25,6 +27,7 @@
     "prepublishOnly": "pnpm run build",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
+    "test": "pnpm --filter @agentdomain/sdk build && pnpm build && node --test test/*.test.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "echo \"no lint\""
   },

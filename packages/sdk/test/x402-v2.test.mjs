@@ -5,6 +5,7 @@ import {
   decodePaymentSignatureHeader,
   encodePaymentRequiredHeader,
 } from '@x402/core/http';
+import { BUILDER_CODE, declareBuilderCodeExtension } from '@x402/extensions/builder-code';
 import { createX402PaymentHeaders } from '../dist/index.js';
 
 const network = 'eip155:8453';
@@ -28,7 +29,11 @@ function paymentRequired(amount = '100000') {
         amount,
         payTo,
         maxTimeoutSeconds: 300,
-        extra: { name: 'USD Coin', version: '2' },
+        extra: {
+          name: 'USD Coin',
+          version: '2',
+          requestBinding: `0x${'ab'.repeat(32)}`,
+        },
       },
     ],
   };
@@ -58,6 +63,7 @@ describe('AgentDomain x402 v2 client', () => {
     assert.equal(payload.accepted.network, network);
     assert.equal(payload.accepted.amount, '100000');
     assert.equal(payload.accepted.payTo, payTo);
+    assert.equal(payload.payload.authorization.nonce, `0x${'ab'.repeat(32)}`);
   });
 
   it('round-trips a base64 PAYMENT-REQUIRED header', () => {
@@ -66,5 +72,28 @@ describe('AgentDomain x402 v2 client', () => {
 
     assert.equal(encoded.trim().startsWith('{'), false);
     assert.deepEqual(decodePaymentRequiredHeader(encoded), challenge);
+  });
+
+  it('preserves the resource server standard builder-code extension', async () => {
+    const challenge = {
+      ...paymentRequired('1'),
+      extensions: {
+        [BUILDER_CODE]: declareBuilderCodeExtension('agentdomain_test'),
+      },
+    };
+    const response = new Response(JSON.stringify(challenge), {
+      status: 402,
+      headers: { 'PAYMENT-REQUIRED': encodePaymentRequiredHeader(challenge) },
+    });
+    const walletClient = {
+      account: { address: payer },
+      signTypedData: async () => `0x${'11'.repeat(65)}`,
+    };
+
+    const headers = await createX402PaymentHeaders(response, walletClient);
+    const payload = decodePaymentSignatureHeader(headers['PAYMENT-SIGNATURE']);
+
+    assert.equal(payload.x402Version, 2);
+    assert.deepEqual(payload.extensions?.[BUILDER_CODE]?.info, { a: 'agentdomain_test' });
   });
 });

@@ -33,5 +33,5 @@ not automatically bypass CDP with self-settlement. The payment recipient remains
 the AgentDomain backend wallet, and the configured treasury allocation is swept
 after confirmed settlement.
 
-Legacy x402 v1 headers are accepted temporarily for existing integrations. New
-clients should use the v2 headers above.
+AgentDomain accepts x402 v2 payments only. Clients must use the
+`PAYMENT-SIGNATURE` header and the Base CAIP-2 network identifier `eip155:8453`.

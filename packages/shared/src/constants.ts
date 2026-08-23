@@ -23,9 +23,6 @@ export const X402_NETWORK = 'eip155:8453';
 export const X402_PAYMENT_HEADER = 'PAYMENT-SIGNATURE';
 export const X402_PAYMENT_REQUIRED_HEADER = 'PAYMENT-REQUIRED';
 export const X402_PAYMENT_RESPONSE_HEADER = 'PAYMENT-RESPONSE';
-export const X402_LEGACY_PAYMENT_HEADER = 'X-Payment';
-export const X402_LEGACY_PAYMENT_REQUIRED_HEADER = 'X-Payment-Required';
-export const X402_LEGACY_PAYMENT_RESPONSE_HEADER = 'X-Payment-Response';
 export const AGENTDOMAIN_API_BASE_URL = 'https://agentdomain.app/api/v1';
 
 export const SERVICE_PLAN_KEYS = ['included', 'starter', 'pro', 'enterprise'] as const;

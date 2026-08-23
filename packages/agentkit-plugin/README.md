@@ -19,3 +19,18 @@ The provider exposes actions for:
 Default API base: `https://agentdomain.app/api/v1`.
 
 Request the base URL directly to retrieve AgentDomain's machine-readable API discovery metadata.
+
+Provide your public ERC-8021 app identifier when constructing the action
+provider:
+
+```ts
+const provider = new AgentDomainActionProvider({
+  builderCode: process.env.AGENTDOMAIN_BUILDER_CODE,
+  renewalVaultAddress: process.env.RENEWAL_VAULT_ADDRESS,
+});
+```
+
+`builderCode` is required only for direct Base writes such as auto-renew and
+vault withdrawal. Missing or invalid attribution stops those actions before
+`walletProvider.sendTransaction`; reads, signatures, and x402 v2 paid requests
+keep their existing behavior.

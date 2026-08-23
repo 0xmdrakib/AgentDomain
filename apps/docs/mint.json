@@ -40,7 +40,14 @@
     },
     {
       "group": "Guides",
-      "pages": ["guides/registration", "guides/x402-payments", "guides/dns", "guides/email", "guides/ssl", "guides/renewal"]
+      "pages": [
+        "guides/registration",
+        "guides/x402-payments",
+        "guides/dns",
+        "guides/email",
+        "guides/ssl",
+        "guides/renewal"
+      ]
     },
     {
       "group": "SDK",

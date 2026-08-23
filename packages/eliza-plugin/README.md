@@ -18,4 +18,11 @@ The plugin gives Eliza agents a complete AgentDomain lifecycle surface:
 
 Configure `AGENTDOMAIN_API_URL` only if you need a custom endpoint. The default is `https://agentdomain.app/api/v1`.
 
+Set `AGENTDOMAIN_BUILDER_CODE` to your public ERC-8021 app identifier whenever
+the runtime can submit direct Base writes. The value is not a private key.
+Eliza passes it to the SDK and uses it for post-registration auto-renew; missing
+or invalid attribution stops the direct transaction before submission. Reads,
+offchain signatures, Ethereum L1 ENS operations, and standard x402 v2 paid
+requests are not changed.
+
 Request the default base URL directly to retrieve AgentDomain's machine-readable API discovery metadata.

@@ -58,6 +58,7 @@ npm install -g @agentdomain/mcp-server
         "AGENTDOMAIN_API_URL": "https://agentdomain.app/api/v1",
         "AGENT_PRIVATE_KEY": "0x...",
         "AGENTDOMAIN_NETWORK": "base",
+        "AGENTDOMAIN_BUILDER_CODE": "your_builder_code",
         "RENEWAL_VAULT_ADDRESS": "0x..."
       }
     }
@@ -67,6 +68,12 @@ npm install -g @agentdomain/mcp-server
 
 For `enable_auto_renew`, `AGENT_PRIVATE_KEY` must be the AgentID NFT owner wallet. Funding can come
 from any wallet, but the RenewalVault contract only accepts auto-renew changes from the owner.
+
+`AGENTDOMAIN_BUILDER_CODE` is the public ERC-8021 app identifier used to attribute direct Base
+transactions created through MCP. It must contain 1-32 lowercase letters, numbers, or underscores.
+It is required only by `enable_auto_renew` and `withdraw_renewal_vault`; the server validates it when
+one of those tools is called, so read-only, API-managed, and x402 payment tools continue to work
+without it. x402 v2 payments use AgentDomain's resource-server attribution instead.
 
 ## Pricing flags
 

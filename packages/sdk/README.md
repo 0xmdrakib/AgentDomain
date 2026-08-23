@@ -13,24 +13,38 @@ npm install @agentdomain/sdk viem
 ```
 
 ```ts
-import { AgentDomain } from "@agentdomain/sdk";
+import { AgentDomain } from '@agentdomain/sdk';
 
 const ad = new AgentDomain({
-  apiUrl: "https://agentdomain.app/api/v1",
+  apiUrl: 'https://agentdomain.app/api/v1',
   walletClient,
+  builderCode: process.env.AGENTDOMAIN_BUILDER_CODE,
 });
 
 const quote = await ad.quote({
-  preferredName: "research-agent",
-  tld: "xyz",
+  preferredName: 'research-agent',
+  tld: 'xyz',
   registerBasename: true,
   registerEns: false,
-  emailUsername: "agent",
-  premiumPlan: "pro",
+  emailUsername: 'agent',
+  premiumPlan: 'pro',
 });
 ```
 
-The SDK handles x402 payment challenges for registration, RenewalVault funding, and Premium Plan purchases when a `walletClient` is provided. Email setup, SSL certification, DNS orchestration, and AgentID NFT mint/orchestration are included in the annual platform fee; Basename and ENS remain optional paid add-ons.
+`builderCode` is the public ERC-8021 app identifier assigned to your application;
+it is not a wallet secret. It is required when the SDK creates a direct Base
+transaction, including `setAutoRenew` and the transaction returned by
+`withdrawFromVault`. Missing or invalid attribution fails before wallet
+submission. Read requests and offchain signatures are unaffected. x402 v2 paid
+requests continue to use the resource server's standard `builder-code`
+extension rather than a direct-transaction suffix.
+
+The SDK handles x402 v2 payment challenges for registration and Premium Plan
+purchases when a `walletClient` is provided. RenewalVault funding uses a
+delegated EIP-3009 authorization followed by the server's vault workflow; it is
+not converted into an x402 paid resource. Email setup, SSL certification, DNS
+orchestration, and AgentID NFT mint/orchestration are included in the annual
+platform fee; Basename and ENS remain optional paid add-ons.
 
 ## Autonomous Premium Plan actions
 
@@ -38,15 +52,15 @@ An agent can buy or upgrade its Premium Plan autonomously only when its runtime 
 
 ```ts
 const identity = await ad.register({
-  preferredName: "research-agent",
-  tld: "xyz",
+  preferredName: 'research-agent',
+  tld: 'xyz',
   years: 1,
-  premiumPlan: "pro",
+  premiumPlan: 'pro',
 });
 
 await ad.purchaseServicePlan({
   agentId: identity.agentId,
-  plan: "enterprise",
+  plan: 'enterprise',
 });
 ```
 
@@ -56,17 +70,17 @@ API keys are scoped to one agent identity and count against that agent's Premium
 
 ```ts
 const owner = new AgentDomain({ walletClient });
-const key = await owner.createApiKey(agentId, "Production key");
+const key = await owner.createApiKey(agentId, 'Production key');
 
 const agent = new AgentDomain({
   apiKey: key.fullKey,
 });
 
 await agent.sendEmail(agentId, {
-  to: "admin@example.com",
-  fromAddress: "agent@research-agent.xyz",
-  subject: "Status",
-  text: "Agent online.",
+  to: 'admin@example.com',
+  fromAddress: 'agent@research-agent.xyz',
+  subject: 'Status',
+  text: 'Agent online.',
 });
 ```
 
@@ -83,10 +97,10 @@ payloads remain compatible.
 const capabilities = await agent.getDnsCapabilities(agentId);
 const records = [
   {
-    type: "SRV",
-    name: "_https._tcp.api",
+    type: 'SRV',
+    name: '_https._tcp.api',
     ttl: 300,
-    data: { priority: 10, weight: 5, port: 443, target: "edge.example.com" },
+    data: { priority: 10, weight: 5, port: 443, target: 'edge.example.com' },
   },
 ];
 
@@ -108,15 +122,13 @@ usage, and configure a signed inbound webhook:
 
 ```ts
 await agent.sendEmailBatch(agentId, {
-  messages: [
-    { to: "ops@example.com", subject: "Status", text: "Agent online." },
-  ],
+  messages: [{ to: 'ops@example.com', subject: 'Status', text: 'Agent online.' }],
 });
 
 const usage = await agent.getEmailUsage(agentId);
 const webhook = await agent.setEmailWebhook(agentId, {
-  url: "https://example.com/webhooks/agentdomain",
-  payloadMode: "metadata",
+  url: 'https://example.com/webhooks/agentdomain',
+  payloadMode: 'metadata',
   enabled: true,
 });
 ```
@@ -127,7 +139,7 @@ Every agent gets one editable primary email address. Starter agents can create 5
 aliases, Pro agents 10, and Enterprise agents 20.
 
 ```ts
-await ad.updatePrimaryEmail(agentId, "support");
-await ad.createEmailAlias(agentId, "billing");
-await ad.deleteEmailAlias(agentId, "billing@research-agent.xyz");
+await ad.updatePrimaryEmail(agentId, 'support');
+await ad.createEmailAlias(agentId, 'billing');
+await ad.deleteEmailAlias(agentId, 'billing@research-agent.xyz');
 ```

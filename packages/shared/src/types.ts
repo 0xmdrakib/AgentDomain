@@ -1,17 +1,11 @@
-import type { Address, Hex } from "viem";
-import {
-  SERVICE_PLAN_INTERVALS,
-  SERVICE_PLAN_KEYS,
-  SUPPORTED_TLDS,
-} from "./constants.js";
+import type { Address, Hex } from 'viem';
+import { SERVICE_PLAN_INTERVALS, SERVICE_PLAN_KEYS, SUPPORTED_TLDS } from './constants.js';
 
 export type SupportedTld = (typeof SUPPORTED_TLDS)[number];
 export type ServicePlanKey = (typeof SERVICE_PLAN_KEYS)[number];
 export type ServicePlanInterval = (typeof SERVICE_PLAN_INTERVALS)[number];
-export type EnterpriseEmailTier =
-  (typeof import("./constants.js").ENTERPRISE_EMAIL_TIERS)[number];
-export type ServicePlanSku =
-  "included" | "starter" | "pro" | `enterprise-${EnterpriseEmailTier}`;
+export type EnterpriseEmailTier = (typeof import('./constants.js').ENTERPRISE_EMAIL_TIERS)[number];
+export type ServicePlanSku = 'included' | 'starter' | 'pro' | `enterprise-${EnterpriseEmailTier}`;
 
 export interface ServicePlanLimits {
   monthlyEmails: number;
@@ -25,7 +19,7 @@ export interface ServicePlanLimits {
 export interface ServicePlanEntitlement {
   plan: ServicePlanKey;
   planSku?: ServicePlanSku;
-  status: "included" | "active" | "expired" | "canceled";
+  status: 'included' | 'active' | 'expired' | 'canceled';
   interval: ServicePlanInterval | null;
   autoRenew: boolean;
   currentPeriodStart: string | null;
@@ -67,7 +61,7 @@ export interface RegistrationResult {
   estimatedReadyAt: string;
   metadataUri: string;
   renewalSnapshot?: RenewalPriceSnapshot;
-  provisioningStatus?: "completed" | "processing" | "recovery_required";
+  provisioningStatus?: 'completed' | 'processing' | 'recovery_required';
   provisioningMessage?: string;
 }
 
@@ -102,7 +96,7 @@ export interface PricingBreakdown {
 }
 
 export type RenewalSnapshotItemKey =
-  "domain" | "platform" | "premium_plan" | "ssl" | "email" | "basename" | "ens";
+  'domain' | 'platform' | 'premium_plan' | 'ssl' | 'email' | 'basename' | 'ens';
 
 export interface RenewalPriceSnapshotItem {
   key: RenewalSnapshotItemKey;
@@ -113,7 +107,7 @@ export interface RenewalPriceSnapshotItem {
   includedInAutoRenew: boolean;
   amountUsdc: string | null;
   amountAtomic: string | null;
-  source: "spaceship" | "agentdomain" | "ses" | "basenames" | "ens";
+  source: 'spaceship' | 'agentdomain' | 'ses' | 'basenames' | 'ens';
   note?: string;
 }
 
@@ -121,7 +115,7 @@ export interface RenewalPriceSnapshot {
   version: 1;
   capturedAt: string;
   years: number;
-  currency: "USDC";
+  currency: 'USDC';
   autoRenewTotalUsdc: string;
   autoRenewTotalAtomic: string;
   fullServiceTotalUsdc: string | null;
@@ -132,7 +126,7 @@ export interface RenewalPriceSnapshot {
 
 export interface EmailMessage {
   id: string;
-  direction: "inbound" | "outbound";
+  direction: 'inbound' | 'outbound';
   providerMessageId?: string | null;
   fromAddress: string;
   toAddress?: string | null;
