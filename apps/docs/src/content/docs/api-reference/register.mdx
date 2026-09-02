@@ -1,0 +1,80 @@
+---
+title: Registration API
+description: Quote and register an identity bundle through the public x402-protected API.
+---
+
+## Quote
+
+```http
+GET /api/v1/agents/quote
+```
+
+```text
+?preferredName=research-agent&tld=com&registerBasename=false&registerEns=false&years=1
+```
+
+The response itemizes the domain, optional onchain names, selected plan, included services, annual
+platform fee, and total USDC amount. Quotes can change until payment is accepted, so request a fresh
+quote immediately before checkout.
+
+## Register
+
+```http
+POST /api/v1/agents/register
+```
+
+```json
+{
+  "wallet": "0x1111111111111111111111111111111111111111",
+  "ownerAddress": "0x1111111111111111111111111111111111111111",
+  "preferredName": "research-agent",
+  "tld": "com",
+  "registerBasename": true,
+  "basenameLabel": "research-agent-ai",
+  "registerEns": false,
+  "emailUsername": "agent",
+  "premiumPlan": "included",
+  "years": 1,
+  "autoRenew": false
+}
+```
+
+The first request can return an x402 v2 challenge. Retry the exact request with the signed
+`PAYMENT-SIGNATURE` header. Successful settlement details are returned in `PAYMENT-RESPONSE`.
+
+## Fields
+
+| Field              | Required | Notes                                                    |
+| ------------------ | -------- | -------------------------------------------------------- |
+| `wallet`           | yes      | Wallet authorizing payment                               |
+| `ownerAddress`     | no       | Final owner; defaults to `wallet`                        |
+| `preferredName`    | yes      | Requested domain label                                   |
+| `tld`              | yes      | Supported top-level domain                               |
+| `registerBasename` | no       | Defaults to `true` in SDK 0.7.0                          |
+| `registerEns`      | no       | Defaults to `false` in SDK 0.7.0                         |
+| `emailUsername`    | no       | Primary address local-part; defaults to `agent`          |
+| `premiumPlan`      | no       | `included`, `starter`, `pro`, or `enterprise`            |
+| `years`            | no       | Initial term from 1 through 10 years                     |
+| `autoRenew`        | no       | Records intent; owner still authorizes the vault onchain |
+
+Email, managed DNS, HTTPS, and AgentID NFT orchestration are part of the identity bundle. Optional
+onchain names are charged only when selected.
+
+## Response
+
+```json
+{
+  "registrationId": "registration-reference",
+  "agentId": "agent-reference",
+  "nftTokenId": 42,
+  "domain": "research-agent.com",
+  "basename": "research-agent-ai.base.eth",
+  "ensName": null,
+  "sslStatus": "pending",
+  "metadataUri": "ipfs://bafy...",
+  "provisioningStatus": "processing"
+}
+```
+
+Track a processing registration by its returned identifiers. Do not create another paid request for
+the same intended identity unless the first request has reached a documented terminal state.

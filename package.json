@@ -6,19 +6,46 @@
   "license": "Apache-2.0",
   "packageManager": "pnpm@10.33.2",
   "engines": {
-    "node": ">=20.0.0",
+    "node": ">=22.12.0",
     "pnpm": ">=10.0.0"
   },
   "scripts": {
+    "audit:production:high": "pnpm audit --prod --audit-level high",
     "build": "turbo run build",
+    "build:public": "turbo run build --filter=!@agentdomain/contracts",
+    "check:public-boundary": "node scripts/check-public-boundary.mjs",
+    "ci:cloudflare": "pnpm --filter @agentdomain/frontend build:cloudflare && pnpm --filter @agentdomain/frontend exec wrangler deploy --dry-run --env=\"\" && pnpm --filter @agentdomain/docs check && pnpm --filter @agentdomain/docs exec wrangler deploy --dry-run --env=\"\"",
+    "ci:public": "pnpm check:public-boundary && pnpm audit:production:high && pnpm format:check && pnpm lint:public && pnpm typecheck:public && pnpm test:public && pnpm build:public",
     "lint": "turbo run lint",
+    "lint:public": "turbo run lint --filter=!@agentdomain/contracts",
     "test": "turbo run test",
+    "test:public": "turbo run test --filter=!@agentdomain/contracts",
     "typecheck": "turbo run typecheck",
-    "format:check": "prettier --check \"**/*.{ts,tsx,md,mdx,json}\""
+    "typecheck:public": "turbo run typecheck --filter=!@agentdomain/contracts",
+    "format:check": "prettier --check \"**/*.{js,mjs,cjs,ts,tsx,md,mdx,json,yml,yaml}\""
   },
   "devDependencies": {
     "prettier": "^3.9.5",
     "turbo": "^2.10.5",
     "typescript": "^5.7.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "browserslist@<4.28.7": "4.28.7",
+      "@hono/node-server@<1.19.15": "1.19.15",
+      "axios@>=1.15.2 <1.18.0": "1.18.0",
+      "brace-expansion@>=4.0.0 <5.0.9": "5.0.9",
+      "decode-uri-component@<0.5.0": "0.5.0",
+      "fast-uri@>=3.0.0 <3.1.5": "3.1.5",
+      "hono@<4.12.34": "4.12.34",
+      "ip-address@<=10.3.0": "10.3.1",
+      "use-sync-external-store@<1.4.0": "1.4.0",
+      "ws@>=8.0.0 <8.21.0": "8.21.0"
+    },
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "unrs-resolver",
+      "workerd"
+    ]
   }
 }

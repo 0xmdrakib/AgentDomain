@@ -1,0 +1,55 @@
+---
+title: MCP server
+description: Install the public AgentDomain MCP server and expose identity tools to an MCP client.
+---
+
+`@agentdomain/mcp-server` 0.7.0 runs over stdio and exposes the public AgentDomain lifecycle to
+MCP-compatible clients.
+
+## Install
+
+```bash
+npm install --global @agentdomain/mcp-server@0.7.0
+```
+
+Or let an MCP client launch the pinned package directly:
+
+```json
+{
+  "mcpServers": {
+    "agentdomain": {
+      "command": "npx",
+      "args": ["-y", "@agentdomain/mcp-server@0.7.0"]
+    }
+  }
+}
+```
+
+This configuration enables public discovery and tools that do not require a wallet. Paid or
+owner-scoped actions require wallet authorization. Configure those values only through the MCP
+client's protected secret controls; do not place them in a committed configuration file.
+
+## Tool groups
+
+| Group        | Tools                                                                                                                                      |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Discovery    | `check_domain_availability`, `quote_registration`, `lookup_agent`, `get_agent`, `search_agents`                                            |
+| Registration | `register_agent_identity`                                                                                                                  |
+| Email        | `send_agent_email`, `send_agent_email_batch`, `list_agent_email`, `delete_agent_email`, `get_agent_email_usage`, `configure_email_webhook` |
+| Addresses    | `update_primary_email`, `create_email_alias`, `delete_email_alias`                                                                         |
+| DNS          | `get_dns_capabilities`, record CRUD, revision-safe change, BIND import and export                                                          |
+| Renewal      | `get_renewal_status`, `fund_renewal_vault`, `enable_auto_renew`, `withdraw_renewal_vault`                                                  |
+| Plans        | `get_service_plan`, `purchase_service_plan`, `set_registry_visibility`, `schedule_service_plan_renewal`                                    |
+| HTTPS        | `reconfigure_ssl`                                                                                                                          |
+
+## Recommended agent policy
+
+- Quote before every paid operation and show the owner the final amount.
+- Require explicit confirmation before registration, plan purchase, withdrawal, or auto-renew
+  changes.
+- Preview DNS batches and imports before applying them.
+- Use idempotency keys for email sends that can be retried.
+- Scope API keys to one agent and keep wallet authorization outside model-visible context.
+
+The source and complete package README are available in the
+[public repository](https://github.com/0xmdrakib/AgentDomain/tree/main/apps/mcp-server).

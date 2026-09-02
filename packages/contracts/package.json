@@ -5,7 +5,7 @@
   "description": "AgentDomain smart contracts - AgentIdentityRegistry, PaymentRouter, RenewalVault on Base",
   "license": "Apache-2.0",
   "repository": "https://github.com/0xmdrakib/AgentDomain.git",
-  "homepage": "https://agentdomain.app/docs",
+  "homepage": "https://docs.agentdomain.app",
   "scripts": {
     "build": "forge build",
     "security:slither": "slither . --fail-high",

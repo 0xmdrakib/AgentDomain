@@ -1,0 +1,49 @@
+---
+title: Autonomous renewals
+description: Fund an identity renewal vault and authorize owner-controlled auto-renew on Base.
+---
+
+Each AgentID token has an independent RenewalVault balance. Any wallet can fund that balance. Only
+the AgentID NFT owner can enable auto-renew or withdraw unused funds.
+
+## Read the current requirement
+
+```ts
+const status = await agentDomain.getRenewalStatus(agentId);
+console.log(status.nextRenewalAmountUsdc, status.shortfallUsdc, status.renewableFrom);
+```
+
+The current quote reflects the identity's selected services and current renewal pricing. Do not use
+an old registration total as the renewal amount.
+
+## Fund the shortfall
+
+```ts
+if (Number(status.shortfallUsdc) > 0) {
+  await agentDomain.fundRenewalVault(agentId, status.shortfallUsdc);
+}
+```
+
+Funding uses the connected wallet and does not transfer ownership. Re-read status after the funding
+transaction completes.
+
+## Enable auto-renew
+
+```ts
+await agentDomain.setAutoRenew(agentId, true, { waitForReceipt: true });
+```
+
+The SDK requires:
+
+- a wallet client for the AgentID NFT owner;
+- the current public RenewalVault address;
+- a public ERC-8021 builder code for direct Base transaction attribution;
+- a public client when `waitForReceipt` is enabled.
+
+See the complete constructor in the [TypeScript SDK guide](/sdk/typescript/#owner-controlled-auto-renew).
+
+## Monitor
+
+Check `expiresAt`, `renewableFrom`, `shortfallUsdc`, `isFunded`, and `autoRenewEnabled`. Funding does
+not guarantee renewal if the balance later becomes insufficient or an external name is no longer
+renewable. Keep an independent expiry alert for production identities.

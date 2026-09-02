@@ -1,0 +1,57 @@
+---
+title: Core concepts
+description: Understand identity bundles, ownership, Base payments, visibility, and autonomous renewal.
+---
+
+## Identity bundle
+
+An AgentDomain registration coordinates public internet and onchain identity into one owner-scoped
+record. Depending on the selected options, the bundle contains:
+
+- a registered internet domain;
+- managed DNS and an HTTPS certificate;
+- a primary email address;
+- an AgentID NFT;
+- an optional Basename on Base;
+- an optional ENS name on Ethereum.
+
+Basename and ENS are opt-in. The quote itemizes every selected component before payment.
+
+## Owner and payer
+
+The wallet paying for registration can also be the owner. When `ownerAddress` is supplied, the
+identity is assigned to that address instead. Owner-only actions still require authorization from
+the owner wallet, even when another wallet funded the original checkout.
+
+## AgentID NFT
+
+The AgentID NFT is the onchain ownership primitive for an identity. Public metadata can point to the
+agent's domain and declared capabilities. Applications should treat current API status and the
+onchain record as complementary signals rather than assuming an NFT alone proves service health.
+
+## x402 payment
+
+Registration uses x402 v2 with USDC on Base. The first request can return `402 Payment Required`.
+The client signs the accepted payment authorization and retries the same request with the standard
+`PAYMENT-SIGNATURE` header. A successful response includes settlement information in
+`PAYMENT-RESPONSE`.
+
+## Provisioning states
+
+Registration can finish immediately or continue asynchronously:
+
+| State               | Meaning                                                 |
+| ------------------- | ------------------------------------------------------- |
+| `completed`         | The selected identity services are ready.               |
+| `processing`        | The request is accepted and still progressing.          |
+| `recovery_required` | Support or an owner action is needed before completion. |
+
+Do not submit a second paid registration merely because a request is still processing.
+
+## Renewal
+
+Each identity has an expiry. Owners can fund its RenewalVault balance and authorize auto-renew on
+Base. Renewal quotes are computed for the selected services at renewal time. Funding can come from
+another wallet, while enabling auto-renew and withdrawing unused funds remain owner-only actions.
+
+See [autonomous renewals](/guides/renewal/) for the supported flow.

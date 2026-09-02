@@ -1,0 +1,106 @@
+---
+title: Email API
+description: Read and send agent email, manage addresses, inspect usage, and configure signed webhooks.
+---
+
+Email endpoints require the owner session or an API key scoped to the requested agent.
+
+## Inbox and retention
+
+```http
+GET    /api/v1/agents/:id/email
+DELETE /api/v1/agents/:id/email/:messageId
+```
+
+Use `limit` and `unreadOnly` on list requests. Accepted message content is available for 30 days.
+Deleting a message makes it unavailable to the agent immediately.
+
+## Primary address and aliases
+
+```http
+PATCH  /api/v1/agents/:id/email
+POST   /api/v1/agents/:id/email/aliases
+DELETE /api/v1/agents/:id/email/aliases?emailAddress=billing@example.com
+```
+
+Changing the primary username requires `confirmReplace: true`. The previous primary address stops
+accepting new mail; existing messages remain available until deleted or expired.
+
+| Plan       | Active aliases |
+| ---------- | -------------: |
+| Included   |              0 |
+| Starter    |              5 |
+| Pro        |             10 |
+| Enterprise |             20 |
+
+## Send mail
+
+```http
+POST /api/v1/agents/:id/email/send
+```
+
+```json
+{
+  "to": "operator@example.com",
+  "fromAddress": "billing@example.com",
+  "subject": "Agent online",
+  "text": "The identity is ready."
+}
+```
+
+`fromAddress` is optional and must be the active primary address or an active alias. A successful
+request returns a queued status. Every recipient counts once against the combined monthly sent and
+received allowance.
+
+Send `Idempotency-Key` when a client may retry. Keys remain valid for 24 hours and are bound to the
+normalized request. A key reused with different content returns `409 IDEMPOTENCY_KEY_REUSED`.
+
+The send endpoint is limited to 12 requests per second. Quota and rate failures return `429` with a
+stable error code; rate-limited responses include `Retry-After`.
+
+## Batch send
+
+```http
+POST /api/v1/agents/:id/email/batch
+```
+
+A batch accepts up to 100 message objects and supports the same 24-hour idempotency contract.
+`validationMode: "strict"` rejects the whole batch when an item is invalid. `"partial"` reports
+invalid items and accepts eligible recipients. Treat the returned per-recipient results as the
+source of truth.
+
+## Usage
+
+```http
+GET /api/v1/agents/:id/email/usage
+```
+
+The response reports the current plan, monthly limit, sent, received, reserved, used, remaining,
+and cycle dates. Check it before large sends, but still handle concurrent `429` responses.
+
+## Signed inbound webhook
+
+```http
+GET   /api/v1/agents/:id/email/webhook
+PUT   /api/v1/agents/:id/email/webhook
+PATCH /api/v1/agents/:id/email/webhook
+```
+
+`PUT` configures an HTTPS endpoint and can return its signing value once. `PATCH` rotates that
+value. Store it in the receiving application's secret store and verify the event identifier,
+timestamp, and HMAC-SHA256 signature before accepting a delivery.
+
+`metadata` payloads contain message metadata and an authenticated content URL. `inline_text` can
+include plain text up to 256 KiB. Webhook delivery status and supported replay actions are exposed
+through the agent-owned webhook endpoints.
+
+## Blocklist
+
+```http
+GET    /api/v1/agents/:id/email/blocklist
+POST   /api/v1/agents/:id/email/blocklist
+DELETE /api/v1/agents/:id/email/blocklist/:blockId
+```
+
+Entries can match one normalized email address or an entire domain and apply to inbound senders and
+outbound recipients.

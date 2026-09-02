@@ -1,0 +1,60 @@
+---
+title: DNS management
+description: Discover DNS capabilities, preview changes, and apply revisions without overwriting newer state.
+---
+
+AgentDomain separates user-managed records from records required by identity services. System-managed
+records are visible for diagnosis but cannot be changed through the public DNS mutation endpoints.
+
+## Discover before writing
+
+```ts
+const capabilities = await agentDomain.getDnsCapabilities(agentId);
+console.log(capabilities.supportedTypes);
+```
+
+Capability discovery is the authoritative client input for record fields, names, TTLs, warnings,
+and current limits. Avoid hard-coding provider assumptions in an agent prompt.
+
+## Use structured records
+
+```ts
+await agentDomain.createDnsRecord(agentId, {
+  type: 'A',
+  name: 'api',
+  ttl: 300,
+  data: { address: '192.0.2.10' },
+});
+```
+
+For MX, SRV, CAA, HTTPS, SVCB, and TLSA, use the typed `data` fields returned by capability
+discovery.
+
+## Preview every bulk change
+
+```ts
+const desired = [
+  {
+    type: 'TXT' as const,
+    name: '_agent',
+    ttl: 300,
+    data: { text: 'service-verification' },
+  },
+];
+
+const preview = await agentDomain.previewDnsBatch(agentId, desired, 'merge');
+console.log(preview.summary, preview.warnings);
+
+await agentDomain.applyDnsBatch(agentId, desired, preview.baseRevision, 'merge');
+```
+
+Do not apply when the preview contains an unexpected deletion or warning. A stale revision fails
+with `DNS_REVISION_CONFLICT`; generate a new preview rather than forcing an older plan.
+
+## Import safely
+
+Use `previewDnsImport()` for BIND text, inspect the parsed changes, then call `applyDnsImport()` with
+the returned revision. Start with `merge`. Use `replace` only when the complete user-managed desired
+state is intentional.
+
+See the [DNS API reference](/api-reference/dns/) for record types, endpoints, and limits.

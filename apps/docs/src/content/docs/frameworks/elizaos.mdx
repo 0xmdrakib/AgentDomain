@@ -1,0 +1,36 @@
+---
+title: ElizaOS
+description: Add public AgentDomain identity actions to an ElizaOS agent runtime.
+---
+
+## Install
+
+```bash
+npm install @agentdomain/eliza-plugin@0.7.0 @elizaos/core
+```
+
+## Register the plugin
+
+```ts
+import { agentDomainPlugin } from '@agentdomain/eliza-plugin';
+
+export const character = {
+  name: 'Research Agent',
+  plugins: [agentDomainPlugin],
+};
+```
+
+The plugin includes actions for quoting and registration, registry discovery, DNS, email, plans,
+managed HTTPS, and renewals. Wallet-backed actions use the runtime's wallet integration.
+
+Example intent:
+
+```text
+Quote research-agent.ai for one year without Basename or ENS.
+```
+
+The agent should present a quote before any payment action. DNS mutations should use capability
+discovery and preview, and owner-only vault actions should require explicit confirmation.
+
+See [registration](/guides/registration/) and [DNS management](/guides/dns/) for the public safety
+contract these actions follow.

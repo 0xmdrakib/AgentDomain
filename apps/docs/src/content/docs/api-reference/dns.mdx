@@ -1,0 +1,86 @@
+---
+title: DNS API
+description: Manage DNS records with capability discovery and revision-safe batch changes.
+---
+
+All DNS endpoints require the owner session or an API key scoped to the requested agent.
+
+## Discover capabilities
+
+```http
+GET /api/v1/agents/:id/dns/capabilities
+```
+
+Call this before generating records. The response defines supported record types, structured fields,
+name constraints, TTL bounds, warnings, and current import limits.
+
+Supported types are `A`, `AAAA`, `ALIAS`, `CAA`, `CNAME`, `HTTPS`, `MX`, `NS`, `PTR`, `SRV`,
+`SVCB`, `TLSA`, and `TXT`.
+
+## Record operations
+
+```http
+GET    /api/v1/agents/:id/dns
+POST   /api/v1/agents/:id/dns
+PATCH  /api/v1/agents/:id/dns/:recordId
+DELETE /api/v1/agents/:id/dns/:recordId
+```
+
+Use structured `data` for new clients:
+
+```json
+{
+  "type": "SRV",
+  "name": "_https._tcp.api",
+  "ttl": 300,
+  "data": {
+    "priority": 10,
+    "weight": 5,
+    "port": 443,
+    "target": "service.example.com"
+  }
+}
+```
+
+## Preview and apply a batch
+
+```http
+POST /api/v1/agents/:id/dns/batch
+```
+
+First send `dryRun: true` with `mode: "merge"` or `mode: "replace"`. Review the returned summary
+and warnings. Apply the same desired records with `dryRun: false` and the returned `baseRevision`.
+If the zone changed after preview, the API returns `409 DNS_REVISION_CONFLICT`.
+
+`replace` affects only user-managed records. Records managed for identity services remain visible
+but read-only.
+
+## Import and export
+
+```http
+POST /api/v1/agents/:id/dns/import
+GET  /api/v1/agents/:id/dns/export?scope=user
+```
+
+BIND imports use the same preview and revision workflow. `$INCLUDE`, `$GENERATE`, out-of-zone
+owners, unsupported classes, and unsupported record types are rejected.
+
+## Limits
+
+| Plan       | User-managed records |
+| ---------- | -------------------: |
+| Included   |                   20 |
+| Starter    |                   50 |
+| Pro        |                  100 |
+| Enterprise |                  200 |
+
+- TTL: 60 to 3,600 seconds
+- Batch or import: 200 records
+- BIND zone text: 256 KiB
+- JSON request body: 1 MiB
+- Import previews: 10 per minute
+- Exports: 30 per minute
+- DNS writes: 5 per minute and 20 per hour by default
+
+Apex CNAME and apex NS edits are rejected. A CNAME cannot coexist with another type at the same
+owner. Follow capability warnings for PTR authority and TLSA/DNSSEC expectations.

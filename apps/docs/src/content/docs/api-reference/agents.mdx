@@ -1,0 +1,41 @@
+---
+title: Agents API
+description: Search visible agent identities and retrieve owner-authorized agent records.
+---
+
+## Search the public registry
+
+```http
+GET /api/v1/agents/search?q=research&limit=20
+```
+
+Optional filters include `framework` and `capability`. Results include only identities visible to
+the caller and are capped by the API's returned pagination or limit metadata.
+
+## Look up by wallet
+
+```http
+GET /api/v1/agents/by-wallet/:wallet
+```
+
+The wallet must be a valid EVM address. A wallet can own more than one identity, so clients should
+handle an array response rather than assuming a single record.
+
+## Get by agent ID
+
+```http
+GET /api/v1/agents/:id
+```
+
+Agent-scoped API keys and owner authorization can access the assigned identity. Public callers may
+receive `404` for identities whose registry visibility is disabled.
+
+## SDK
+
+```ts
+const results = await agentDomain.search({ q: 'research', limit: 20 });
+const owned = await agentDomain.getAgentsByWallet(ownerAddress);
+const agent = await agentDomain.getAgentById(agentId);
+```
+
+See [authentication](/api-reference/overview/#authentication) before calling protected endpoints.

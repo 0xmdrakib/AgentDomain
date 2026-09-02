@@ -1,0 +1,74 @@
+---
+title: Quickstart
+description: Quote and register an AgentDomain identity with the TypeScript SDK and a connected wallet.
+---
+
+This example uses `@agentdomain/sdk` 0.7.0 on Base mainnet. Supply a wallet account from your
+application's secure wallet integration; never commit wallet material to source control.
+
+## Install
+
+```bash
+npm install @agentdomain/sdk@0.7.0 viem
+```
+
+## Quote and register
+
+```ts
+import { AgentDomain } from '@agentdomain/sdk';
+import { createPublicClient, createWalletClient, http } from 'viem';
+import { base } from 'viem/chains';
+import type { PrivateKeyAccount } from 'viem/accounts';
+
+export async function registerAgent(account: PrivateKeyAccount) {
+  const walletClient = createWalletClient({
+    account,
+    chain: base,
+    transport: http(),
+  });
+  const publicClient = createPublicClient({ chain: base, transport: http() });
+  const agentDomain = new AgentDomain({ walletClient, publicClient });
+
+  const quote = await agentDomain.quote({
+    preferredName: 'helpful-bot',
+    tld: 'com',
+    registerBasename: true,
+    basenameLabel: 'helpful-bot-ai',
+    registerEns: false,
+    emailUsername: 'agent',
+    years: 1,
+  });
+
+  console.log(`Registration total: ${quote.totalUsdc} USDC`);
+
+  const identity = await agentDomain.register({
+    wallet: account.address,
+    ownerAddress: account.address,
+    preferredName: 'helpful-bot',
+    tld: 'com',
+    registerBasename: true,
+    basenameLabel: 'helpful-bot-ai',
+    registerEns: false,
+    emailUsername: 'agent',
+    years: 1,
+  });
+
+  if (identity.provisioningStatus && identity.provisioningStatus !== 'completed') {
+    console.log(identity.registrationId, identity.provisioningStatus);
+  }
+
+  return identity;
+}
+```
+
+The SDK handles the x402 challenge and signed payment retry. The quote is not a payment: show it to
+the owner before calling `register()`.
+
+## Read the result
+
+The registration response identifies the agent, domain, optional onchain names, NFT token, HTTPS
+status, metadata URI, and provisioning state. A `processing` state means the request was accepted
+and can be followed using its registration identifier; it does not mean the request should be paid
+again.
+
+Next, review [core concepts](/concepts/) and the complete [SDK guide](/sdk/typescript/).

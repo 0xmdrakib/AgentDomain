@@ -1,0 +1,109 @@
+---
+title: TypeScript SDK
+description: Use AgentDomain SDK 0.7.0 for registration, discovery, DNS, email, plans, and renewals.
+---
+
+## Install
+
+```bash
+npm install @agentdomain/sdk@0.7.0 viem
+```
+
+The default API base is `https://agentdomain.app/api/v1` and the default network is Base mainnet.
+
+## Construct a client
+
+```ts
+import { AgentDomain } from '@agentdomain/sdk';
+import { createPublicClient, createWalletClient, http } from 'viem';
+import { base } from 'viem/chains';
+import type { PrivateKeyAccount } from 'viem/accounts';
+
+export function createAgentDomain(account: PrivateKeyAccount) {
+  const walletClient = createWalletClient({ account, chain: base, transport: http() });
+  const publicClient = createPublicClient({ chain: base, transport: http() });
+
+  return new AgentDomain({ walletClient, publicClient });
+}
+```
+
+Supply the account through your wallet or secret-management integration. For agent-scoped server
+operations, construct `AgentDomain` with an `apiKey` instead and keep that value server-side.
+
+## Quote and register
+
+```ts
+const quote = await agentDomain.quote({
+  preferredName: 'research-agent',
+  tld: 'ai',
+  registerBasename: false,
+  registerEns: false,
+  emailUsername: 'agent',
+  years: 1,
+});
+
+const identity = await agentDomain.register({
+  preferredName: 'research-agent',
+  tld: 'ai',
+  registerBasename: false,
+  registerEns: false,
+  emailUsername: 'agent',
+  years: 1,
+});
+
+console.log(quote.totalUsdc, identity.agentId, identity.provisioningStatus);
+```
+
+`register()` requires a wallet address, either in the request or from the wallet client. When the
+API returns an x402 challenge, the SDK signs and retries it on Base mainnet.
+
+## Email and DNS
+
+```ts
+await agentDomain.sendEmail(agentId, {
+  to: 'operator@example.com',
+  subject: 'Status',
+  text: 'Agent online.',
+  idempotencyKey: crypto.randomUUID(),
+});
+
+const records = await agentDomain.listDnsRecords(agentId);
+const preview = await agentDomain.previewDnsBatch(agentId, desiredRecords, 'merge');
+await agentDomain.applyDnsBatch(agentId, desiredRecords, preview.baseRevision, 'merge');
+```
+
+Use [Email API](/api-reference/email/) and [DNS API](/api-reference/dns/) limits when designing
+automation.
+
+## Owner-controlled auto-renew
+
+Direct Base writes require the public RenewalVault address and a public ERC-8021 builder code:
+
+```ts
+import type { Address } from 'viem';
+
+const agentDomain = new AgentDomain({
+  walletClient,
+  publicClient,
+  renewalVaultAddress: '0xb7b19826a566ebd9e8b50bee986a8da04bbb2c0a' as Address,
+  builderCode: 'my_agent_app',
+});
+
+const status = await agentDomain.getRenewalStatus(agentId);
+if (Number(status.shortfallUsdc) > 0) {
+  await agentDomain.fundRenewalVault(agentId, status.shortfallUsdc);
+}
+await agentDomain.setAutoRenew(agentId, true, { waitForReceipt: true });
+```
+
+The wallet client must be the AgentID NFT owner for `setAutoRenew()`. The builder code contains 1
+to 32 lowercase letters, numbers, or underscores and is public attribution, not a credential.
+
+## Registry and plans
+
+SDK 0.7.0 also includes registry search, agent lookup, API key management from owner sessions,
+service-plan status and purchase, registry visibility, email usage and webhooks, DNS import/export,
+and owner-authorized vault withdrawal.
+
+Read the [API error contract](/api-reference/overview/#errors) and handle stable error codes rather
+than parsing message text.

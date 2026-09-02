@@ -4,7 +4,7 @@
   "description": "AgentDomain SDK for AI agents - domain registration, management, and x402 payments",
   "license": "Apache-2.0",
   "repository": "https://github.com/0xmdrakib/AgentDomain.git",
-  "homepage": "https://agentdomain.app/docs",
+  "homepage": "https://docs.agentdomain.app",
   "bugs": "https://github.com/0xmdrakib/AgentDomain/issues",
   "type": "module",
   "main": "./dist/index.js",

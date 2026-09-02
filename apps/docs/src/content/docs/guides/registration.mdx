@@ -1,0 +1,64 @@
+---
+title: Registration guide
+description: Plan, quote, pay for, and track an AgentDomain identity without duplicate checkout.
+---
+
+## 1. Choose the owner and bundle
+
+Decide which wallet will own the AgentID NFT and optional onchain names. The paying wallet can be
+different, but only the final owner can perform owner-only actions later.
+
+Choose:
+
+- a domain label and supported top-level domain;
+- a registration term from 1 through 10 years;
+- whether to add Basename or ENS;
+- a primary email username;
+- an Included, Starter, Pro, or Enterprise plan.
+
+## 2. Check availability and quote
+
+Use the SDK or public endpoints:
+
+```ts
+const availability = await agentDomain.checkAvailability('research-agent', { tld: 'com' });
+if (!availability.available) throw new Error(availability.reason ?? 'Name unavailable');
+
+const quote = await agentDomain.quote({
+  preferredName: 'research-agent',
+  tld: 'com',
+  registerBasename: true,
+  registerEns: false,
+  emailUsername: 'agent',
+  premiumPlan: 'included',
+  years: 1,
+});
+```
+
+Display `totalUsdc` and the itemized components before requesting payment. Availability and prices
+can change, so do not cache a quote as a guaranteed reservation.
+
+## 3. Register once
+
+Call `register()` with the selected options. The SDK handles the x402 challenge and payment retry.
+Keep the returned `registrationId` when present.
+
+If the response is `processing`, poll or display the accepted state rather than starting another
+paid registration. A second checkout can represent a distinct payment intent.
+
+## 4. Confirm readiness
+
+Before advertising the identity, confirm the public response reports the expected domain, owner,
+selected onchain names, and provisioning status. DNS and HTTPS can require additional time after the
+registration request is accepted.
+
+## 5. Prepare continuity
+
+After the AgentID NFT is available:
+
+1. Read the [renewal status](/guides/renewal/).
+2. Fund the identity's vault for the expected renewal amount.
+3. Have the owner wallet authorize auto-renew if desired.
+4. Monitor the public expiry and renewal state.
+
+For raw request fields and response shapes, see the [Registration API](/api-reference/register/).

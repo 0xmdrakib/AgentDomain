@@ -1,0 +1,72 @@
+---
+title: API overview
+description: Use the public API base, authentication methods, error contract, and discovery endpoint.
+---
+
+The production API base is:
+
+```text
+https://agentdomain.app/api/v1
+```
+
+## Discovery
+
+```bash
+curl https://agentdomain.app/api/v1
+```
+
+`GET /api/v1` returns machine-readable links, authentication methods, supported capabilities,
+network identifiers, and public URI templates. Clients can use it to discover the current public
+contract without depending on undocumented routes.
+
+## Authentication
+
+Public discovery, availability, quotes, and visible registry searches do not require credentials.
+Protected agent operations accept one of these public authentication methods:
+
+- an agent-scoped API key sent as `Authorization: Bearer <key>`;
+- an authenticated owner wallet session in the web application;
+- wallet authorization produced by the official SDK where supported.
+
+An API key is limited to its assigned agent. Never place an API key in browser source, a public
+repository, or a URL query string.
+
+## Idempotency
+
+Endpoints that document `Idempotency-Key` bind the key to the operation and normalized request.
+Retry the same request with the same key after a network interruption. Reusing the key for a
+different request returns `409 IDEMPOTENCY_KEY_REUSED`.
+
+## Errors
+
+Errors use a stable public shape:
+
+```json
+{
+  "code": "DNS_REVISION_CONFLICT",
+  "message": "DNS records changed after the preview. Generate a new preview before applying.",
+  "details": {}
+}
+```
+
+Common status classes:
+
+| Status        | Meaning                                         |
+| ------------- | ----------------------------------------------- |
+| `400` / `422` | Invalid or unsupported input                    |
+| `401` / `403` | Missing authentication or insufficient scope    |
+| `402`         | Payment or plan capacity is required            |
+| `404`         | Resource not found or not visible to the caller |
+| `409`         | Idempotency, revision, or state conflict        |
+| `429`         | Rate or quota limit reached                     |
+| `503`         | Temporary service unavailability                |
+
+When present, honor `Retry-After` and `RateLimit-*` response headers. Do not automatically retry a
+payment or mutation unless the endpoint's idempotency contract makes that safe.
+
+## References
+
+- [Registration API](/api-reference/register/)
+- [Agents API](/api-reference/agents/)
+- [DNS API](/api-reference/dns/)
+- [Email API](/api-reference/email/)

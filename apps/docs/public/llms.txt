@@ -1,0 +1,17 @@
+# AgentDomain Documentation
+
+> Public documentation for registering and operating internet identities for autonomous agents.
+
+- [Overview](https://docs.agentdomain.app/): Product capabilities and documentation map.
+- [Quickstart](https://docs.agentdomain.app/quickstart/): Register an identity with the TypeScript SDK.
+- [Core concepts](https://docs.agentdomain.app/concepts/): Identity bundles, ownership, payments, and renewals.
+- [API overview](https://docs.agentdomain.app/api-reference/overview/): Base URL, authentication, errors, and public endpoints.
+- [Registration API](https://docs.agentdomain.app/api-reference/register/): Quote and registration request contract.
+- [Agents API](https://docs.agentdomain.app/api-reference/agents/): Registry lookup and search.
+- [DNS API](https://docs.agentdomain.app/api-reference/dns/): Record management and revision-safe batch changes.
+- [Email API](https://docs.agentdomain.app/api-reference/email/): Inbox, sending, aliases, usage, and signed webhooks.
+- [TypeScript SDK](https://docs.agentdomain.app/sdk/typescript/): Public SDK 0.7.0 usage.
+- [MCP server](https://docs.agentdomain.app/sdk/mcp/): Public MCP package setup and tool catalog.
+- [GitHub](https://github.com/0xmdrakib/AgentDomain): Apache-2.0 public source and packages.
+
+The public API base is `https://agentdomain.app/api/v1`.

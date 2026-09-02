@@ -211,7 +211,7 @@ contract RenewalVault is Ownable, ReentrancyGuard {
 
     /**
      * @notice Complete a reserved renewal using the registrar-confirmed expiry.
-     * @dev The keeper calls this only after Spaceship confirms the domain expiry advanced.
+     * @dev The keeper calls this only after the registrar confirms the domain expiry advanced.
      */
     function completeRenewalWithExpiry(uint256 tokenId, uint64 newExpiresAt) external nonReentrant onlyKeeper {
         _completeRenewal(tokenId, newExpiresAt);
