@@ -6,6 +6,60 @@ import { findForbiddenMatches } from './validate-content.mjs';
 
 const docsRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(docsRoot, 'dist');
+const docsOrigin = 'https://docs.agentdomain.app';
+const frontendOrigin = 'https://agentdomain.app';
+
+export function parseAbsoluteUrl(value, context) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`${context}: invalid absolute URL`);
+  }
+  if (url.protocol !== 'https:' || url.username || url.password) {
+    throw new Error(`${context}: only credential-free HTTPS URLs are allowed`);
+  }
+  return url;
+}
+
+function htmlAttribute(tag, name) {
+  const match = tag.match(new RegExp(`\\b${name}\\s*=\\s*["']([^"']*)["']`, 'i'));
+  return match?.[1] ?? null;
+}
+
+function canonicalUrl(source, name) {
+  const canonicalLinks = [...source.matchAll(/<link\b[^>]*>/gi)].filter((match) => {
+    const rel = htmlAttribute(match[0], 'rel');
+    return rel?.toLowerCase().split(/\s+/).includes('canonical');
+  });
+  if (canonicalLinks.length !== 1) {
+    throw new Error(`dist/${name}: expected exactly one canonical link`);
+  }
+  const href = htmlAttribute(canonicalLinks[0][0], 'href');
+  if (!href) throw new Error(`dist/${name}: canonical link has no href`);
+  return parseAbsoluteUrl(href, `dist/${name}: canonical link`);
+}
+
+function absoluteUrls(source, context) {
+  return [...source.matchAll(/\bhttps:\/\/[^\s"'<>`\\)]+/g)].map((match) =>
+    parseAbsoluteUrl(match[0], context),
+  );
+}
+
+export function validateHtmlUrls(source, name) {
+  const canonical = canonicalUrl(source, name);
+  if (canonical.origin !== docsOrigin || canonical.search || canonical.hash) {
+    throw new Error(`dist/${name}: canonical docs URL is invalid`);
+  }
+  const hasRemoteFrontendBrandDependency = absoluteUrls(source, `dist/${name}`).some(
+    (url) =>
+      url.origin === frontendOrigin &&
+      (url.pathname === '/brand' || url.pathname.startsWith('/brand/')),
+  );
+  if (hasRemoteFrontendBrandDependency) {
+    throw new Error(`dist/${name}: remote frontend brand dependency is forbidden`);
+  }
+}
 
 async function listFiles(root) {
   const files = [];
@@ -51,21 +105,35 @@ async function validateOutput() {
     const forbidden = findForbiddenMatches(source);
     if (forbidden.length)
       throw new Error(`dist/${name}: forbidden content: ${forbidden.join(', ')}`);
-    if (!source.includes('https://docs.agentdomain.app')) {
-      throw new Error(`dist/${name}: canonical docs origin is missing`);
-    }
-    if (source.includes('https://agentdomain.app/brand/')) {
-      throw new Error(`dist/${name}: remote frontend brand dependency is forbidden`);
-    }
+    validateHtmlUrls(source, name);
   }
 
   const robots = await requireFile('robots.txt');
   const llms = await requireFile('llms.txt');
   const headers = await requireFile('_headers');
-  if (!robots.includes('https://docs.agentdomain.app/sitemap-index.xml')) {
+  const sitemapLines = robots
+    .split(/\r?\n/)
+    .map((line) => line.match(/^Sitemap:\s*(\S+)\s*$/i)?.[1])
+    .filter(Boolean);
+  if (
+    sitemapLines.length !== 1 ||
+    parseAbsoluteUrl(sitemapLines[0], 'dist/robots.txt: sitemap').href !==
+      `${docsOrigin}/sitemap-index.xml`
+  ) {
     throw new Error('dist/robots.txt: wrong sitemap origin');
   }
-  if (!llms.includes('https://docs.agentdomain.app/api-reference/overview/')) {
+  const llmsUrls = [...llms.matchAll(/\]\((https?:\/\/[^)\s]+)\)/g)].map((match) =>
+    parseAbsoluteUrl(match[1], 'dist/llms.txt'),
+  );
+  if (
+    !llmsUrls.some(
+      (url) =>
+        url.origin === docsOrigin &&
+        url.pathname === '/api-reference/overview/' &&
+        !url.search &&
+        !url.hash,
+    )
+  ) {
     throw new Error('dist/llms.txt: public documentation index is incomplete');
   }
   if (!headers.includes('https://:version.:subdomain.workers.dev/*')) {
@@ -77,7 +145,9 @@ async function validateOutput() {
   );
 }
 
-validateOutput().catch((error) => {
-  console.error(error.message);
-  process.exitCode = 1;
-});
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  validateOutput().catch((error) => {
+    console.error(error.message);
+    process.exitCode = 1;
+  });
+}

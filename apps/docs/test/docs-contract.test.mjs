@@ -12,6 +12,7 @@ import {
   validateDocs,
   validateInternalLinks,
 } from '../scripts/validate-content.mjs';
+import { validateHtmlUrls } from '../scripts/validate-output.mjs';
 
 test('the complete public docs contract validates', async () => {
   const result = await validateDocs();
@@ -54,6 +55,41 @@ test('internal links resolve only to published routes', () => {
   assert.throws(
     () => validateInternalLinks('[Relative](..\/private)', 'bad.mdx', routes),
     /root-relative/,
+  );
+});
+
+test('built HTML requires an exact canonical origin and local brand assets', () => {
+  const canonical = (href) => `<link rel="canonical" href="${href}">`;
+
+  assert.doesNotThrow(() =>
+    validateHtmlUrls(
+      canonical('https://docs.agentdomain.app/quickstart/'),
+      'quickstart/index.html',
+    ),
+  );
+  assert.throws(
+    () =>
+      validateHtmlUrls(
+        canonical('https://docs.agentdomain.app.evil.example/quickstart/'),
+        'quickstart/index.html',
+      ),
+    /canonical docs URL is invalid/,
+  );
+  assert.throws(
+    () =>
+      validateHtmlUrls(
+        `${canonical('https://docs.agentdomain.app/')}<img src="https://agentdomain.app/brand/logo.png">`,
+        'index.html',
+      ),
+    /remote frontend brand dependency is forbidden/,
+  );
+  assert.throws(
+    () =>
+      validateHtmlUrls(
+        canonical('https://attacker@docs.agentdomain.app/quickstart/'),
+        'quickstart/index.html',
+      ),
+    /credential-free HTTPS URLs/,
   );
 });
 
