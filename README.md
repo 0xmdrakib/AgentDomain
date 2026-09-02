@@ -10,6 +10,17 @@ management.
 - Documentation: [docs.agentdomain.app](https://docs.agentdomain.app)
 - API: [api.agentdomain.app/api/v1](https://api.agentdomain.app/api/v1)
 
+## Tech stack
+
+| Surface                  | Technologies                                                   |
+| ------------------------ | -------------------------------------------------------------- |
+| Frontend                 | Next.js 16, React 19, TypeScript, Tailwind CSS, TanStack Query |
+| Wallet and onchain       | wagmi, viem, ethers, SIWE, x402, Base                          |
+| Documentation            | Astro 7, Starlight                                             |
+| SDK and integrations     | TypeScript, Model Context Protocol SDK, Zod                    |
+| Smart contracts          | Solidity, Foundry, OpenZeppelin                                |
+| Hosting and build system | Cloudflare Workers, OpenNext, Wrangler, pnpm, Turborepo        |
+
 ## Public packages
 
 | Package                                                                                      | Purpose                                               |
