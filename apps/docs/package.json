@@ -2,7 +2,7 @@
   "name": "@agentdomain/docs",
   "version": "0.1.0",
   "private": true,
-  "description": "Public AgentDomain documentation, built with Astro and Starlight for Cloudflare Workers Static Assets.",
+  "description": "Public product, API, and integration documentation for AgentDomain.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",

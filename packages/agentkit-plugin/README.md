@@ -16,7 +16,7 @@ The provider exposes actions for:
 - RenewalVault status, funding, auto-renew, and withdrawal
 - Per-agent Starter, Pro, and Enterprise Premium Plans
 
-Default API base: `https://agentdomain.app/api/v1`.
+Default API base: `https://api.agentdomain.app/api/v1`.
 
 Request the base URL directly to retrieve AgentDomain's machine-readable API discovery metadata.
 

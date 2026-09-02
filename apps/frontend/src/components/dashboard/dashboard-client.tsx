@@ -214,12 +214,12 @@ export function DashboardClient() {
         <ResourceCard
           title="Agent API"
           desc="Let agents buy identities with x402 payments."
-          href="https://docs.agentdomain.app#api"
+          href="https://docs.agentdomain.app/api-reference/overview/"
         />
         <ResourceCard
           title="SDK Example"
           desc="Use the TypeScript SDK registration flow."
-          href="https://docs.agentdomain.app#stacks"
+          href="https://docs.agentdomain.app/sdk/typescript/"
         />
       </div>
     </section>

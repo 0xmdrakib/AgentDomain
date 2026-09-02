@@ -14,4 +14,4 @@
 - [MCP server](https://docs.agentdomain.app/sdk/mcp/): Public MCP package setup and tool catalog.
 - [GitHub](https://github.com/0xmdrakib/AgentDomain): Apache-2.0 public source and packages.
 
-The public API base is `https://agentdomain.app/api/v1`.
+The public API base is `https://api.agentdomain.app/api/v1`.

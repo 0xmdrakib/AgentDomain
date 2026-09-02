@@ -3,22 +3,22 @@
   "name": "agentdomain-frontend",
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-09-01",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "workers_dev": false,
   "preview_urls": false,
   "routes": [
     { "pattern": "agentdomain.app", "custom_domain": true },
-    { "pattern": "www.agentdomain.app", "custom_domain": true }
+    { "pattern": "www.agentdomain.app", "custom_domain": true },
   ],
   "assets": {
     "directory": ".open-next/assets",
-    "binding": "ASSETS"
+    "binding": "ASSETS",
   },
   "observability": {
-    "enabled": true
+    "enabled": true,
   },
   "limits": {
-    "cpu_ms": 1000
+    "cpu_ms": 1000,
   },
   "upload_source_maps": true,
   "env": {
@@ -26,7 +26,7 @@
       "name": "agentdomain-frontend-preview",
       "workers_dev": true,
       "preview_urls": true,
-      "routes": []
-    }
-  }
+      "routes": [],
+    },
+  },
 }

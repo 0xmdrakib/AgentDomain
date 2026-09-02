@@ -52,6 +52,7 @@ initOpenNextCloudflareForDev();
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  agentRules: false,
   reactStrictMode: true,
   transpilePackages: ['@agentdomain/sdk', '@agentdomain/shared'],
   turbopack: { root: fileURLToPath(new URL('../..', import.meta.url)) },
@@ -84,28 +85,6 @@ const nextConfig = {
   },
   async redirects() {
     return [
-      {
-        source: '/',
-        has: [{ type: 'host', value: 'www.agentdomain.app' }],
-        destination: 'https://agentdomain.app/',
-        permanent: true,
-      },
-      {
-        source: '/:path*',
-        has: [{ type: 'host', value: 'www.agentdomain.app' }],
-        destination: 'https://agentdomain.app/:path*',
-        permanent: true,
-      },
-      {
-        source: '/docs',
-        destination: 'https://docs.agentdomain.app',
-        permanent: true,
-      },
-      {
-        source: '/docs/:path*',
-        destination: 'https://docs.agentdomain.app/:path*',
-        permanent: true,
-      },
       ...Object.entries(brandConfig.legacyAliases).map(([source, asset]) => ({
         source,
         destination: brandConfig.assets[asset],

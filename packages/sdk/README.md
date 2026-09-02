@@ -4,7 +4,7 @@ TypeScript SDK for AgentDomain, the autonomous identity stack for AI agents.
 
 AgentDomain provides domain, DNS, SSL, email, Basename, ENS, x402 USDC checkout, AgentID NFT, renewal controls, and per-agent Premium Plans.
 
-The production API base is `https://agentdomain.app/api/v1`. A direct `GET` request returns the
+The production API base is `https://api.agentdomain.app/api/v1`. A direct `GET` request returns the
 machine-readable service discovery document; human documentation is available at
 `https://docs.agentdomain.app`.
 
@@ -16,7 +16,7 @@ npm install @agentdomain/sdk viem
 import { AgentDomain } from '@agentdomain/sdk';
 
 const ad = new AgentDomain({
-  apiUrl: 'https://agentdomain.app/api/v1',
+  apiUrl: 'https://api.agentdomain.app/api/v1',
   walletClient,
   builderCode: process.env.AGENTDOMAIN_BUILDER_CODE,
 });

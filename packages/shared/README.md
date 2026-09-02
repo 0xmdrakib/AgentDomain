@@ -10,6 +10,6 @@ import {
 } from '@agentdomain/shared';
 ```
 
-Default API base: `https://agentdomain.app/api/v1`.
+Default API base: `https://api.agentdomain.app/api/v1`.
 
 This package is used by the SDK, MCP server, AgentKit plugin, ElizaOS plugin, and AgentDomain web app.

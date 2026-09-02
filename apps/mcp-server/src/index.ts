@@ -14,18 +14,24 @@
  *         "command": "npx",
  *         "args": ["-y", "@agentdomain/mcp-server"],
  *         "env": {
- *           "AGENTDOMAIN_API_URL": "https://agentdomain.app/api/v1",
- *           "AGENT_PRIVATE_KEY": "0x...",
- *           "AGENTDOMAIN_BUILDER_CODE": "your_builder_code"
+ *           "AGENTDOMAIN_API_URL": "https://api.agentdomain.app/api/v1"
  *         }
  *       }
  *     }
  *   }
+ *
+ * Inject optional signing credentials through a trusted external secret source,
+ * and only when a signing operation is explicitly enabled.
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+  type Tool,
+  type ToolAnnotations,
+} from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { AgentDomain, validateBuilderCode } from '@agentdomain/sdk';
 import {
@@ -50,6 +56,8 @@ const AGENT_PRIVATE_KEY = process.env.AGENT_PRIVATE_KEY;
 const AGENTDOMAIN_API_KEY = process.env.AGENTDOMAIN_API_KEY;
 const AGENTDOMAIN_BUILDER_CODE = process.env.AGENTDOMAIN_BUILDER_CODE;
 const RENEWAL_VAULT_ADDRESS = process.env.RENEWAL_VAULT_ADDRESS as Address | undefined;
+const WRITE_TOOLS_ENV = 'AGENTDOMAIN_ENABLE_WRITE_TOOLS';
+const WRITE_TOOLS_ENABLED = parseWriteToolsEnabled(process.env[WRITE_TOOLS_ENV]);
 
 function getClient(): AgentDomain {
   const config: ConstructorParameters<typeof AgentDomain>[0] = {
@@ -80,7 +88,7 @@ const server = new Server(
 // TOOL DEFINITIONS
 // ----------------------------------------------------------------------
 
-const TOOLS = [
+const TOOL_DEFINITIONS: Tool[] = [
   {
     name: 'check_domain_availability',
     description:
@@ -602,19 +610,67 @@ const TOOLS = [
   },
 ];
 
+const READ_ONLY_TOOL_NAMES = new Set([
+  'check_domain_availability',
+  'quote_registration',
+  'lookup_agent',
+  'get_agent',
+  'search_agents',
+  'get_agent_email_usage',
+  'list_agent_email',
+  'get_dns_capabilities',
+  'list_dns_records',
+  'export_dns_zone',
+  'get_renewal_status',
+  'get_service_plan',
+]);
+
+const ADDITIVE_WRITE_TOOL_NAMES = new Set([
+  'send_agent_email',
+  'send_agent_email_batch',
+  'create_email_alias',
+  'create_dns_record',
+]);
+
+function annotationsForTool(name: string): ToolAnnotations {
+  const readOnly = READ_ONLY_TOOL_NAMES.has(name);
+  return {
+    readOnlyHint: readOnly,
+    destructiveHint: readOnly ? false : !ADDITIVE_WRITE_TOOL_NAMES.has(name),
+    idempotentHint: readOnly,
+    openWorldHint: true,
+  };
+}
+
+const TOOLS: Tool[] = TOOL_DEFINITIONS.map((tool) => ({
+  ...tool,
+  annotations: annotationsForTool(tool.name),
+}));
+const ENABLED_TOOLS = WRITE_TOOLS_ENABLED
+  ? TOOLS
+  : TOOLS.filter((tool) => READ_ONLY_TOOL_NAMES.has(tool.name));
+const ENABLED_TOOL_NAMES = new Set(ENABLED_TOOLS.map((tool) => tool.name));
+
 // ----------------------------------------------------------------------
 // HANDLERS
 // ----------------------------------------------------------------------
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: TOOLS,
+  tools: ENABLED_TOOLS,
 }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
-  const client = getClient();
 
   try {
+    if (!ENABLED_TOOL_NAMES.has(name)) {
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `Unknown or disabled tool: ${name}` }],
+      };
+    }
+
+    const client = getClient();
     switch (name) {
       case 'check_domain_availability': {
         const a = z
@@ -1036,6 +1092,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 function requireDnsRevision(value: string | undefined): string {
   if (!value) throw new Error('Apply requires baseRevision from a fresh DNS dry-run preview.');
   return value;
+}
+
+function parseWriteToolsEnabled(value: string | undefined): boolean {
+  if (value === undefined || value === 'false') return false;
+  if (value === 'true') return true;
+  throw new Error(`${WRITE_TOOLS_ENV} must be exactly "true" or "false" when set.`);
 }
 
 function requireDirectBaseWriteBuilderCode(toolName: string): string {

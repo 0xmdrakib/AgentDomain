@@ -1,93 +1,54 @@
 # @agentdomain/contracts
 
-Smart contracts for AgentDomain. Solidity 0.8.24, built with Foundry.
+Public AgentDomain smart contracts for Base. The source accepts Solidity 0.8.24 or newer; the
+checked-in Foundry profile pins the compiler settings recorded for the published deployment.
 
 ## Contracts
 
-| Contract                | Purpose                                                  |
-| ----------------------- | -------------------------------------------------------- |
-| `AgentIdentityRegistry` | ERC-721 NFT representing an agent identity bundle        |
-| `PaymentRouter`         | Receives USDC payments and triggers minting (idempotent) |
-| `RenewalVault`          | Holds USDC for autonomous identity renewals              |
+| Contract                | Public behavior                                         |
+| ----------------------- | ------------------------------------------------------- |
+| `AgentIdentityRegistry` | ERC-721 representation of an agent identity bundle      |
+| `PaymentRouter`         | Idempotent USDC payment and identity-mint coordination  |
+| `RenewalVault`          | USDC deposits and controlled identity-renewal execution |
 
-## Architecture
+The contracts expose the onchain portion of registration and renewal. Review their source, NatSpec,
+and published deployment record before integrating; offchain API responses remain authoritative for
+current quotes and supported product flows.
 
-```
-        ┌─────────────────────┐
-        │   Off-chain x402    │
-        │     Backend         │
-        └──────────┬──────────┘
-                   │ processRegistration
-                   ▼
-        ┌─────────────────────┐
-        │   PaymentRouter     │  ─── pulls USDC ──> Treasury
-        └──────────┬──────────┘
-                   │ mintIdentity
-                   ▼
-        ┌─────────────────────┐
-        │AgentIdentityRegistry│  ── ERC-721 ──> Agent wallet
-        └──────────▲──────────┘
-                   │ extendExpiry
-        ┌──────────┴──────────┐
-        │   RenewalVault      │  <── deposit ── Agent
-        └─────────────────────┘
-                   ▲
-                   │ reserveRenewal -> registrar -> completeRenewalWithExpiry
-              ┌────┴────┐
-              │ Keeper  │
-              └─────────┘
-```
+## Local verification
 
-## Setup
+Install [Foundry](https://book.getfoundry.sh/getting-started/installation), then
+run from this directory:
 
 ```bash
-# Install Foundry (one-time)
-curl -L https://foundry.paradigm.xyz | bash
-foundryup
-
-# Install dependencies from the workspace lockfile
-pnpm install
-
-# Build
 forge build
+forge fmt --check
 ```
 
-## Remix Deployment
+These commands compile and format-check the contracts locally without requiring a production
+credential. They do not deploy contracts or verify live chain state. Never place wallet keys in
+source files, command-line arguments, committed fixtures, or repository configuration.
 
-Deploy from Remix with a temporary deploy wallet, not your main wallet private key.
-After deployment, wire permissions and transfer ownership to your main admin wallet
-or Safe.
+## Published deployments
 
-Current Base mainnet deployment metadata is tracked in
-`packages/contracts/deployments/base-mainnet.json`.
+Available Base deployment records are stored in
+[`deployments/base-mainnet.json`](deployments/base-mainnet.json). Verify the
+network, bytecode, contract addresses, and relevant onchain state independently
+before relying on a published record.
 
-1. Deploy `AgentIdentityRegistry` with `initialOwner = deploy wallet address`.
-2. Deploy `PaymentRouter` with `initialOwner`, Base USDC, registry address, treasury address, and backend signer address.
-3. Deploy `RenewalVault` with `initialOwner`, Base USDC, registry address, registry address, and treasury address.
-4. Call `setMinter(paymentRouterAddress, true)` on `AgentIdentityRegistry`.
-5. Call `setRenewalVault(renewalVaultAddress)` on `AgentIdentityRegistry`.
-6. Call `setKeeper(backendOrKeeperAddress, true)` on `RenewalVault`.
-7. Call `setRenewalParams(365 days, 30 days, minimumRenewalFeeAtomic)` on `RenewalVault`.
-   The third value is a minimum quote floor, not the fixed renewal price for
-   every domain. Keepers pass the exact per-agent quote into `reserveRenewal`.
-   For example, the annual `$3.90` platform-fee floor is `3900000` with 6-decimal USDC.
-8. Transfer ownership of all three contracts to your final admin wallet or Safe.
-9. Use the deployed addresses from `deployments/base-mainnet.json` in your
-   integration configuration. Never commit private keys or production secrets.
+## Security properties
 
-## Security Notes
+- Registration processing is idempotent and rejects replayed payment intents.
+- `PaymentRouter` supports emergency pausing.
+- `RenewalVault` separates deposits, withdrawals, reservations, and completion.
+- Renewal completion is bound to the registrar-confirmed expiry.
+- ERC-721 transfer hooks keep the registry's owner lookup synchronized.
+- Privileged functions enforce the access controls defined in contract source.
 
-- Idempotency keys prevent replay attacks on registration.
-- `Pausable` PaymentRouter can be paused in emergencies.
-- `RenewalVault` keepers are gated; anyone can deposit, only owner can withdraw.
-- Keepers must reserve the exact quote before registrar spend and complete with
-  the registrar-confirmed expiry; legacy one-call renewal methods revert.
-- Registry uses ERC-721 transfer hooks to keep `_ownerToTokenId` accurate.
-- All admin functions are guarded by `Ownable`; production ownership should end on
-  a Safe or dedicated admin wallet, not on the temporary deploy wallet.
+Report suspected vulnerabilities through the repository's confidential
+[security process](../../SECURITY.md).
 
-## Audit Status
+## License
 
-- [ ] Internal review complete
-- [ ] Code4rena / Sherlock contest scheduled
-- [ ] Bug bounty (Immunefi) live
+Unless a file or third-party notice states otherwise, the contracts are licensed
+under Apache-2.0.

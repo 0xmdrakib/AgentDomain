@@ -21,6 +21,27 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
+describe('public API default', () => {
+  it('uses the canonical API subdomain', async () => {
+    let requestedUrl;
+    globalThis.fetch = async (input) => {
+      requestedUrl = String(input);
+      return new Response(JSON.stringify({ available: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    };
+
+    const ad = new AgentDomain();
+    await ad.checkAvailability('research-agent', { tld: 'xyz' });
+
+    assert.equal(
+      requestedUrl,
+      'https://api.agentdomain.app/api/v1/domains/availability?name=research-agent&tld=xyz',
+    );
+  });
+});
+
 describe('ERC-8021 direct Base attribution', () => {
   it('encodes and decodes app attribution on RenewalVault calldata', () => {
     const data = encodeSetAutoRenewCalldata(42n, true, builderCode);

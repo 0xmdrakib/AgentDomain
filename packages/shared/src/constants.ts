@@ -23,7 +23,7 @@ export const X402_NETWORK = 'eip155:8453';
 export const X402_PAYMENT_HEADER = 'PAYMENT-SIGNATURE';
 export const X402_PAYMENT_REQUIRED_HEADER = 'PAYMENT-REQUIRED';
 export const X402_PAYMENT_RESPONSE_HEADER = 'PAYMENT-RESPONSE';
-export const AGENTDOMAIN_API_BASE_URL = 'https://agentdomain.app/api/v1';
+export const AGENTDOMAIN_API_BASE_URL = 'https://api.agentdomain.app/api/v1';
 
 export const SERVICE_PLAN_KEYS = ['included', 'starter', 'pro', 'enterprise'] as const;
 export const SERVICE_PLAN_INTERVALS = ['yearly'] as const;

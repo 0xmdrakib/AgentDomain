@@ -2,12 +2,18 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve, relative } from 'node:path';
+import ts from 'typescript';
 import { auditSourceGraph, inspectSource, sourceFiles, root } from '../scripts/source-graph.mjs';
 import { assertBuildBoundary } from '../scripts/check-build.mjs';
 import { hashInput, verifyAssets } from '../scripts/verify-assets.mjs';
 import { validateFrontendProductionEnvironment } from '../scripts/production-release-gate.mjs';
 
 const read = (path) => readFileSync(resolve(root, path), 'utf8');
+const readJsonc = (path) => {
+  const result = ts.parseConfigFileTextToJson(path, read(path));
+  if (result.error) throw new Error(`Invalid JSONC: ${path}`);
+  return result.config;
+};
 
 test('source graph closes over only frontend and reviewed public SDK/shared source', () => {
   const result = auditSourceGraph();
@@ -117,37 +123,24 @@ test('approved brand kit and mappings are tracked, self-contained and hash verif
     assert.equal(existsSync(resolve(root, `public${path}`)), false, path);
 });
 
-test('Next config uses local brand data and redirects docs to its canonical host', async () => {
+test('Next config keeps only asset redirects while request routing owns host and API policy', async () => {
   const { default: config } = await import('../next.config.mjs');
   const source = read('next.config.mjs');
   assert.match(source, /src\/lib\/brand-assets\.json/);
   assert.match(source, /initOpenNextCloudflareForDev/);
   assert.doesNotMatch(source, /apps\/web|materialize-assets|rewrites/);
+  assert.equal(config.agentRules, false);
   const redirects = await config.redirects();
-  assert.deepEqual(redirects.slice(0, 4), [
-    {
-      source: '/',
-      has: [{ type: 'host', value: 'www.agentdomain.app' }],
-      destination: 'https://agentdomain.app/',
-      permanent: true,
-    },
-    {
-      source: '/:path*',
-      has: [{ type: 'host', value: 'www.agentdomain.app' }],
-      destination: 'https://agentdomain.app/:path*',
-      permanent: true,
-    },
-    {
-      source: '/docs',
-      destination: 'https://docs.agentdomain.app',
-      permanent: true,
-    },
-    {
-      source: '/docs/:path*',
-      destination: 'https://docs.agentdomain.app/:path*',
-      permanent: true,
-    },
-  ]);
+  const brand = JSON.parse(read('src/lib/brand-assets.json'));
+  assert.equal(redirects.length, Object.keys(brand.legacyAliases).length);
+  assert.equal(JSON.stringify(redirects).includes('docs.agentdomain.app'), false);
+  assert.equal(JSON.stringify(redirects).includes('www.agentdomain.app'), false);
+  const middleware = read('src/middleware.ts');
+  assert.match(middleware, /https:\/\/docs\.agentdomain\.app/);
+  assert.match(middleware, /api\.agentdomain\.app/);
+  assert.doesNotMatch(middleware, /\bfetch\s*\(|authorization|cookie/i);
+  assert.match(middleware, /'\/api\/:path\*'/);
+  assert.match(middleware, /'\/docs\/:path\*'/);
   const headers = await config.headers();
   assert.equal(headers.length, 2);
   const values = Object.fromEntries(headers[0].headers.map(({ key, value }) => [key, value]));
@@ -173,11 +166,11 @@ test('Next config uses local brand data and redirects docs to its canonical host
 });
 
 test('Wrangler owns production custom domains and isolates route-free previews', () => {
-  const config = JSON.parse(read('wrangler.jsonc'));
+  const config = readJsonc('wrangler.jsonc');
   assert.equal(config.name, 'agentdomain-frontend');
   assert.equal(config.main, '.open-next/worker.js');
   assert.equal(config.compatibility_date, '2026-09-01');
-  assert.deepEqual(config.compatibility_flags, ['nodejs_compat']);
+  assert.deepEqual(config.compatibility_flags, ['nodejs_compat', 'global_fetch_strictly_public']);
   assert.deepEqual(config.assets, { directory: '.open-next/assets', binding: 'ASSETS' });
   assert.equal(config.observability.enabled, true);
   assert.deepEqual(config.limits, { cpu_ms: 1000 });
@@ -191,6 +184,15 @@ test('Wrangler owns production custom domains and isolates route-free previews',
   assert.equal(config.env.preview.workers_dev, true);
   assert.equal(config.env.preview.preview_urls, true);
   assert.deepEqual(config.env.preview.routes, []);
+  for (const bindingType of [
+    'services',
+    'kv_namespaces',
+    'durable_objects',
+    'd1_databases',
+    'r2_buckets',
+    'hyperdrive',
+  ])
+    assert.equal(config[bindingType] ?? config.env.preview[bindingType], undefined, bindingType);
   assert.equal(JSON.stringify(config).includes('api.agentdomain.app'), false);
 });
 
@@ -233,6 +235,15 @@ test('browser APIs stay same-origin while server reads use the reviewed public A
   assert.doesNotMatch(registration, /NEXT_PUBLIC_API_URL/);
   const transport = read('src/lib/backend-transport.ts');
   assert.match(transport, /https:\/\/api\.agentdomain\.app\/api\/v1/);
+  const solutions = read('src/lib/solution-pages.ts');
+  assert.doesNotMatch(solutions, /https:\/\/agentdomain\.app\/api\/v1/);
+  assert.doesNotMatch(solutions, /x-api-key/i);
+  assert.doesNotMatch(solutions, /agents\/quote[\s\S]{0,160}method:\s*'POST'/);
+  assert.match(solutions, /authorization:\s*'Bearer '\s*\+/);
+  const dashboard = read('src/components/dashboard/dashboard-client.tsx');
+  assert.doesNotMatch(dashboard, /docs\.agentdomain\.app#(?:api|stacks)/);
+  assert.match(dashboard, /docs\.agentdomain\.app\/api-reference\/overview\//);
+  assert.match(dashboard, /docs\.agentdomain\.app\/sdk\/typescript\//);
   const email = read('src/components/agents/email-management.tsx');
   assert.match(email, /sync: 'false'/);
   assert.match(email, /inboxStatus\.verificationStatus/);
@@ -250,6 +261,20 @@ test('public source contains no administration or private edge-auth implementati
     source,
     /\/api\/v1\/admin|Admin Console|timingSafeEqual|subtle\.sign|x-agentdomain|FRONTEND_[A-Z_]*SECRET|EDGE_[A-Z_]*SECRET/,
   );
+});
+
+test('public data failures stay route-specific and expose only bounded references', () => {
+  const component = read('src/components/public-data-error.tsx');
+  assert.match(read('src/app/error.tsx'), /PublicDataError/);
+  assert.match(read('src/app/registry/error.tsx'), /Registry temporarily unavailable/);
+  assert.match(read('src/app/agents/[id]/error.tsx'), /Identity temporarily unavailable/);
+  assert.match(component, /error\.digest/);
+  assert.doesNotMatch(component, /error\.message|error\.stack/);
+
+  const sitemap = read('src/app/sitemap-agents.xml/route.ts');
+  assert.match(sitemap, /X-Request-Reference/);
+  assert.match(sitemap, /no-store, max-age=0/);
+  assert.doesNotMatch(sitemap, /error\.(?:message|stack|cause)/);
 });
 
 test('docs links are canonical and the frontend sitemap cannot publish the retired page', () => {

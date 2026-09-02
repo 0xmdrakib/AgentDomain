@@ -57,7 +57,7 @@ const solutionPages: SolutionPageDefinition[] = [
       },
     ],
     codeTitle: 'Discover the platform contract',
-    code: `const response = await fetch('https://agentdomain.app/api/v1');
+    code: `const response = await fetch('https://api.agentdomain.app/api/v1');
 const discovery = await response.json();
 
 console.log(discovery.capabilities);
@@ -117,18 +117,15 @@ console.log(discovery.endpoints);`,
       },
     ],
     codeTitle: 'Request a live registration quote',
-    code: `const quote = await fetch(
-  'https://agentdomain.app/api/v1/agents/quote',
-  {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      preferredName: 'example-agent',
-      tld: 'xyz',
-      years: 1,
-      premiumPlan: 'included'
-    })
-  }
+    code: `const params = new URLSearchParams({
+  preferredName: 'example-agent',
+  tld: 'xyz',
+  years: '1',
+  premiumPlan: 'included'
+});
+
+const quote = await fetch(
+  'https://api.agentdomain.app/api/v1/agents/quote?' + params.toString()
 );`,
     codeCaption:
       'The quote step returns the current payment requirements before any registration is submitted.',
@@ -185,12 +182,12 @@ console.log(discovery.endpoints);`,
     ],
     codeTitle: 'Queue a text email',
     code: `const result = await fetch(
-  'https://agentdomain.app/api/v1/agents/AGENT_ID/email/send',
+  'https://api.agentdomain.app/api/v1/agents/AGENT_ID/email/send',
   {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'x-api-key': process.env.AGENTDOMAIN_API_KEY
+      authorization: 'Bearer ' + process.env.AGENTDOMAIN_API_KEY
     },
     body: JSON.stringify({
       to: ['recipient@example.com'],
@@ -255,8 +252,8 @@ console.log(discovery.endpoints);`,
     ],
     codeTitle: 'Ask for machine-readable DNS capabilities',
     code: `const capabilities = await fetch(
-  'https://agentdomain.app/api/v1/agents/AGENT_ID/dns/capabilities',
-  { headers: { 'x-api-key': process.env.AGENTDOMAIN_API_KEY } }
+  'https://api.agentdomain.app/api/v1/agents/AGENT_ID/dns/capabilities',
+  { headers: { authorization: 'Bearer ' + process.env.AGENTDOMAIN_API_KEY } }
 ).then((response) => response.json());
 
 console.log(capabilities.supportedTypes);`,
@@ -315,12 +312,10 @@ console.log(capabilities.supportedTypes);`,
       },
     ],
     codeTitle: 'Start from API discovery',
-    code: `curl https://agentdomain.app/api/v1
+    code: `curl https://api.agentdomain.app/api/v1
 
 # Then request a quote:
-curl -X POST https://agentdomain.app/api/v1/agents/quote \\
-  -H "content-type: application/json" \\
-  -d '{"preferredName":"example-agent","tld":"xyz","years":1}'`,
+curl "https://api.agentdomain.app/api/v1/agents/quote?preferredName=example-agent&tld=xyz&years=1"`,
     codeCaption:
       'The discovery endpoint is public; owner and paid operations add the required authentication and x402 headers.',
     related: [
@@ -439,7 +434,7 @@ if (response.status === 402) {
     ],
     codeTitle: 'Read an identity through the API',
     code: `const identity = await fetch(
-  'https://agentdomain.app/api/v1/agents/AGENT_ID'
+  'https://api.agentdomain.app/api/v1/agents/AGENT_ID'
 ).then((response) => response.json());
 
 console.log(identity.domain);
@@ -501,8 +496,8 @@ console.log(identity.ownerAddress);`,
     ],
     codeTitle: 'Inspect renewal status',
     code: `const status = await fetch(
-  'https://agentdomain.app/api/v1/agents/AGENT_ID/renewal/status',
-  { headers: { 'x-api-key': process.env.AGENTDOMAIN_API_KEY } }
+  'https://api.agentdomain.app/api/v1/agents/AGENT_ID/renewal/status',
+  { headers: { authorization: 'Bearer ' + process.env.AGENTDOMAIN_API_KEY } }
 ).then((response) => response.json());
 
 console.log(status.nextRenewalAt);
@@ -568,7 +563,7 @@ const integrationPages: SolutionPageDefinition[] = [
     code: `npx @agentdomain/mcp-server
 
 # Configure the host with:
-AGENTDOMAIN_API_URL=https://agentdomain.app/api/v1
+AGENTDOMAIN_API_URL=https://api.agentdomain.app/api/v1
 AGENTDOMAIN_API_KEY=your_agent_scoped_key`,
     codeCaption:
       'The server can be connected to an MCP host using the package command and environment-scoped credentials.',
