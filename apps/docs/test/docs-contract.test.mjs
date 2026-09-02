@@ -8,6 +8,7 @@ import {
   EXPECTED_DOCS,
   findForbiddenMatches,
   parseFrontmatter,
+  parseJsonc,
   routeForDoc,
   validateDocs,
   validateInternalLinks,
@@ -97,7 +98,8 @@ test('built HTML requires an exact canonical origin and local brand assets', () 
 });
 
 test('Cloudflare configuration is static-only and pinned', async () => {
-  const config = JSON.parse(await readFile(join(DOCS_ROOT, 'wrangler.jsonc'), 'utf8'));
+  const configFile = join(DOCS_ROOT, 'wrangler.jsonc');
+  const config = parseJsonc(await readFile(configFile, 'utf8'), configFile);
   assert.equal(config.name, 'agentdomain-docs');
   assert.equal(config.compatibility_date, '2026-09-01');
   assert.equal(config.workers_dev, false);
@@ -109,8 +111,8 @@ test('Cloudflare configuration is static-only and pinned', async () => {
   assert.equal(config.assets.not_found_handling, '404-page');
   assert.deepEqual(config.env.preview, {
     name: 'agentdomain-docs-preview',
-    workers_dev: true,
-    preview_urls: true,
+    workers_dev: false,
+    preview_urls: false,
     routes: [],
   });
 });

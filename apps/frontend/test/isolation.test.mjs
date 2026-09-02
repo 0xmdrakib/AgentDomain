@@ -181,8 +181,8 @@ test('Wrangler owns production custom domains and isolates route-free previews',
     { pattern: 'www.agentdomain.app', custom_domain: true },
   ]);
   assert.equal(config.env.preview.name, 'agentdomain-frontend-preview');
-  assert.equal(config.env.preview.workers_dev, true);
-  assert.equal(config.env.preview.preview_urls, true);
+  assert.equal(config.env.preview.workers_dev, false);
+  assert.equal(config.env.preview.preview_urls, false);
   assert.deepEqual(config.env.preview.routes, []);
   for (const bindingType of [
     'services',

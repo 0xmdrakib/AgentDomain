@@ -95,6 +95,9 @@ test('repository pins reviewed production dependencies and excludes unsafe graph
   assert.equal(rootPackage.pnpm.overrides['qs@<6.16.0'], '6.16.0');
   assert.match(lockfile, /qs@6\.16\.0:/);
   assert.doesNotMatch(lockfile, /qs@6\.15\.3:/);
+  assert.equal(rootPackage.pnpm.overrides['fast-uri@>=3.0.0 <3.1.6'], '3.1.6');
+  assert.match(lockfile, /fast-uri@3\.1\.6:/);
+  assert.doesNotMatch(lockfile, /fast-uri@3\.1\.5:/);
   assert.equal(frontendPackage.dependencies.wagmi, '3.7.7');
   assert.equal(frontendPackage.dependencies['@coinbase/wallet-sdk'], '4.3.7');
   assert.equal(frontendPackage.dependencies['@walletconnect/ethereum-provider'], '2.21.8');
