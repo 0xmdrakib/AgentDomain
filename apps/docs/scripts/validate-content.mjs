@@ -2,9 +2,16 @@ import { createHash } from 'node:crypto';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 
 export const DOCS_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const CONTENT_ROOT = join(DOCS_ROOT, 'src', 'content', 'docs');
+
+export function parseJsonc(source, file) {
+  const result = ts.parseConfigFileTextToJson(file, source);
+  if (result.error) throw new Error(`${file}: invalid JSONC`);
+  return result.config;
+}
 
 export const EXPECTED_DOCS = [
   'api-reference/agents.mdx',
@@ -159,7 +166,8 @@ async function assertAppContract() {
     throw new Error('package.json: Starlight must be 0.41.11');
   }
 
-  const wrangler = JSON.parse(await readFile(join(DOCS_ROOT, 'wrangler.jsonc'), 'utf8'));
+  const wranglerFile = join(DOCS_ROOT, 'wrangler.jsonc');
+  const wrangler = parseJsonc(await readFile(wranglerFile, 'utf8'), wranglerFile);
   if (wrangler.name !== 'agentdomain-docs') throw new Error('wrangler.jsonc: worker name mismatch');
   if (wrangler.compatibility_date !== '2026-09-01') {
     throw new Error('wrangler.jsonc: compatibility date mismatch');
@@ -181,11 +189,11 @@ async function assertAppContract() {
   if (!domain) throw new Error('wrangler.jsonc: canonical custom domain is missing');
   if (
     wrangler.env?.preview?.name !== 'agentdomain-docs-preview' ||
-    wrangler.env.preview.workers_dev !== true ||
-    wrangler.env.preview.preview_urls !== true ||
+    wrangler.env.preview.workers_dev !== false ||
+    wrangler.env.preview.preview_urls !== false ||
     JSON.stringify(wrangler.env.preview.routes) !== '[]'
   ) {
-    throw new Error('wrangler.jsonc: isolated route-free preview environment is required');
+    throw new Error('wrangler.jsonc: disabled deny-by-default preview environment is required');
   }
 
   const config = await readFile(join(DOCS_ROOT, 'astro.config.mjs'), 'utf8');
