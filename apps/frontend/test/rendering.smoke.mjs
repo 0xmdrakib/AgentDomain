@@ -115,6 +115,21 @@ test('docs redirects preserve paths on the canonical docs origin', async () => {
   }
 });
 
+test('www redirects preserve the canonical root, paths and queries', async () => {
+  for (const [path, destination] of [
+    ['/', 'https://agentdomain.app/'],
+    ['/?ref=test', 'https://agentdomain.app/?ref=test'],
+    ['/registry?page=2', 'https://agentdomain.app/registry?page=2'],
+  ]) {
+    const response = await fetch(new URL(path, origin), {
+      headers: { host: 'www.agentdomain.app' },
+      redirect: 'manual',
+    });
+    assert.equal(response.status, 308, path);
+    assert.equal(response.headers.get('location'), destination, path);
+  }
+});
+
 test('all 41 supplied images are served byte-for-byte and legacy URLs redirect to their replacements', async () => {
   const images = Object.keys(assetManifest.files).filter((file) =>
     file.startsWith('public/brand/agentdomain-brand/'),
