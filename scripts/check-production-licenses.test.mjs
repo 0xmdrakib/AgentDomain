@@ -70,20 +70,31 @@ test('rejects malformed license command output', () => {
   ]);
 });
 
-test('repository pins optional wallet peers and excludes the MetaMask SDK graph', async () => {
-  const [frontendPackageText, lockfile, wagmiSource, walletButtonSource, workflow] =
-    await Promise.all([
-      readFile(path.join(repoRoot, 'apps/frontend/package.json'), 'utf8'),
-      readFile(path.join(repoRoot, 'pnpm-lock.yaml'), 'utf8'),
-      readFile(path.join(repoRoot, 'apps/frontend/src/lib/wagmi.ts'), 'utf8'),
-      readFile(
-        path.join(repoRoot, 'apps/frontend/src/components/wallet/connect-wallet-button.tsx'),
-        'utf8',
-      ),
-      readFile(path.join(repoRoot, '.github/workflows/dependency-review.yml'), 'utf8'),
-    ]);
+test('repository pins reviewed production dependencies and excludes unsafe graphs', async () => {
+  const [
+    rootPackageText,
+    frontendPackageText,
+    lockfile,
+    wagmiSource,
+    walletButtonSource,
+    workflow,
+  ] = await Promise.all([
+    readFile(path.join(repoRoot, 'package.json'), 'utf8'),
+    readFile(path.join(repoRoot, 'apps/frontend/package.json'), 'utf8'),
+    readFile(path.join(repoRoot, 'pnpm-lock.yaml'), 'utf8'),
+    readFile(path.join(repoRoot, 'apps/frontend/src/lib/wagmi.ts'), 'utf8'),
+    readFile(
+      path.join(repoRoot, 'apps/frontend/src/components/wallet/connect-wallet-button.tsx'),
+      'utf8',
+    ),
+    readFile(path.join(repoRoot, '.github/workflows/dependency-review.yml'), 'utf8'),
+  ]);
+  const rootPackage = JSON.parse(rootPackageText);
   const frontendPackage = JSON.parse(frontendPackageText);
 
+  assert.equal(rootPackage.pnpm.overrides['qs@<6.16.0'], '6.16.0');
+  assert.match(lockfile, /qs@6\.16\.0:/);
+  assert.doesNotMatch(lockfile, /qs@6\.15\.3:/);
   assert.equal(frontendPackage.dependencies.wagmi, '3.7.7');
   assert.equal(frontendPackage.dependencies['@coinbase/wallet-sdk'], '4.3.7');
   assert.equal(frontendPackage.dependencies['@walletconnect/ethereum-provider'], '2.21.8');
