@@ -124,7 +124,13 @@ test('Next config uses local brand data and redirects docs to its canonical host
   assert.match(source, /initOpenNextCloudflareForDev/);
   assert.doesNotMatch(source, /apps\/web|materialize-assets|rewrites/);
   const redirects = await config.redirects();
-  assert.deepEqual(redirects.slice(0, 3), [
+  assert.deepEqual(redirects.slice(0, 4), [
+    {
+      source: '/',
+      has: [{ type: 'host', value: 'www.agentdomain.app' }],
+      destination: 'https://agentdomain.app/',
+      permanent: true,
+    },
     {
       source: '/:path*',
       has: [{ type: 'host', value: 'www.agentdomain.app' }],
