@@ -7,13 +7,11 @@ Thank you for improving AgentDomain's public developer experience.
 - `apps/frontend` is the source of truth for the public frontend.
 - `apps/docs` is the source of truth for public documentation.
 - `packages` and `apps/mcp-server` contain the public packages and integrations.
-- Backend services, databases, storage, infrastructure, operations, and private
-  planning do not belong in this repository.
+- Changes in this repository must stay within the public surfaces listed above.
 
-Public code must depend only on documented public contracts. Do not copy private
-history, internal runbooks, backend algorithms, provider configuration, service
-URLs, credentials, environment files, or generated deployment state into a pull
-request.
+Public code must depend only on documented public contracts. Never include
+credentials, customer data, internal operational material, or generated deployment
+state in a pull request.
 
 ## Local setup
 
