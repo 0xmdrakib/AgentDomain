@@ -17,8 +17,8 @@ Before opening a pull request:
 4. Confirm browser-visible settings contain public values only.
 5. Confirm documentation links and examples work as written.
 
-Never put a secret in a `NEXT_PUBLIC_*` variable or any other value delivered to
-a browser. Keep environment files untracked and committed examples value-free.
+Never put a secret in browser-delivered configuration or client-side code. Keep
+environment files untracked and committed examples value-free.
 
 ## Security reports
 
