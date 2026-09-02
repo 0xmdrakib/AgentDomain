@@ -19,6 +19,22 @@ Backend services, storage implementations, infrastructure, operations, private
 configuration, and provider credentials are intentionally outside this
 repository. Public applications integrate through reviewed API contracts only.
 
+## Cloudflare deployment ownership
+
+Cloudflare Workers Builds deploys the production frontend and documentation from
+the protected `main` branch of this repository. Non-production branch builds are
+disabled on the production Workers; isolated preview Workers remain separate
+targets.
+
+| Worker                 | Build command                                                     | Production deploy command                                           |
+| ---------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `agentdomain-frontend` | `pnpm --filter @agentdomain/frontend build:cloudflare:production` | `pnpm --filter @agentdomain/frontend exec wrangler deploy --env=""` |
+| `agentdomain-docs`     | `pnpm --filter @agentdomain/docs build:cloudflare:production`     | `pnpm --filter @agentdomain/docs exec wrangler deploy --env=""`     |
+
+Build-time browser settings are configured in Cloudflare and are not a source of
+backend credentials. Production custom domains, runtime bindings, and API routing
+remain provider configuration rather than repository secrets.
+
 ---
 
 ## Public packages
