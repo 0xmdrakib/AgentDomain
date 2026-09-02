@@ -14,7 +14,7 @@
     "build": "turbo run build",
     "build:public": "turbo run build --filter=!@agentdomain/contracts",
     "check:public-boundary": "node scripts/check-public-boundary.mjs",
-    "ci:cloudflare": "pnpm --filter @agentdomain/frontend build:cloudflare && pnpm --filter @agentdomain/frontend exec wrangler deploy --dry-run --env=\"\" && pnpm --filter @agentdomain/docs check && pnpm --filter @agentdomain/docs exec wrangler deploy --dry-run --env=\"\"",
+    "ci:cloudflare": "pnpm --filter @agentdomain/frontend build:cloudflare && pnpm --filter @agentdomain/frontend exec wrangler deploy --dry-run --env=\"\" && pnpm --filter @agentdomain/frontend exec wrangler deploy --dry-run --env preview && pnpm --filter @agentdomain/docs check && pnpm --filter @agentdomain/docs exec wrangler deploy --dry-run --env=\"\" && pnpm --filter @agentdomain/docs exec wrangler deploy --dry-run --env preview",
     "ci:public": "pnpm check:public-boundary && pnpm audit:production:high && pnpm format:check && pnpm lint:public && pnpm typecheck:public && pnpm test:public && pnpm build:public",
     "lint": "turbo run lint",
     "lint:public": "turbo run lint --filter=!@agentdomain/contracts",

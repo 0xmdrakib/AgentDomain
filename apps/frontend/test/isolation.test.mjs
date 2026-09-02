@@ -4,7 +4,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve, relative } from 'node:path';
 import { auditSourceGraph, inspectSource, sourceFiles, root } from '../scripts/source-graph.mjs';
 import { assertBuildBoundary } from '../scripts/check-build.mjs';
-import { verifyAssets } from '../scripts/verify-assets.mjs';
+import { hashInput, verifyAssets } from '../scripts/verify-assets.mjs';
+import { validateFrontendProductionEnvironment } from '../scripts/production-release-gate.mjs';
 
 const read = (path) => readFileSync(resolve(root, path), 'utf8');
 
@@ -101,6 +102,8 @@ test('artifact boundary rejects API functions, backend traces and environment fi
 
 test('approved brand kit and mappings are tracked, self-contained and hash verified', () => {
   assert.deepEqual(verifyAssets(), { files: 44 });
+  assert.equal(hashInput('key.txt', Buffer.from('value\r\n')).toString(), 'value\n');
+  assert.deepEqual(hashInput('mark.png', Buffer.from([0x0d, 0x0a])), Buffer.from([0x0d, 0x0a]));
   const manifest = JSON.parse(read('brand-assets.manifest.json'));
   assert.equal(
     Object.keys(manifest.files).filter((file) => file.startsWith('public/brand/agentdomain-brand/'))
@@ -140,7 +143,7 @@ test('Next config uses local brand data and redirects docs to its canonical host
     },
   ]);
   const headers = await config.headers();
-  assert.equal(headers.length, 1);
+  assert.equal(headers.length, 2);
   const values = Object.fromEntries(headers[0].headers.map(({ key, value }) => [key, value]));
   assert.equal(values['X-Frame-Options'], 'DENY');
   assert.equal(values['X-Content-Type-Options'], 'nosniff');
@@ -151,6 +154,16 @@ test('Next config uses local brand data and redirects docs to its canonical host
   );
   assert.doesNotMatch(values['Content-Security-Policy'], /connect-src[^;]*\shttps:\s/);
   assert.doesNotMatch(values['Content-Security-Policy'], /img-src[^;]*\shttps:\s/);
+  assert.deepEqual(headers[1], {
+    source: '/:path*',
+    has: [
+      {
+        type: 'host',
+        value: '(?:[a-z0-9-]+-)?agentdomain-frontend-preview\\.[a-z0-9-]+\\.workers\\.dev',
+      },
+    ],
+    headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }],
+  });
 });
 
 test('Wrangler owns production custom domains and isolates route-free previews', () => {
@@ -170,6 +183,7 @@ test('Wrangler owns production custom domains and isolates route-free previews',
   ]);
   assert.equal(config.env.preview.name, 'agentdomain-frontend-preview');
   assert.equal(config.env.preview.workers_dev, true);
+  assert.equal(config.env.preview.preview_urls, true);
   assert.deepEqual(config.env.preview.routes, []);
   assert.equal(JSON.stringify(config).includes('api.agentdomain.app'), false);
 });
@@ -180,7 +194,31 @@ test('static assets carry bounded cache and security headers', () => {
   assert.match(headers, /\/_next\/static\/\*/);
   assert.match(headers, /max-age=31536000, immutable/);
   assert.match(headers, /\/brand\/\*/);
+  assert.match(headers, /workers\.dev\/\*/);
+  assert.match(headers, /X-Robots-Tag: noindex, nofollow/);
   assert.doesNotMatch(headers, /Access-Control-Allow-Origin:\s*\*/);
+});
+
+test('production release requires complete browser config and the dedicated API origin', () => {
+  const valid = {
+    FRONTEND_PUBLIC_API_URL: 'https://api.agentdomain.app/api/v1',
+    NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: 'w'.repeat(32),
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: '0x4synthetic-public-site-key',
+  };
+  assert.deepEqual(validateFrontendProductionEnvironment(valid), {
+    api: 'https://api.agentdomain.app/api/v1',
+    walletConnect: true,
+    turnstile: true,
+  });
+  for (const key of Object.keys(valid)) {
+    assert.throws(() => validateFrontendProductionEnvironment({ ...valid, [key]: '' }));
+  }
+  assert.throws(() =>
+    validateFrontendProductionEnvironment({
+      ...valid,
+      FRONTEND_PUBLIC_API_URL: 'https://agentdomain.app/api/v1',
+    }),
+  );
 });
 
 test('browser APIs stay same-origin while server reads use the reviewed public API host', () => {
@@ -219,7 +257,7 @@ test('docs links are canonical and the frontend sitemap cannot publish the retir
 
 test('frontend env template is blank, reviewed and local values stay ignored', () => {
   assert.equal(
-    read('frontend.env.example'),
+    read('frontend.env.example').replaceAll('\r\n', '\n'),
     [
       'FRONTEND_PUBLIC_API_URL=',
       'NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=',

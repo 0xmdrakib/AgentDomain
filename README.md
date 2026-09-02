@@ -11,7 +11,7 @@ Live docs: https://docs.agentdomain.app
 ## Public source of truth
 
 This repository is the public source of truth for the AgentDomain frontend,
-documentation, SDKs, integrations, and verified contracts. Frontend work belongs
+documentation, SDKs, integrations, and published contract artifacts. Frontend work belongs
 in `apps/frontend`; documentation work belongs in `apps/docs`. Their production
 destinations are `agentdomain.app` and `docs.agentdomain.app`, respectively.
 
@@ -41,13 +41,15 @@ npm install @agentdomain/sdk
 
 - API and integration guides: [AgentDomain docs](https://docs.agentdomain.app)
 - Production API: [agentdomain.app](https://agentdomain.app)
-- Base contract sources and deployment records: [`packages/contracts`](packages/contracts)
+- Base contract source and available deployment records: [`packages/contracts`](packages/contracts)
 
 ## Base contracts
 
-The verified contract sources, ABIs, and Base mainnet deployment records are in
-[`packages/contracts`](packages/contracts). Do not place private keys or service
-credentials in this repository.
+Contract source and the Base mainnet deployment records currently published by
+AgentDomain are in [`packages/contracts`](packages/contracts). Only artifacts
+committed there are part of this public evidence; this repository does not claim
+complete ABI or deployment verification where those artifacts are absent. Do not
+place private keys or service credentials in this repository.
 
 ## Development
 
@@ -66,6 +68,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request and
 
 ## License
 
-The public contents of this repository are licensed under the
-[Apache License 2.0](LICENSE). AgentDomain names and logos are not licensed as
-part of the source code; see [NOTICE](NOTICE).
+Unless a file or third-party notice states otherwise, the source code and
+documentation in this repository are licensed under the
+[Apache License 2.0](LICENSE). AgentDomain names, logos, marks, and brand artwork
+are excluded from that license; see [NOTICE](NOTICE).

@@ -71,7 +71,30 @@ test('only main Workers Builds or explicit local production can submit', async (
       environment: {},
       git: git({
         'rev-parse HEAD': SHA,
+        'branch --show-current': 'main',
+        'ls-remote --exit-code origin refs/heads/main': `${SHA}\trefs/heads/main\n`,
         'status --porcelain=v1 --untracked-files=normal': ' M apps/frontend/package.json',
+      }),
+    }),
+  );
+  await rejects('INDEXNOW_NON_PRODUCTION_BRANCH', () =>
+    productionContext({
+      confirmed: true,
+      environment: {},
+      git: git({
+        'rev-parse HEAD': SHA,
+        'branch --show-current': 'codex/unsafe-production',
+      }),
+    }),
+  );
+  await rejects('INDEXNOW_REMOTE_MAIN_MISMATCH', () =>
+    productionContext({
+      confirmed: true,
+      environment: {},
+      git: git({
+        'rev-parse HEAD': SHA,
+        'branch --show-current': 'main',
+        'ls-remote --exit-code origin refs/heads/main': `${'b'.repeat(40)}\trefs/heads/main\n`,
       }),
     }),
   );
@@ -80,6 +103,8 @@ test('only main Workers Builds or explicit local production can submit', async (
     environment: {},
     git: git({
       'rev-parse HEAD': SHA,
+      'branch --show-current': 'main',
+      'ls-remote --exit-code origin refs/heads/main': `${SHA}\trefs/heads/main\n`,
       'status --porcelain=v1 --untracked-files=normal': '',
     }),
   });
@@ -195,6 +220,10 @@ test('package commands run IndexNow only after production deploys', async () => 
   );
   assert.doesNotMatch(frontend.scripts.preview, /indexnow\.mjs submit/);
   assert.match(docs.scripts.build, /indexnow\.mjs prepare-key --site=docs/);
+  assert.match(
+    docs.scripts['build:cloudflare:production'],
+    /indexnow\.mjs verify.*--site=docs.*--production.*pnpm run check/,
+  );
   assert.match(
     docs.scripts.deploy,
     /indexnow\.mjs verify.*--production.*wrangler deploy.*indexnow\.mjs submit.*--production/,

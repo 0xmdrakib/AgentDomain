@@ -19,6 +19,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build && node ../../scripts/seo/indexnow.mjs prepare-key --site=docs",
+    "build:cloudflare:production": "node ../../scripts/seo/indexnow.mjs verify --site=docs --production && pnpm run check",
     "preview": "pnpm run build && wrangler dev --env preview",
     "deploy": "pnpm run check && node ../../scripts/seo/indexnow.mjs verify --site=docs --production && wrangler deploy && node ../../scripts/seo/indexnow.mjs submit --site=docs --production",
     "lint": "node scripts/validate-content.mjs",

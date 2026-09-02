@@ -17,7 +17,7 @@ export default function TermsPage() {
       <section className="container py-16 md:py-24 max-w-4xl">
         <h1 className="text-4xl font-bold tracking-tight mb-8">Terms of Service</h1>
         <div className="prose prose-sm max-w-none space-y-6 text-muted-foreground">
-          <p>Last updated: {new Date().toLocaleDateString()}</p>
+          <p>Last reviewed: September 2, 2026</p>
 
           <h2 className="text-2xl font-semibold text-foreground mt-8">1. Acceptance of Terms</h2>
           <p>
@@ -51,14 +51,15 @@ export default function TermsPage() {
             distribution, illegal activities, or violates our acceptable use policy.
           </p>
 
-          <h2 className="text-2xl font-semibold text-foreground mt-8">
-            4. Payments and Non-Refundability
-          </h2>
+          <h2 className="text-2xl font-semibold text-foreground mt-8">4. Payments and Refunds</h2>
           <p>
             Payments for the Service are made in cryptocurrency (USDC) via the x402 protocol or
-            standard on-chain transfers. Due to the immutable nature of blockchain transactions and
-            the upfront costs of ICANN domain registrations,{' '}
-            <strong>all payments are final and non-refundable</strong>.
+            standard on-chain transfers. Blockchain transfers cannot be reversed, and payments are
+            generally final once confirmed and once provisioning or non-recoverable third-party work
+            has begun. A payment is not treated as categorically non-refundable when AgentDomain
+            explicitly marks it as refund eligible, including in a registration recovery response,
+            or when applicable law requires a refund. An approved refund is a separate transaction
+            and does not reverse the original blockchain transfer.
           </p>
 
           <h2 className="text-2xl font-semibold text-foreground mt-8">

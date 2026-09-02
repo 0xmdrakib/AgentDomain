@@ -5,18 +5,21 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: publish-npm
   cancel-in-progress: false
 
 jobs:
-  publish:
-    name: Build and publish public packages
+  validate:
+    name: Validate and package public releases
     if: github.ref == 'refs/heads/main' && github.repository == '0xmdrakib/AgentDomain'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      release-manifest-sha256: ${{ steps.pack-release.outputs.release-manifest-sha256 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -30,11 +33,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22.14.0
-          registry-url: https://registry.npmjs.org
           package-manager-cache: false
-
-      - name: Install an OIDC-capable npm CLI
-        run: npm install --global 'npm@11.5.1'
 
       - run: pnpm install --frozen-lockfile
 
@@ -47,34 +46,142 @@ jobs:
       - run: pnpm --filter @agentdomain/agentkit-plugin build
       - run: pnpm --filter @agentdomain/eliza-plugin build
 
-      - name: Publish packages
+      - name: Pack reviewed packages and the OIDC-capable npm CLI
+        id: pack-release
+        shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$GITHUB_WORKSPACE/.release"
+          release_dir="$RUNNER_TEMP/agentdomain-release"
+          package_dir="$release_dir/packages"
+          tooling_dir="$release_dir/tooling"
+          publish_order="$release_dir/publish-order.tsv"
+          checksums="$release_dir/release.sha256"
+          mkdir -p "$package_dir" "$tooling_dir"
+          : > "$publish_order"
+          : > "$checksums"
 
-          publish_if_needed() {
-            local package_dir="$1"
+          pack_release() {
+            local source_dir="$1"
             local name
             local version
             local slug
             local archive
 
-            name="$(node -p "require('./${package_dir}/package.json').name")"
-            version="$(node -p "require('./${package_dir}/package.json').version")"
-            if npm view "${name}@${version}" version >/dev/null 2>&1; then
-              echo "Skipping ${name}@${version}; it is already published."
-              return
-            fi
-
-            pnpm --dir "$package_dir" pack --pack-destination "$GITHUB_WORKSPACE/.release"
+            name="$(node -p "require('./${source_dir}/package.json').name")"
+            version="$(node -p "require('./${source_dir}/package.json').version")"
+            pnpm --dir "$source_dir" pack --pack-destination "$package_dir"
             slug="${name#@}"
             slug="${slug//\//-}"
-            archive="$GITHUB_WORKSPACE/.release/${slug}-${version}.tgz"
-            npm publish "$archive" --access public --provenance
+            archive="$package_dir/${slug}-${version}.tgz"
+            test -f "$archive"
+            printf '%s\t%s\tpackages/%s\n' "$name" "$version" "$(basename "$archive")" >> "$publish_order"
+            printf '%s  packages/%s\n' "$(sha256sum "$archive" | cut -d ' ' -f 1)" "$(basename "$archive")" >> "$checksums"
           }
 
-          publish_if_needed packages/shared
-          publish_if_needed packages/sdk
-          publish_if_needed apps/mcp-server
-          publish_if_needed packages/agentkit-plugin
-          publish_if_needed packages/eliza-plugin
+          pack_release packages/shared
+          pack_release packages/sdk
+          pack_release apps/mcp-server
+          pack_release packages/agentkit-plugin
+          pack_release packages/eliza-plugin
+
+          npm pack 'npm@11.5.1' --pack-destination "$tooling_dir" >/dev/null
+          npm_archive="$tooling_dir/npm-11.5.1.tgz"
+          test -f "$npm_archive"
+          printf '%s  tooling/%s\n' "$(sha256sum "$npm_archive" | cut -d ' ' -f 1)" "$(basename "$npm_archive")" >> "$checksums"
+          printf '%s  publish-order.tsv\n' "$(sha256sum "$publish_order" | cut -d ' ' -f 1)" >> "$checksums"
+
+          test "$(wc -l < "$publish_order")" -eq 5
+          test "$(wc -l < "$checksums")" -eq 7
+          (cd "$release_dir" && sha256sum --check --strict release.sha256)
+          manifest_sha256="$(sha256sum "$checksums" | cut -d ' ' -f 1)"
+          test "${#manifest_sha256}" -eq 64
+          printf 'release-manifest-sha256=%s\n' "$manifest_sha256" >> "$GITHUB_OUTPUT"
+
+      - name: Upload immutable release inputs
+        id: upload-release
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: public-packages-${{ github.sha }}
+          path: ${{ runner.temp }}/agentdomain-release
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  publish:
+    name: Publish validated packages with npm OIDC
+    needs: validate
+    if: github.ref == 'refs/heads/main' && github.repository == '0xmdrakib/AgentDomain'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: npm-production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Download validated release inputs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: public-packages-${{ github.sha }}
+          path: ${{ runner.temp }}/agentdomain-release
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.14.0
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Verify staged release inputs
+        shell: bash
+        env:
+          EXPECTED_RELEASE_MANIFEST_SHA256: ${{ needs.validate.outputs.release-manifest-sha256 }}
+        run: |
+          set -euo pipefail
+          release_dir="$RUNNER_TEMP/agentdomain-release"
+          test -f "$release_dir/publish-order.tsv"
+          test -f "$release_dir/release.sha256"
+          test "$(wc -l < "$release_dir/publish-order.tsv")" -eq 5
+          test "$(wc -l < "$release_dir/release.sha256")" -eq 7
+          [[ "$EXPECTED_RELEASE_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          printf '%s  %s\n' "$EXPECTED_RELEASE_MANIFEST_SHA256" "$release_dir/release.sha256" | sha256sum --check --status
+          (cd "$release_dir" && sha256sum --check --strict release.sha256)
+
+          mkdir -p "$RUNNER_TEMP/npm-cli"
+          tar -xzf "$release_dir/tooling/npm-11.5.1.tgz" -C "$RUNNER_TEMP/npm-cli"
+          test "$(node "$RUNNER_TEMP/npm-cli/package/bin/npm-cli.js" --version)" = '11.5.1'
+
+      - name: Publish packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_dir="$RUNNER_TEMP/agentdomain-release"
+          npm_cli="$RUNNER_TEMP/npm-cli/package/bin/npm-cli.js"
+
+          while IFS=$'\t' read -r name version archive_path; do
+            if [[ ! "$name" =~ ^@agentdomain/[a-z0-9-]+$ ]] \
+              || [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]] \
+              || [[ ! "$archive_path" =~ ^packages/agentdomain-[a-z0-9-]+-[0-9A-Za-z.+-]+\.tgz$ ]]; then
+              echo '::error::Invalid staged package metadata.'
+              exit 1
+            fi
+
+            archive="$release_dir/$archive_path"
+            test -f "$archive"
+            tar -xOf "$archive" package/package.json | node -e '
+              let source = "";
+              process.stdin.setEncoding("utf8");
+              process.stdin.on("data", (chunk) => { source += chunk; });
+              process.stdin.on("end", () => {
+                const manifest = JSON.parse(source);
+                if (manifest.name !== process.argv[1] || manifest.version !== process.argv[2]) {
+                  process.exitCode = 1;
+                }
+              });
+            ' "$name" "$version"
+
+            if node "$npm_cli" view "${name}@${version}" version >/dev/null 2>&1; then
+              echo "Skipping ${name}@${version}; it is already published."
+              continue
+            fi
+            node "$npm_cli" publish "$archive" --access public --provenance
+          done < "$release_dir/publish-order.tsv"
