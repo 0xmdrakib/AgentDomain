@@ -33,7 +33,7 @@ export default defineConfig({
       disable404Route: true,
       lastUpdated: true,
       editLink: {
-        baseUrl: 'https://github.com/0xmdrakib/AgentDomain/edit/main/apps/docs/src/content/docs/',
+        baseUrl: 'https://github.com/0xmdrakib/AgentDomain/edit/main/apps/docs/',
       },
       social: [
         {
