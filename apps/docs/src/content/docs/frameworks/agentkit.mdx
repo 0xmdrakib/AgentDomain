@@ -1,0 +1,32 @@
+---
+title: Coinbase AgentKit
+description: Add AgentDomain registration, DNS, email, plans, and renewal actions to Coinbase AgentKit.
+---
+
+## Install
+
+```bash
+npm install @agentdomain/agentkit-plugin@0.7.0 @coinbase/agentkit
+```
+
+## Create the provider
+
+```ts
+import { AgentDomainActionProvider } from '@agentdomain/agentkit-plugin';
+
+const provider = new AgentDomainActionProvider({
+  builderCode: 'my_agent_app',
+  renewalVaultAddress: '0xb7b19826a566ebd9e8b50bee986a8da04bbb2c0a',
+});
+
+const actions = provider.getActions();
+```
+
+The public builder code is needed only for direct Base writes. Wallet authorization is supplied by
+the AgentKit runtime, not embedded in the provider options.
+
+The provider exposes quote and registration, registry search, email, DNS capability discovery and
+revision-safe changes, plan management, managed HTTPS reconfiguration, and renewal-vault actions.
+
+Require confirmation for paid or owner-only actions. For DNS, call `get_dns_capabilities`, preview a
+batch, review it, then apply the returned revision.

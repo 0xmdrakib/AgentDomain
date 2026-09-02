@@ -6,7 +6,7 @@ AgentDomain provides domain, DNS, SSL, email, Basename, ENS, x402 USDC checkout,
 
 The production API base is `https://agentdomain.app/api/v1`. A direct `GET` request returns the
 machine-readable service discovery document; human documentation is available at
-`https://agentdomain.app/docs`.
+`https://docs.agentdomain.app`.
 
 ```bash
 npm install @agentdomain/sdk viem
@@ -88,7 +88,7 @@ The full key is returned only once. A scoped key can manage only its own agent I
 
 ## Professional DNS management
 
-The SDK supports every DNS record type writable through Spaceship: `A`, `AAAA`,
+The SDK supports every currently available DNS record type: `A`, `AAAA`,
 `ALIAS`, `CAA`, `CNAME`, `HTTPS`, `MX`, `NS`, `PTR`, `SRV`, `SVCB`, `TLSA`, and
 `TXT`. Structured record data is preferred; legacy `value` and `priority`
 payloads remain compatible.

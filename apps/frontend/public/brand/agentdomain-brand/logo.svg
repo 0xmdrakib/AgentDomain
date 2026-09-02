@@ -1,0 +1,31 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="788" height="788" viewBox="233 233 788 788">
+<title>Centered logo — corners matched to the white circle surface</title>
+<defs>
+  <linearGradient id="badge-material" x1="0" y1="0" x2="0.8" y2="1">
+    <stop offset="0" stop-color="#fefefe" />
+    <stop offset="1" stop-color="#fdfdfd" />
+  </linearGradient>
+  <linearGradient id="ink" gradientUnits="userSpaceOnUse" x1="450" y1="415" x2="804" y2="840">
+    <stop offset="0" stop-color="#131413" />
+    <stop offset="0.5" stop-color="#141514" />
+    <stop offset="1" stop-color="#141413" />
+  </linearGradient>
+  <filter id="ink-shadow" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
+    <feGaussianBlur in="SourceAlpha" stdDeviation="1.2" result="blur" />
+    <feOffset in="blur" dx="-0.6" dy="0.8" result="offset" />
+    <feFlood flood-color="#000000" flood-opacity="0.13" />
+    <feComposite in2="offset" operator="in" />
+    <feMerge><feMergeNode /><feMergeNode in="SourceGraphic" /></feMerge>
+  </filter>
+</defs>
+<desc>The corrected logo and white circle geometry are unchanged. The circle's white material is extended seamlessly to the four outer corners of the 788 by 788 canvas. Only the darker corner background and badge drop shadow are removed. The black logo, its subtle shadow, and the small black circle retain their original geometry and position.</desc>
+<rect id="matched-background" x="233" y="233" width="788" height="788" fill="url(#badge-material)" />
+<circle id="badge" cx="627" cy="627" r="394" fill="url(#badge-material)" />
+<g id="logo" fill="url(#ink)" filter="url(#ink-shadow)">
+<g transform="translate(627 627) scale(1.000926517572 0.998800644575) translate(-627 -602.338911840095)"><path d="M 450.16384180791 396.363742773954 A 6.78 6.78 0 0 1 460.547746871741 390.620897809053 L 572.664098263722 460.979176500074 A 5.29 5.29 0 0 1 575.142201834862 465.459950816346 L 575.142201834862 733.777563408654 A 3.77 3.77 0 0 1 573.486951829772 736.898578060819 L 459.623148165775 814.050884299371 A 6.06 6.06 0 0 1 450.16384180791 809.034080906235 Z" />
+<path d="M 450.16384180791 396.363742773954 A 6.78 6.78 0 0 1 460.547746871741 390.620897809053 L 572.664098263722 460.979176500074 A 5.29 5.29 0 0 1 575.142201834862 465.459950816346 L 575.142201834862 733.777563408654 A 3.77 3.77 0 0 1 573.486951829772 736.898578060819 L 459.623148165775 814.050884299371 A 6.06 6.06 0 0 1 450.16384180791 809.034080906235 Z" transform="translate(1254 0) scale(-1 1)" />
+<path d="M 610.35 550.85 H 643.65 Q 644 550.85 644 551.2 V 572.8 Q 644 573.45 643.28 574.02 L 634.86 580.52 Q 633.9 581.2 633.9 582.22 V 779.5 H 620.1 V 582.22 Q 620.1 581.2 619.14 580.52 L 610.72 574.02 Q 610 573.45 610 572.8 V 551.2 Q 610 550.85 610.35 550.85 Z" /></g>
+<circle id="endpoint-circle" cx="627" cy="804" r="24.25" />
+</g>
+</svg>

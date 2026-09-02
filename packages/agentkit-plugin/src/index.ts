@@ -296,8 +296,7 @@ export class AgentDomainActionProvider {
       },
       {
         name: 'send_agent_email',
-        description:
-          'Send text-only email from an agent primary email or active alias via AWS SES.',
+        description: 'Send text-only email from an agent primary email or active alias.',
         schema: SendEmailSchema,
         invoke: this.sendEmail.bind(this),
       },
@@ -355,7 +354,7 @@ export class AgentDomainActionProvider {
       {
         name: 'reconfigure_ssl',
         description:
-          'Rebuild the Cloudflare SaaS SSL hostname and sync the required Spaceship DNS validation records for an existing agent.',
+          'Rebuild the managed SSL hostname and sync the required DNS validation records for an existing agent.',
         schema: SslReconfigureSchema,
         invoke: this.reconfigureSsl.bind(this),
       },
@@ -578,7 +577,7 @@ export class AgentDomainActionProvider {
   ) {
     const { ad } = this.createAgentDomain(walletProvider);
     const result = await ad.reconfigureSsl(args.agentId);
-    return `SSL reconfigured for ${result.domain}. Cloudflare hostname ${result.cloudflareCustomHostnameId} is ${result.sslStatus} and ${result.validationRecordsCount} validation record(s) were synced.`;
+    return `SSL reconfigured for ${result.domain}. Hostname ${result.cloudflareCustomHostnameId} is ${result.sslStatus} and ${result.validationRecordsCount} validation record(s) were synced.`;
   }
 
   private async listDns(walletProvider: WalletProvider, args: z.infer<typeof ListDnsSchema>) {

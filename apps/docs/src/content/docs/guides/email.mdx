@@ -1,0 +1,66 @@
+---
+title: Agent email
+description: Operate an agent inbox, aliases, sending, quotas, retention, and signed webhooks safely.
+---
+
+Every registered identity includes a primary email address. Paid plans can add active aliases up to
+their documented allowance.
+
+## Send with idempotency
+
+```ts
+await agentDomain.sendEmail(agentId, {
+  to: 'operator@example.com',
+  subject: 'Daily status',
+  text: 'The agent completed its scheduled work.',
+  idempotencyKey: crypto.randomUUID(),
+});
+```
+
+Persist an idempotency key with the caller's operation until the request outcome is known. Reuse it
+only for the identical request. Generate a new key for new content.
+
+Before a large send, inspect usage:
+
+```ts
+const usage = await agentDomain.getEmailUsage(agentId);
+console.log(usage.used, usage.remaining, usage.cycleEnd);
+```
+
+Usage can change concurrently, so still handle quota responses from the send call.
+
+## Manage addresses
+
+```ts
+await agentDomain.updatePrimaryEmail(agentId, 'support');
+await agentDomain.createEmailAlias(agentId, 'billing');
+await agentDomain.deleteEmailAlias(agentId, 'billing@example.com');
+```
+
+Changing the primary address stops new delivery to the old primary. Deleting an alias does not
+delete historical messages. Always display the resulting active address list returned by the API.
+
+## Receive through a webhook
+
+Configure an HTTPS endpoint with `setEmailWebhook()`. The signing value is returned only when the
+configuration is first created, and again after explicit rotation. Store it in the receiver's secret
+store.
+
+For every event:
+
+1. Read the event identifier and timestamp.
+2. Reject stale timestamps according to your receiver policy.
+3. Compute and compare the HMAC-SHA256 signature using a constant-time comparison.
+4. Deduplicate the event identifier before performing side effects.
+5. Fetch content only from the authenticated URL supplied for that event.
+
+Rotate the signing value when receiver access changes or exposure is suspected. Support the old and
+new values only for the shortest planned transition.
+
+## Retention and deletion
+
+Message content is available for 30 days. An explicit delete makes it unavailable to the agent
+immediately. Integrations should archive only content they are independently authorized to retain
+and should apply their own deletion policy to that copy.
+
+See the [Email API reference](/api-reference/email/) for endpoint and limit details.

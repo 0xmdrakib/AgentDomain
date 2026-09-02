@@ -555,7 +555,7 @@ export const enableAutoRenewAction = {
 export const reconfigureSslAction = {
   name: 'RECONFIGURE_SSL',
   description:
-    'Rebuild the Cloudflare SaaS SSL hostname and sync Spaceship DNS validation records for an AgentDomain identity.',
+    'Rebuild the managed SSL hostname and sync DNS validation records for an AgentDomain identity.',
   similes: ['FIX_SSL', 'REPAIR_SSL', 'SYNC_SSL'],
   examples: [],
   validate: async (runtime: IAgentRuntime) => Boolean(runtime.getSetting('AGENT_PRIVATE_KEY')),
@@ -598,7 +598,7 @@ export const dnsCapabilitiesAction = {
     const { ad } = getClients(runtime);
     const result = await ad.getDnsCapabilities(requireAgentId(message.content.text));
     return {
-      text: `AgentDomain supports ${result.supportedTypes.length} Spaceship DNS record types.`,
+      text: `AgentDomain supports ${result.supportedTypes.length} DNS record types.`,
       data: result,
     };
   },

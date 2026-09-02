@@ -26,11 +26,11 @@ metadata when requested directly.
 - `create_dns_record` - create a user-managed DNS record
 - `update_dns_record` - update a user-managed DNS record
 - `delete_dns_record` - delete a user-managed DNS record
-- `get_dns_capabilities` - discover all 13 Spaceship-supported types and validation constraints
+- `get_dns_capabilities` - discover all 13 supported types and validation constraints
 - `change_dns_records` - preview or apply a revision-protected merge/replace batch
 - `import_dns_zone` - preview or apply a standard BIND zone import
 - `export_dns_zone` - export user-managed or permitted complete-zone records as BIND
-- `reconfigure_ssl` - rebuild Cloudflare SaaS SSL and DNS validation records
+- `reconfigure_ssl` - rebuild managed SSL and DNS validation records
 - `fund_renewal_vault` - top up an agent's renewal vault
 - `withdraw_renewal_vault` - build an owner-signed vault withdrawal transaction
 - `get_renewal_status` - check renewal date, amount, vault balance, and auto-renew state

@@ -368,7 +368,7 @@ const TOOLS = [
   {
     name: 'get_dns_capabilities',
     description:
-      'Get the machine-readable Spaceship DNS types, fields, limits, and safety warnings supported by AgentDomain.',
+      'Get the machine-readable DNS types, fields, limits, and safety warnings supported by AgentDomain.',
     inputSchema: {
       type: 'object',
       properties: { agentId: { type: 'string', description: 'AgentDomain agent ID (UUID)' } },
@@ -377,7 +377,7 @@ const TOOLS = [
   },
   {
     name: 'list_dns_records',
-    description: 'List Spaceship-backed DNS records for an agent domain.',
+    description: 'List DNS records for an agent domain.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -388,7 +388,7 @@ const TOOLS = [
   },
   {
     name: 'create_dns_record',
-    description: 'Create a user-managed DNS record and sync the full DNS state to Spaceship.',
+    description: 'Create a user-managed DNS record and apply the resulting DNS state.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -405,7 +405,7 @@ const TOOLS = [
   },
   {
     name: 'update_dns_record',
-    description: 'Update a user-managed DNS record and sync the DNS state to Spaceship.',
+    description: 'Update a user-managed DNS record and apply the resulting DNS state.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -423,7 +423,7 @@ const TOOLS = [
   },
   {
     name: 'delete_dns_record',
-    description: 'Delete a user-managed DNS record and sync the DNS state to Spaceship.',
+    description: 'Delete a user-managed DNS record and apply the resulting DNS state.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -479,8 +479,7 @@ const TOOLS = [
   },
   {
     name: 'reconfigure_ssl',
-    description:
-      'Rebuild the Cloudflare SaaS SSL hostname and sync required DNS validation records.',
+    description: 'Rebuild the managed SSL hostname and sync required DNS validation records.',
     inputSchema: {
       type: 'object',
       properties: {

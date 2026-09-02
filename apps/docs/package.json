@@ -2,11 +2,41 @@
   "name": "@agentdomain/docs",
   "version": "0.1.0",
   "private": true,
-  "description": "AgentDomain documentation site (Mintlify)",
+  "description": "Public AgentDomain documentation, built with Astro and Starlight for Cloudflare Workers Static Assets.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/0xmdrakib/AgentDomain.git",
+    "directory": "apps/docs"
+  },
+  "homepage": "https://docs.agentdomain.app",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0",
+    "pnpm": ">=10.0.0"
+  },
+  "packageManager": "pnpm@10.33.2",
   "scripts": {
-    "dev": "echo \"Run with: mintlify dev\"",
-    "build": "echo \"Mintlify deploys via git push\"",
-    "lint": "echo \"no lint\"",
-    "typecheck": "echo \"no typecheck\""
+    "dev": "astro dev",
+    "build": "astro build && node ../../scripts/seo/indexnow.mjs prepare-key --site=docs",
+    "preview": "pnpm run build && wrangler dev --env preview",
+    "deploy": "pnpm run check && node ../../scripts/seo/indexnow.mjs verify --site=docs --production && wrangler deploy && node ../../scripts/seo/indexnow.mjs submit --site=docs --production",
+    "lint": "node scripts/validate-content.mjs",
+    "typecheck": "astro check",
+    "test": "node --test test/*.test.mjs",
+    "validate:content": "node scripts/validate-content.mjs",
+    "validate:output": "node scripts/validate-output.mjs",
+    "check": "pnpm run validate:content && pnpm run typecheck && pnpm run test && pnpm run build && pnpm run validate:output"
+  },
+  "dependencies": {
+    "@astrojs/sitemap": "3.7.4",
+    "@astrojs/starlight": "0.41.11",
+    "astro": "7.2.10",
+    "sharp": "0.35.4"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.10",
+    "typescript": "6.0.3",
+    "wrangler": "4.128.0"
   }
 }

@@ -1563,7 +1563,7 @@ export function createOpenAITools(): Array<{
       function: {
         name: 'reconfigure_ssl',
         description:
-          'Rebuild the Cloudflare SaaS SSL hostname and sync the required Spaceship DNS validation records for an existing agent. Use this if SSL is pending, failed, or needs a refresh.',
+          'Rebuild the managed SSL hostname and sync the required DNS validation records for an existing agent. Use this if SSL is pending, failed, or needs a refresh.',
         parameters: {
           type: 'object',
           properties: {
@@ -1876,7 +1876,7 @@ export function createAnthropicTools(): Array<{
     {
       name: 'reconfigure_ssl',
       description:
-        'Rebuild the Cloudflare SaaS SSL hostname and sync the required Spaceship DNS validation records for an existing agent. Use this if SSL is pending, failed, or needs a refresh.',
+        'Rebuild the managed SSL hostname and sync the required DNS validation records for an existing agent. Use this if SSL is pending, failed, or needs a refresh.',
       input_schema: {
         type: 'object',
         properties: {

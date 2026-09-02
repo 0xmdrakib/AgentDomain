@@ -4,7 +4,7 @@
   "description": "Coinbase AgentKit action provider for AgentDomain",
   "license": "Apache-2.0",
   "repository": "https://github.com/0xmdrakib/AgentDomain.git",
-  "homepage": "https://agentdomain.app/docs",
+  "homepage": "https://docs.agentdomain.app",
   "bugs": "https://github.com/0xmdrakib/AgentDomain/issues",
   "type": "module",
   "main": "./dist/index.js",

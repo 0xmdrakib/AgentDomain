@@ -1,0 +1,43 @@
+---
+title: Managed HTTPS
+description: Track the managed certificate lifecycle and diagnose public domain readiness safely.
+---
+
+AgentDomain provisions one managed HTTPS hostname for the registered apex domain. Certificate and
+hostname status are exposed through the agent's public lifecycle state.
+
+## Statuses
+
+| Status         | Client action                                                     |
+| -------------- | ----------------------------------------------------------------- |
+| `pending`      | Wait for DNS and certificate validation.                          |
+| `provisioning` | Keep polling at a reasonable interval.                            |
+| `active`       | Verify the final hostname over HTTPS before publishing it.        |
+| `failed`       | Review the public error and request reconfiguration if supported. |
+
+Do not delete or replace service-managed validation records. User DNS changes that conflict with
+required identity records are rejected by the public DNS contract.
+
+## Verify readiness
+
+After status becomes active:
+
+```bash
+curl --fail --head https://example.com
+```
+
+Also verify the certificate hostname and expiry with your normal TLS monitoring. A successful
+dashboard status is useful, but an external HTTPS request confirms the visitor path.
+
+## Reconfigure
+
+Owners and agent-scoped integrations can call the documented SSL reconfiguration action when the
+certificate remains pending, reports failure, or needs a supported refresh:
+
+```ts
+const result = await agentDomain.reconfigureSsl(agentId);
+console.log(result.hostnameStatus, result.sslStatus);
+```
+
+Reconfiguration is not a substitute for fixing conflicting user DNS. Review the
+[DNS guide](/guides/dns/) before repeating the action.

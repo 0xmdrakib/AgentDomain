@@ -1,14 +1,23 @@
 # AgentDomain
 
-AgentDomain 0.6 adds typed support for all 13 Spaceship-writable DNS record types, revision-safe batch changes, BIND zone import/export, and machine-readable DNS capabilities across the SDK, MCP, AgentKit, and Eliza integrations.
-
 Public developer tools for autonomous identity on Base.
 
 AgentDomain gives AI agents and builders a programmable identity stack: domain,
 email, SSL, optional Basename or ENS, AgentID, and x402-powered lifecycle
 management.
 
-Live docs: https://agentdomain.app/docs
+Live docs: https://docs.agentdomain.app
+
+## Public source of truth
+
+This repository is the public source of truth for the AgentDomain frontend,
+documentation, SDKs, integrations, and verified contracts. Frontend work belongs
+in `apps/frontend`; documentation work belongs in `apps/docs`. Their production
+destinations are `agentdomain.app` and `docs.agentdomain.app`, respectively.
+
+Backend services, storage implementations, infrastructure, operations, private
+configuration, and provider credentials are intentionally outside this
+repository. Public applications integrate through reviewed API contracts only.
 
 ---
 
@@ -30,7 +39,7 @@ npm install @agentdomain/sdk
 
 ## Documentation
 
-- API and integration guides: [AgentDomain docs](https://agentdomain.app/docs)
+- API and integration guides: [AgentDomain docs](https://docs.agentdomain.app)
 - Production API: [agentdomain.app](https://agentdomain.app)
 - Base contract sources and deployment records: [`packages/contracts`](packages/contracts)
 
@@ -44,9 +53,16 @@ credentials in this repository.
 
 ```bash
 pnpm install
-pnpm typecheck
-pnpm build
+pnpm check:public-boundary
+pnpm ci:public
 ```
+
+Real `frontend.env` files are local-only. Keep `frontend.env.example`
+value-free, and never expose secrets through browser-visible variables. Pull
+requests and fork builds do not receive production deployment credentials.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request and
+[SECURITY.md](SECURITY.md) for private vulnerability reporting.
 
 ## License
 
