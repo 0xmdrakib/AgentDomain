@@ -27,6 +27,12 @@ function filesUnder(directory) {
     });
 }
 
+function hashInput(file, content) {
+  return file.endsWith('.svg')
+    ? Buffer.from(content.toString('utf8').replaceAll('\r\n', '\n'))
+    : content;
+}
+
 export function verifyAssets() {
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
   if (manifest.schemaVersion !== 1 || !manifest.files || Array.isArray(manifest.files)) {
@@ -47,7 +53,9 @@ export function verifyAssets() {
     if (!/^[a-f0-9]{64}$/.test(expectedHash)) throw new Error(`Invalid asset hash: ${file}`);
     const path = resolve(frontendRoot, file);
     if (!lstatSync(path).isFile()) throw new Error(`Brand asset is not a regular file: ${file}`);
-    const actualHash = createHash('sha256').update(readFileSync(path)).digest('hex');
+    const actualHash = createHash('sha256')
+      .update(hashInput(file, readFileSync(path)))
+      .digest('hex');
     if (actualHash !== expectedHash) throw new Error(`Brand asset integrity check failed: ${file}`);
   }
 

@@ -58,8 +58,8 @@ export const FORBIDDEN_CONTENT = [
 ];
 
 const APPROVED_ASSETS = {
-  'src/assets/logo.svg': 'edb3459bf0055280961e9d6a12827207a6b33474257182c77c6bc8cc146fe48c',
-  'src/assets/logo-black.svg': 'f03b5577b861794df5bd214b86815659b78676a3305e8467d81347fdc9df4522',
+  'src/assets/logo.svg': '299fef1db3404fc0ff64340d264d80af2fd8fb7564701517a7216314db6aa6a4',
+  'src/assets/logo-black.svg': '5de88e88e332ca99aef904a3a868a853841d1a4087fee285a181cb91d41fce4e',
   'public/brand/favicon-96.png': '1db3717ab5ae04390ee036415ece401f5e7c2ba3b7878b9b19e327229c45a24f',
   'public/brand/agentdomain-docs-card.png':
     'df73a8d0ef7e0a1202ef826dff958de93be47c96717815c3b2136faa921220fc',
@@ -133,9 +133,11 @@ export function validateInternalLinks(source, file, routes) {
 
 async function assertApprovedAssets() {
   for (const [file, expected] of Object.entries(APPROVED_ASSETS)) {
-    const digest = createHash('sha256')
-      .update(await readFile(join(DOCS_ROOT, file)))
-      .digest('hex');
+    const content = await readFile(join(DOCS_ROOT, file));
+    const hashInput = file.endsWith('.svg')
+      ? Buffer.from(content.toString('utf8').replaceAll('\r\n', '\n'))
+      : content;
+    const digest = createHash('sha256').update(hashInput).digest('hex');
     if (digest !== expected) throw new Error(`${file}: approved asset hash mismatch`);
   }
 }

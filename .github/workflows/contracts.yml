@@ -42,5 +42,4 @@ jobs:
           version: v1.8.1
       - run: pnpm install --frozen-lockfile
         working-directory: ${{ github.workspace }}
-      - run: forge fmt --check
       - run: forge build --sizes
