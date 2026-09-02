@@ -127,11 +127,4 @@ export const SUPPORTED_TLDS = ['xyz', 'com', 'ai', 'org', 'io', 'net', 'co', 'ap
 
 export const PRIMARY_SUPPORTED_TLDS = SUPPORTED_TLDS;
 
-export const SUPPORTED_FRAMEWORKS = [
-  'agentkit',
-  'eliza',
-  'crewai',
-  'langchain',
-  'openai',
-  'anthropic',
-] as const;
+export const SUPPORTED_FRAMEWORKS = ['agentkit', 'eliza', 'openai', 'anthropic'] as const;
