@@ -112,6 +112,13 @@ test('Cloudflare configuration is static-only and pinned', async () => {
   });
 });
 
+test('docs CSP enables only the WebAssembly and worker capabilities required by Pagefind', async () => {
+  const headers = await readFile(join(DOCS_ROOT, 'public', '_headers'), 'utf8');
+  assert.match(headers, /script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'/);
+  assert.match(headers, /worker-src 'self' blob:/);
+  assert.doesNotMatch(headers, /(?:^|\s)'unsafe-eval'(?:\s|;|$)/m);
+});
+
 test('package cannot be published to npm', async () => {
   const pkg = JSON.parse(await readFile(join(DOCS_ROOT, 'package.json'), 'utf8'));
   assert.equal(pkg.private, true);

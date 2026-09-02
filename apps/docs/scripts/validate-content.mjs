@@ -187,6 +187,11 @@ async function assertAppContract() {
   if (!config.includes("const canonicalSite = 'https://docs.agentdomain.app'")) {
     throw new Error('astro.config.mjs: canonical site mismatch');
   }
+  if (
+    !config.includes("baseUrl: 'https://github.com/0xmdrakib/AgentDomain/edit/main/apps/docs/'")
+  ) {
+    throw new Error('astro.config.mjs: public edit-link base mismatch');
+  }
   if (!config.includes('disable404Route: true')) {
     throw new Error('astro.config.mjs: explicit 404 route must remain enabled');
   }
@@ -202,6 +207,8 @@ async function assertAppContract() {
   const headers = await readFile(join(DOCS_ROOT, 'public', '_headers'), 'utf8');
   for (const required of [
     'Content-Security-Policy:',
+    "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
+    "worker-src 'self' blob:",
     'Strict-Transport-Security:',
     'X-Content-Type-Options: nosniff',
     'X-Robots-Tag: noindex, nofollow',
