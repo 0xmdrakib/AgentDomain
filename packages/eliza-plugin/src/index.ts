@@ -14,6 +14,14 @@ import { createPublicClient, createWalletClient, http, type Address } from 'viem
 import { privateKeyToAccount } from 'viem/accounts';
 import { base, baseSepolia } from 'viem/chains';
 import { z } from 'zod';
+import {
+  extractEmailAddresses,
+  extractFencedBlock,
+  parseCompactQuantity,
+  readLabeledEmail,
+  readLabeledEmailUsername,
+  readLabeledRemainder,
+} from './text-parsing.js';
 
 interface IAgentRuntime {
   getSetting(key: string): string | undefined;
@@ -68,8 +76,6 @@ function getClients(runtime: IAgentRuntime, opts: { requireWallet?: boolean } = 
 const TLD_PATTERN = new RegExp(String.raw`([a-z0-9-]{3,63})\.([a-z]{2,20})\b`, 'i');
 const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i;
 const AMOUNT_PATTERN = /\$?\s*(\d+(?:\.\d{1,6})?)\s*(?:usdc)?/i;
-const EMAIL_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
-const EMAIL_GLOBAL_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const EMAIL_USERNAME_PATTERN = /^[a-z0-9](?:[a-z0-9._+-]{0,62}[a-z0-9])?$/;
 
 const registerSchema = z.object({
@@ -152,9 +158,9 @@ function parsePlan(text: string): {
 } {
   const lower = text.toLowerCase();
   if (lower.includes('enterprise')) {
-    const match = lower.match(/(\d+(?:\.\d+)?)\s*(k|m)/);
-    const monthly = match
-      ? Math.round(Number(match[1]) * (match[2] === 'm' ? 1_000_000 : 1_000))
+    const quantity = parseCompactQuantity(lower);
+    const monthly = quantity
+      ? Math.round(quantity.value * (quantity.suffix === 'm' ? 1_000_000 : 1_000))
       : 100_000;
     return {
       plan: 'enterprise',
@@ -168,13 +174,15 @@ function parseDnsRecord(text: string) {
   const lower = text.toLowerCase();
   const typeMatch = text.match(/\b(A|AAAA|ALIAS|CAA|CNAME|HTTPS|MX|NS|PTR|SRV|SVCB|TLSA|TXT)\b/i);
   const nameMatch = text.match(/\bname[:=]\s*([^\s]+)/i);
-  const valueMatch = text.match(/\bvalue[:=]\s*(.+?)(?=\s+\b(?:ttl|priority)[:=]|$)/i);
+  const value = readLabeledRemainder(text, ['value'], {
+    stopLabels: ['ttl', 'priority'],
+  });
   const ttlMatch = text.match(/\bttl[:=]\s*(\d+)/i);
   const priorityMatch = text.match(/\bpriority[:=]\s*(\d+)/i);
   const parsed = dnsRecordSchema.parse({
     type: typeMatch?.[1]?.toUpperCase() ?? (lower.includes('txt') ? 'TXT' : 'A'),
     name: nameMatch?.[1] ?? '@',
-    value: valueMatch?.[1]?.trim() ?? text.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/)?.[0] ?? '',
+    value: value ?? text.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/)?.[0] ?? '',
     ttl: ttlMatch ? Number(ttlMatch[1]) : 3600,
     priority: priorityMatch ? Number(priorityMatch[1]) : undefined,
   });
@@ -182,14 +190,14 @@ function parseDnsRecord(text: string) {
 }
 
 function parseDnsRecordsJson(text: string): DnsRecordInput[] {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
+  const fenced = extractFencedBlock(text, ['json']);
   const json = fenced ?? text.slice(text.indexOf('['), text.lastIndexOf(']') + 1);
   if (!json) throw new Error('A JSON array of DNS records is required');
   return z.array(sharedDnsRecordSchema).min(1).max(200).parse(JSON.parse(json)) as DnsRecordInput[];
 }
 
 function parseZoneFile(text: string): string {
-  const fenced = text.match(/```(?:bind|zone|dns)?\s*([\s\S]*?)```/i)?.[1];
+  const fenced = extractFencedBlock(text, ['bind', 'zone', 'dns']);
   if (!fenced?.trim()) throw new Error('Put the BIND zone records inside a fenced code block');
   return fenced.trim();
 }
@@ -210,24 +218,23 @@ function requireDnsRevision(value: string | undefined): string {
 
 function parseEmailUsername(text: string): string | null {
   const explicit =
-    text.match(
-      /\b(?:email\s+username|primary\s+email|username|alias)[:=]?\s*([a-z0-9._+-]{1,64})/i,
-    )?.[1] ?? text.match(EMAIL_PATTERN)?.[0]?.split('@')[0];
+    readLabeledEmailUsername(text, ['email username', 'primary email', 'username', 'alias']) ??
+    extractEmailAddresses(text)[0]?.split('@')[0];
   const username = explicit?.trim().toLowerCase();
   return username && EMAIL_USERNAME_PATTERN.test(username) ? username : null;
 }
 
 function parseEmailRequest(text: string) {
-  const fromAddress = text.match(/\bfrom[:=]\s*([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i)?.[1];
-  const explicitTo = text.match(/\bto[:=]\s*([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i)?.[1];
-  const emails = text.match(EMAIL_GLOBAL_PATTERN) ?? [];
+  const fromAddress = readLabeledEmail(text, ['from']);
+  const explicitTo = readLabeledEmail(text, ['to']);
+  const emails = extractEmailAddresses(text);
   const to =
     explicitTo ?? emails.find((email) => email.toLowerCase() !== fromAddress?.toLowerCase());
   if (!to) throw new Error('Recipient email address is required');
-  const subject = text.match(/\bsubject[:=]\s*([^|]+)/i)?.[1]?.trim() ?? 'AgentDomain message';
+  const subject =
+    readLabeledRemainder(text, ['subject'], { stopCharacter: '|' }) ?? 'AgentDomain message';
   const body =
-    text.match(/\b(?:text|body|message)[:=]\s*([\s\S]+)/i)?.[1]?.trim() ??
-    text.replace(to, '').trim();
+    readLabeledRemainder(text, ['text', 'body', 'message']) ?? text.replace(to, '').trim();
   return { to, fromAddress, subject, text: body || 'Hello from AgentDomain.' };
 }
 
@@ -491,7 +498,7 @@ export const deleteEmailAliasAction = {
   handler: async (runtime: IAgentRuntime, message: Memory) => {
     const { ad } = getClients(runtime);
     const agentId = requireAgentId(message.content.text);
-    const emailAddress = message.content.text.match(EMAIL_PATTERN)?.[0];
+    const emailAddress = extractEmailAddresses(message.content.text)[0];
     if (!emailAddress) throw new Error('Full alias email address is required');
     const result = await ad.deleteEmailAlias(agentId, emailAddress);
     return { text: `Deleted email alias ${emailAddress}.`, data: result };
