@@ -130,3 +130,25 @@ test('package cannot be published to npm', async () => {
   assert.equal(pkg.license, 'Apache-2.0');
   assert.equal(pkg.repository.url, 'https://github.com/0xmdrakib/AgentDomain.git');
 });
+
+test('unreleased framework integrations remain code-free coming-soon placeholders', async () => {
+  for (const framework of ['langchain', 'crewai']) {
+    const source = await readFile(
+      join(DOCS_ROOT, 'src', 'content', 'docs', 'frameworks', `${framework}.mdx`),
+      'utf8',
+    );
+    assert.match(source, /## Coming soon/);
+    assert.match(source, /has not been released/);
+    assert.doesNotMatch(source, /```|npm\s+(?:install|add)|@agentdomain\/|\bimport\s+/);
+  }
+
+  const docsConfig = await readFile(join(DOCS_ROOT, 'astro.config.mjs'), 'utf8');
+  assert.match(docsConfig, /label: 'LangChain \(Coming soon\)'/);
+  assert.match(docsConfig, /label: 'CrewAI \(Coming soon\)'/);
+
+  const sharedConstants = await readFile(
+    join(DOCS_ROOT, '..', '..', 'packages', 'shared', 'src', 'constants.ts'),
+    'utf8',
+  );
+  assert.doesNotMatch(sharedConstants, /['"](?:langchain|crewai)['"]/);
+});

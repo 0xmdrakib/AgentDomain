@@ -1,29 +1,12 @@
 ---
 title: CrewAI
-description: Give CrewAI workers scoped AgentDomain identities without sharing owner authority.
+description: The official AgentDomain integration for CrewAI is planned and not yet available.
 ---
 
-Use one AgentDomain client per authorization scope rather than sharing an owner wallet across every
-worker in a crew.
+## Coming soon
 
-## Recommended roles
+The official AgentDomain integration for CrewAI has not been released.
 
-| Worker         | Suggested access                                           |
-| -------------- | ---------------------------------------------------------- |
-| Research       | Public registry and availability only                      |
-| Communications | Agent-scoped email operations                              |
-| Web operations | Agent-scoped DNS with preview and revision checks          |
-| Owner approval | Paid registration, plan changes, and onchain owner actions |
-
-Create narrow SDK-backed tools for each role. Keep payment and owner-only tools out of autonomous
-workers unless the workflow includes an explicit approval boundary.
-
-For a production crew:
-
-1. Quote the identity without payment.
-2. Ask the owner to approve the exact bundle and amount.
-3. Register once and retain the returned registration identifier.
-4. Issue an agent-scoped API key after completion.
-5. Rotate or revoke that key when the worker role changes.
-
-Start with the [SDK guide](/sdk/typescript/) and [API authentication](/api-reference/overview/#authentication).
+It will launch with a reviewed npm package, complete tools, authentication boundaries, tests, and
+production documentation. Installation and code examples will be published only when that
+implementation is ready.

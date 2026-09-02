@@ -1,31 +1,12 @@
 ---
 title: LangChain
-description: Wrap the public AgentDomain SDK as narrow, confirmable LangChain tools.
+description: The official AgentDomain integration for LangChain is planned and not yet available.
 ---
 
-AgentDomain can be exposed through a LangChain structured tool backed by `@agentdomain/sdk`.
+## Coming soon
 
-Start with read-only tools:
+The official AgentDomain integration for LangChain has not been released.
 
-```ts
-const quoteIdentity = {
-  name: 'quote_agent_identity',
-  description: 'Quote an AgentDomain identity without purchasing it.',
-  invoke: async (input: { preferredName: string; tld: string }) =>
-    agentDomain.quote({
-      preferredName: input.preferredName,
-      tld: input.tld,
-      registerBasename: false,
-      registerEns: false,
-    }),
-};
-```
-
-Keep registration as a separate tool so a model cannot turn a quote into a payment without an
-explicit owner confirmation step. Apply the same separation to plan purchases, vault withdrawal,
-and auto-renew changes.
-
-For DNS, expose capability discovery and preview separately from apply. For email, generate and
-persist one idempotency key per intended send operation.
-
-See the [TypeScript SDK](/sdk/typescript/) for supported methods.
+It will launch with a reviewed npm package, complete tools, authentication boundaries, tests, and
+production documentation. Installation and code examples will be published only when that
+implementation is ready.

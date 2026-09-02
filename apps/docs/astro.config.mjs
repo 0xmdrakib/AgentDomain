@@ -96,8 +96,8 @@ export default defineConfig({
           items: [
             { label: 'Coinbase AgentKit', slug: 'frameworks/agentkit' },
             { label: 'ElizaOS', slug: 'frameworks/elizaos' },
-            { label: 'LangChain', slug: 'frameworks/langchain' },
-            { label: 'CrewAI', slug: 'frameworks/crewai' },
+            { label: 'LangChain (Coming soon)', slug: 'frameworks/langchain' },
+            { label: 'CrewAI (Coming soon)', slug: 'frameworks/crewai' },
           ],
         },
         {
