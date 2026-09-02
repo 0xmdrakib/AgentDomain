@@ -41,6 +41,13 @@ const securityHeaders = [
   },
 ];
 
+const previewHeaders = [
+  {
+    key: 'X-Robots-Tag',
+    value: 'noindex, nofollow',
+  },
+];
+
 initOpenNextCloudflareForDev();
 
 /** @type {import('next').NextConfig} */
@@ -61,7 +68,19 @@ const nextConfig = {
     ],
   },
   async headers() {
-    return [{ source: '/:path*', headers: securityHeaders }];
+    return [
+      { source: '/:path*', headers: securityHeaders },
+      {
+        source: '/:path*',
+        has: [
+          {
+            type: 'host',
+            value: '(?:[a-z0-9-]+-)?agentdomain-frontend-preview\\.[a-z0-9-]+\\.workers\\.dev',
+          },
+        ],
+        headers: previewHeaders,
+      },
+    ];
   },
   async redirects() {
     return [

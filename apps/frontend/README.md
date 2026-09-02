@@ -62,14 +62,20 @@ observability are enabled.
 
 ```bash
 pnpm --filter @agentdomain/frontend build:cloudflare
+pnpm --filter @agentdomain/frontend build:cloudflare:production
 pnpm --filter @agentdomain/frontend preview
 pnpm --filter @agentdomain/frontend deploy
 ```
 
 - `build:cloudflare` verifies assets and source isolation, builds OpenNext, then scans both Next.js
   and Worker artifacts.
+- `build:cloudflare:production` additionally requires the exact remote public `main` commit and all
+  three reviewed production browser/API settings. Workers Builds must use this production command.
 - `preview` uses the separate `agentdomain-frontend-preview` environment. It has no production
-  routes and uses Cloudflare preview/Workers URLs.
+  routes, uses Cloudflare preview/Workers URLs, and returns `X-Robots-Tag: noindex, nofollow`.
+- The route-free preview is for rendering, navigation, headers, and public-read acceptance only.
+  Authenticated browser flows intentionally remain same-origin and are verified during the
+  reversible production canary; preview never receives a privileged API proxy or backend binding.
 - `deploy` targets `agentdomain-frontend` and its two production Custom Domains. Deployment
   credentials and account configuration are supplied outside this repository.
 

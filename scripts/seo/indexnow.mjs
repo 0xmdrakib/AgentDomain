@@ -114,6 +114,13 @@ export async function productionContext({
     commit = explicitCommit
       ? validCommit(explicitCommit)
       : validCommit(await git(['rev-parse', 'HEAD']));
+    if ((await git(['branch', '--show-current'])).trim() !== 'main') {
+      fail('INDEXNOW_NON_PRODUCTION_BRANCH');
+    }
+    const remoteMain = (await git(['ls-remote', '--exit-code', 'origin', 'refs/heads/main']))
+      .trim()
+      .split(/\s+/)[0];
+    if (validCommit(remoteMain) !== commit) fail('INDEXNOW_REMOTE_MAIN_MISMATCH');
   }
 
   if (explicitCommit && validCommit(explicitCommit) !== commit) fail('INDEXNOW_COMMIT_MISMATCH');

@@ -17,7 +17,7 @@ export default function PrivacyPage() {
       <section className="container py-16 md:py-24 max-w-4xl">
         <h1 className="text-4xl font-bold tracking-tight mb-8">Privacy Policy</h1>
         <div className="prose prose-sm max-w-none space-y-6 text-muted-foreground">
-          <p>Last updated: {new Date().toLocaleDateString()}</p>
+          <p>Last reviewed: September 2, 2026</p>
 
           <h2 className="text-2xl font-semibold text-foreground mt-8">1. Information We Collect</h2>
           <p>

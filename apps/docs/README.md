@@ -34,11 +34,16 @@ robots policy, security headers, canonical URL, and generated HTML.
 Deployment is intentionally explicit:
 
 ```bash
+pnpm --filter @agentdomain/docs build:cloudflare:production
 pnpm --filter @agentdomain/docs deploy
 ```
 
 Only approved CI or an authorized operator should run deployment. No provider credential belongs
 in this repository or in browser-visible configuration.
+
+Cloudflare Workers Builds must use `build:cloudflare:production`; it fails closed unless the build
+is the exact reviewed public `main` commit. Local production deployment enforces the same remote
+`main` binding.
 
 ## Publication boundary
 

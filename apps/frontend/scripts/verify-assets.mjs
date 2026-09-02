@@ -27,10 +27,10 @@ function filesUnder(directory) {
     });
 }
 
-function hashInput(file, content) {
-  return file.endsWith('.svg')
-    ? Buffer.from(content.toString('utf8').replaceAll('\r\n', '\n'))
-    : content;
+export function hashInput(file, content) {
+  return file.endsWith('.png')
+    ? content
+    : Buffer.from(content.toString('utf8').replaceAll('\r\n', '\n'));
 }
 
 export function verifyAssets() {
