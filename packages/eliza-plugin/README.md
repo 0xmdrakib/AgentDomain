@@ -16,7 +16,8 @@ The plugin gives Eliza agents a complete AgentDomain lifecycle surface:
 - RenewalVault status, funding, and auto-renew
 - Per-agent Premium Plan status and upgrades
 
-Configure `AGENTDOMAIN_API_URL` only if you need a custom endpoint. The default is `https://agentdomain.app/api/v1`.
+Configure `AGENTDOMAIN_API_URL` only if you need a custom endpoint. The default is
+`https://api.agentdomain.app/api/v1`.
 
 Set `AGENTDOMAIN_BUILDER_CODE` to your public ERC-8021 app identifier whenever
 the runtime can submit direct Base writes. The value is not a private key.

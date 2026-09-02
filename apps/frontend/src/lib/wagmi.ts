@@ -1,6 +1,8 @@
 import { http, createConfig } from 'wagmi';
 import { base } from 'wagmi/chains';
-import { coinbaseWallet, injected, walletConnect } from 'wagmi/connectors';
+import { coinbaseWallet } from 'wagmi/connectors/coinbaseWallet';
+import { injected } from 'wagmi/connectors/injected';
+import { walletConnect } from 'wagmi/connectors/walletConnect';
 import { BRAND_ASSETS } from '@/lib/brand-assets';
 
 const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? '';
@@ -35,7 +37,7 @@ export function getWagmiConfig() {
       // Coinbase Wallet: 'all' lets user choose Smart Wallet or EOA
       coinbaseWallet({
         appName: 'AgentDomain',
-        preference: 'all',
+        preference: { options: 'all' },
       }),
       // Injected: MetaMask, Rabby, Base App, etc.
       injected({ shimDisconnect: true }),

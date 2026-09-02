@@ -52,6 +52,11 @@ export const FORBIDDEN_CONTENT = [
     label: 'private origin detail',
     pattern: /\b(?:Cloud Run URL|service account|edge HMAC|origin secret)\b/i,
   },
+  {
+    label: 'internal planning or topology narrative',
+    pattern:
+      /\b(?:private planning|private platform implementation|internal topology|internal runbooks?|backend deployment instructions?|private checkout)\b/i,
+  },
   { label: 'runtime environment access', pattern: /\bprocess\.env\b/ },
   { label: 'insecure URL', pattern: /http:\/\//i },
   { label: 'obsolete docs URL', pattern: /https:\/\/agentdomain\.app\/docs(?:\/|\b)/i },

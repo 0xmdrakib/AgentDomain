@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 
 const id = '00000000-0000-4000-8000-000000000001';
+const unavailableId = '00000000-0000-4000-8000-000000000003';
 const agent = {
   id,
   domain: 'example.test',
@@ -29,6 +30,11 @@ const server = createServer((request, response) => {
     return;
   }
   if (url.searchParams.get('q') === 'upstream-error') {
+    response.statusCode = 503;
+    response.end(JSON.stringify({ error: 'Synthetic upstream failure' }));
+    return;
+  }
+  if (path === `agents/${unavailableId}`) {
     response.statusCode = 503;
     response.end(JSON.stringify({ error: 'Synthetic upstream failure' }));
     return;

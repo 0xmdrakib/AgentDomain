@@ -8,8 +8,9 @@
   "homepage": "https://docs.agentdomain.app",
   "scripts": {
     "build": "forge build",
+    "test": "node --test test/*.test.mjs",
     "security:slither": "slither . --fail-high",
-    "security:mythril": "myth analyze src/AgentIdentityRegistry.sol --solv 0.8.24 --execution-timeout 120 && myth analyze src/PaymentRouter.sol --solv 0.8.24 --execution-timeout 120 && myth analyze src/RenewalVault.sol --solv 0.8.24 --execution-timeout 120",
+    "security:mythril": "myth analyze src/AgentIdentityRegistry.sol --solv 0.8.34 --execution-timeout 120 && myth analyze src/PaymentRouter.sol --solv 0.8.34 --execution-timeout 120 && myth analyze src/RenewalVault.sol --solv 0.8.34 --execution-timeout 120",
     "fmt": "forge fmt",
     "lint": "forge fmt --check",
     "typecheck": "echo \"contracts use solidity, no typecheck\"",

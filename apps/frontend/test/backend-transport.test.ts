@@ -42,7 +42,7 @@ test('production server reads use only the exact credential-free public API orig
     assert.equal(target.origin, 'https://api.agentdomain.app');
     assert.deepEqual(options?.headers, { Accept: 'application/json' });
     assert.equal(options?.credentials, 'omit');
-    assert.equal(options?.redirect, 'error');
+    assert.equal(options?.redirect, 'manual');
     return json({ items: [], total: 0, hasMore: false });
   });
   await backend.registry({ q: 'exact + query', limit: 12, offset: 0 });
@@ -86,7 +86,7 @@ test('public reads use only fixed routes, no credentials, redirects, cache or re
   assert.equal(new URL(calls[1].url).origin, 'https://api.test');
   for (const { options } of calls) {
     assert.equal(options?.credentials, 'omit');
-    assert.equal(options?.redirect, 'error');
+    assert.equal(options?.redirect, 'manual');
     assert.equal(options?.cache, 'no-store');
     assert.ok(options?.signal);
     assert.deepEqual(options?.headers, { Accept: 'application/json' });
@@ -118,6 +118,87 @@ test('only genuine public 404 becomes not-found; failures never become empty dat
     /temporarily unavailable/,
   );
   assert.equal(calls, 1);
+});
+
+test('redirect responses fail closed without a second request or exposing the destination', async () => {
+  const events: unknown[] = [];
+  let calls = 0;
+  await assert.rejects(
+    createPublicBackend(
+      'https://api.test/api/v1',
+      'development',
+      async () => {
+        calls++;
+        return new Response(null, {
+          status: 307,
+          headers: { Location: 'https://private-provider.test/customer-id' },
+        });
+      },
+      (event) => events.push(event),
+    ).registry({ limit: 12, offset: 0 }),
+    (error: unknown) =>
+      error instanceof PublicBackendError && error.stage === 'redirect' && error.status === 307,
+  );
+  assert.equal(calls, 1);
+  assert.equal(JSON.stringify(events).includes('private-provider'), false);
+  assert.deepEqual(Object.keys(events[0] as object).sort(), [
+    'event',
+    'operation',
+    'reference',
+    'stage',
+    'status',
+  ]);
+});
+
+test('failure telemetry is bounded, correlated and never contains request or provider details', async () => {
+  const events: unknown[] = [];
+  const secret = 'provider-secret-customer-id-00000000-0000-4000-8000-000000000001';
+  let thrown: unknown;
+  try {
+    await createPublicBackend(
+      'https://api.test/api/v1',
+      'development',
+      async () => {
+        throw new Error(secret);
+      },
+      (event) => events.push(event),
+    ).registry({ q: secret, limit: 12, offset: 0 });
+  } catch (error) {
+    thrown = error;
+  }
+
+  assert.ok(thrown instanceof PublicBackendError);
+  assert.match(thrown.reference, /^AD-[A-F0-9]{8}$/);
+  assert.equal(thrown.operation, 'registry');
+  assert.equal(thrown.stage, 'transport');
+  assert.deepEqual(events, [
+    {
+      event: 'frontend.public_backend_failure',
+      operation: 'registry',
+      stage: 'transport',
+      status: 503,
+      reference: thrown.reference,
+    },
+  ]);
+  assert.doesNotMatch(JSON.stringify(events), /provider-secret|customer-id|00000000/);
+});
+
+test('telemetry reporter failures cannot replace the sanitized backend error', async () => {
+  await assert.rejects(
+    createPublicBackend(
+      'https://api.test/api/v1',
+      'development',
+      async () => new Response('<html>private provider response</html>'),
+      () => {
+        throw new Error('telemetry transport detail');
+      },
+    ).agent(id),
+    (error: unknown) =>
+      error instanceof PublicBackendError &&
+      error.stage === 'content_type' &&
+      !error.message.includes('provider response') &&
+      !error.message.includes('telemetry transport'),
+  );
 });
 
 test('malformed DTOs/content types fail closed and internal fields are rejected', async () => {
@@ -159,7 +240,7 @@ test('registry query and sitemap stay public with no local substitutes', async (
   });
   await backend.registry({ q: 'test', limit: 12, offset: 24 });
   assert.equal(requested, 'https://api.test/api/v1/public/registry?q=test&limit=12&offset=24');
-  assert.equal(await (await backend.sitemap()).text(), '<urlset/>');
+  assert.equal(await backend.sitemap(), '<urlset/>');
   await assert.rejects(
     createPublicBackend('https://api.test/api/v1', 'development', async () =>
       json({}, 404),

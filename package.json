@@ -2,7 +2,7 @@
   "name": "agentdomain-public",
   "version": "0.3.0",
   "private": true,
-  "description": "Public AgentDomain SDKs, integrations, documentation, and verified Base contracts.",
+  "description": "Public AgentDomain SDKs, integrations, documentation, and published Base contract artifacts.",
   "license": "Apache-2.0",
   "packageManager": "pnpm@10.33.2",
   "engines": {
@@ -13,13 +13,15 @@
     "audit:production:high": "pnpm audit --prod --audit-level high",
     "build": "turbo run build",
     "build:public": "turbo run build --filter=!@agentdomain/contracts",
+    "check:production-licenses": "node scripts/check-production-licenses.mjs",
     "check:public-boundary": "node scripts/check-public-boundary.mjs",
     "ci:cloudflare": "pnpm --filter @agentdomain/frontend build:cloudflare && pnpm --filter @agentdomain/frontend exec wrangler deploy --dry-run --env=\"\" && pnpm --filter @agentdomain/frontend exec wrangler deploy --dry-run --env preview && pnpm --filter @agentdomain/docs check && pnpm --filter @agentdomain/docs exec wrangler deploy --dry-run --env=\"\" && pnpm --filter @agentdomain/docs exec wrangler deploy --dry-run --env preview",
-    "ci:public": "pnpm check:public-boundary && pnpm audit:production:high && pnpm format:check && pnpm lint:public && pnpm typecheck:public && pnpm test:public && pnpm build:public",
+    "ci:public": "pnpm check:public-boundary && pnpm check:production-licenses && pnpm audit:production:high && pnpm format:check && pnpm lint:public && pnpm typecheck:public && pnpm test:public && pnpm build:public",
     "lint": "turbo run lint",
     "lint:public": "turbo run lint --filter=!@agentdomain/contracts",
     "test": "turbo run test",
-    "test:public": "turbo run test --filter=!@agentdomain/contracts",
+    "test:license-gate": "node --test scripts/check-production-licenses.test.mjs",
+    "test:public": "pnpm test:license-gate && pnpm --filter @agentdomain/contracts test && turbo run test --filter=!@agentdomain/contracts",
     "typecheck": "turbo run typecheck",
     "typecheck:public": "turbo run typecheck --filter=!@agentdomain/contracts",
     "format:check": "prettier --check \"**/*.{js,mjs,cjs,ts,tsx,md,mdx,json,yml,yaml}\""
@@ -40,6 +42,7 @@
       "hono@<4.12.34": "4.12.34",
       "ip-address@<=10.3.0": "10.3.1",
       "use-sync-external-store@<1.4.0": "1.4.0",
+      "uuid@<11.1.1": "11.1.1",
       "ws@>=8.0.0 <8.21.0": "8.21.0"
     },
     "onlyBuiltDependencies": [

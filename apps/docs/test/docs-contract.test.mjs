@@ -28,6 +28,9 @@ test('forbidden infrastructure and operator details are detected', () => {
     'backend environment variable',
     'runtime environment access',
   ]);
+  assert.deepEqual(findForbiddenMatches('Private planning and internal topology'), [
+    'internal planning or topology narrative',
+  ]);
 });
 
 test('frontmatter requires a useful description and no duplicate H1', () => {

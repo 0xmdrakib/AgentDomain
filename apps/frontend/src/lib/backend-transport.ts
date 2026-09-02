@@ -4,11 +4,38 @@ import { API_TIMEOUT_MS } from './transport-policy';
 export const PUBLIC_API_TIMEOUT_MS = API_TIMEOUT_MS;
 export const PRODUCTION_PUBLIC_API_BASE = 'https://api.agentdomain.app/api/v1';
 
+export type PublicBackendOperation = 'agent' | 'domain' | 'registry' | 'sitemap';
+export type PublicBackendFailureStage =
+  'transport' | 'redirect' | 'upstream_status' | 'content_type' | 'decode' | 'schema';
+
+export interface PublicBackendFailureEvent {
+  event: 'frontend.public_backend_failure';
+  operation: PublicBackendOperation;
+  stage: PublicBackendFailureStage;
+  status: number;
+  reference: string;
+}
+
+export type PublicBackendFailureReporter = (event: PublicBackendFailureEvent) => void;
+
 export class PublicBackendError extends Error {
-  constructor(public readonly status: number) {
-    super('Public identity data is temporarily unavailable.');
+  constructor(
+    public readonly status: number,
+    public readonly operation: PublicBackendOperation,
+    public readonly stage: PublicBackendFailureStage,
+    public readonly reference: string,
+  ) {
+    super(`Public identity data is temporarily unavailable. Reference: ${reference}`);
     this.name = 'PublicBackendError';
   }
+}
+
+function createFailureReference() {
+  return `AD-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+}
+
+function defaultFailureReporter(event: PublicBackendFailureEvent) {
+  console.error(JSON.stringify(event));
 }
 
 export function publicApiBase(value: string | undefined, runtime: string | undefined): URL {
@@ -41,64 +68,105 @@ export function createPublicBackend(
   value: string | undefined,
   runtime = 'production',
   fetcher = fetch,
+  reporter: PublicBackendFailureReporter = defaultFailureReporter,
 ) {
+  function fail(
+    operation: PublicBackendOperation,
+    stage: PublicBackendFailureStage,
+    status: number,
+  ): never {
+    const error = new PublicBackendError(status, operation, stage, createFailureReference());
+    try {
+      reporter({
+        event: 'frontend.public_backend_failure',
+        operation,
+        stage,
+        status,
+        reference: error.reference,
+      });
+    } catch {
+      // Observability must never replace the sanitized application failure.
+    }
+    throw error;
+  }
+
   // Only fixed public endpoint paths enter this transport. Request cookies/headers never do.
-  async function request(path: string, query?: URLSearchParams): Promise<Response> {
+  async function request(
+    operation: PublicBackendOperation,
+    path: string,
+    query?: URLSearchParams,
+  ): Promise<Response> {
     const base = publicApiBase(value, runtime);
     const url = new URL(path, base);
     if (url.origin !== base.origin || !url.pathname.startsWith('/api/v1/public/')) {
       throw new Error('Invalid public API endpoint.');
     }
     if (query) url.search = query.toString();
+    const headers = {
+      Accept: path.endsWith('.xml') ? 'application/xml' : 'application/json',
+    };
+    let response: Response;
     try {
-      const headers = {
-        Accept: path.endsWith('.xml') ? 'application/xml' : 'application/json',
-      };
-      return await fetcher(url, {
+      response = await fetcher(url, {
         method: 'GET',
         headers,
         credentials: 'omit',
         cache: 'no-store',
-        redirect: 'error',
+        redirect: 'manual',
         signal: AbortSignal.timeout(PUBLIC_API_TIMEOUT_MS),
       });
     } catch {
-      throw new PublicBackendError(503);
+      fail(operation, 'transport', 503);
     }
+    if (response.status >= 300 && response.status < 400) {
+      fail(operation, 'redirect', response.status);
+    }
+    return response;
   }
 
-  async function json(path: string, query?: URLSearchParams, allowNotFound = false) {
-    const response = await request(path, query);
+  async function json(
+    operation: PublicBackendOperation,
+    path: string,
+    query?: URLSearchParams,
+    allowNotFound = false,
+  ) {
+    const response = await request(operation, path, query);
     if (allowNotFound && response.status === 404) return null;
-    if (!response.ok) throw new PublicBackendError(response.status);
+    if (!response.ok) fail(operation, 'upstream_status', response.status);
     if (!response.headers.get('content-type')?.includes('application/json')) {
-      throw new PublicBackendError(502);
+      fail(operation, 'content_type', 502);
     }
     try {
       return (await response.json()) as unknown;
     } catch {
-      throw new PublicBackendError(502);
+      fail(operation, 'decode', 502);
     }
   }
 
   function parse<T>(
+    operation: PublicBackendOperation,
     schema: { safeParse(value: unknown): { success: true; data: T } | { success: false } },
     value: unknown,
   ): T {
     const result = schema.safeParse(value);
-    if (!result.success) throw new PublicBackendError(502);
+    if (!result.success) fail(operation, 'schema', 502);
     return result.data;
   }
 
   return {
     async agent(id: string) {
       if (!publicAgentResponseSchema.shape.agent.shape.id.safeParse(id).success) return null;
-      const value = await json(`public/agents/${encodeURIComponent(id)}`, undefined, true);
-      return value === null ? null : parse(publicAgentResponseSchema, value);
+      const value = await json('agent', `public/agents/${encodeURIComponent(id)}`, undefined, true);
+      return value === null ? null : parse('agent', publicAgentResponseSchema, value);
     },
     async domain(host: string) {
-      const value = await json('public/agents/by-domain', new URLSearchParams({ host }), true);
-      return value === null ? null : parse(publicAgentResponseSchema, value);
+      const value = await json(
+        'domain',
+        'public/agents/by-domain',
+        new URLSearchParams({ host }),
+        true,
+      );
+      return value === null ? null : parse('domain', publicAgentResponseSchema, value);
     },
     async registry(options: {
       q?: string;
@@ -110,14 +178,22 @@ export function createPublicBackend(
       const query = new URLSearchParams();
       for (const [key, value] of Object.entries(options))
         if (value !== undefined) query.set(key, String(value));
-      return parse(publicRegistrySchema, await json('public/registry', query));
+      return parse(
+        'registry',
+        publicRegistrySchema,
+        await json('registry', 'public/registry', query),
+      );
     },
     async sitemap() {
-      const response = await request('public/sitemap-agents.xml');
-      if (!response.ok) throw new PublicBackendError(response.status);
+      const response = await request('sitemap', 'public/sitemap-agents.xml');
+      if (!response.ok) fail('sitemap', 'upstream_status', response.status);
       if (!response.headers.get('content-type')?.includes('application/xml'))
-        throw new PublicBackendError(502);
-      return response;
+        fail('sitemap', 'content_type', 502);
+      try {
+        return await response.text();
+      } catch {
+        fail('sitemap', 'decode', 502);
+      }
     },
   };
 }

@@ -1,53 +1,16 @@
-# AgentDomain documentation
+# AgentDomain Documentation
 
-Public documentation for AgentDomain. This package is a standalone Astro 7 and Starlight 0.41
-static site hosted with Cloudflare Workers Static Assets.
+The official AgentDomain documentation is available at
+[docs.agentdomain.app](https://docs.agentdomain.app).
 
-## Local development
+It covers the product, [public API](https://api.agentdomain.app/api/v1), SDKs,
+integrations, smart contracts, authentication, idempotency, limits, and
+user-visible lifecycle behavior.
 
-Install from the public repository root so the single reviewed workspace lockfile is used:
+Documentation contributions should keep examples accurate, reproducible, and
+free of credentials or customer data. Public contract changes must update their
+related documentation and tests in the same pull request.
 
-```bash
-pnpm install --frozen-lockfile
-pnpm --filter @agentdomain/docs dev
-```
-
-## Verification
-
-```bash
-pnpm --filter @agentdomain/docs check
-```
-
-The check validates the public content boundary, frontmatter, internal links, approved brand
-asset hashes, TypeScript, focused contract tests, the production build, search output, sitemap,
-robots policy, security headers, canonical URL, and generated HTML.
-
-## Cloudflare hosting
-
-`wrangler.jsonc` is the deployment source of truth:
-
-- Worker: `agentdomain-docs`
-- Canonical domain: `docs.agentdomain.app`
-- Preview: `workers.dev` and preview URLs enabled with `noindex` response headers
-- Hosting: static assets only, with no runtime Worker script or secret bindings
-
-Deployment is intentionally explicit:
-
-```bash
-pnpm --filter @agentdomain/docs build:cloudflare:production
-pnpm --filter @agentdomain/docs deploy
-```
-
-Only approved CI or an authorized operator should run deployment. No provider credential belongs
-in this repository or in browser-visible configuration.
-
-Cloudflare Workers Builds must use `build:cloudflare:production`; it fails closed unless the build
-is the exact reviewed public `main` commit. Local production deployment enforces the same remote
-`main` binding.
-
-## Publication boundary
-
-Documentation may describe public API behavior, authentication, idempotency, limits, and
-user-visible lifecycle states. It must not contain operator routes, secret configuration names,
-private runbooks, infrastructure topology, storage or queue algorithms, or backend recovery
-procedures. `pnpm validate:content` enforces this boundary before build.
+See the root [contributing guide](../../CONTRIBUTING.md) for contribution checks
+and the [security policy](../../SECURITY.md) for confidential vulnerability
+reporting.

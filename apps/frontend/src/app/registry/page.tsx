@@ -98,7 +98,9 @@ export default async function RegistryPage({
             Discover agents by domain, capability, framework, and x402 endpoint.
           </p>
           <div className="mt-6 flex flex-wrap items-center gap-3 text-sm text-muted-foreground sm:gap-4">
-            <Badge variant="success">{result.total} agents</Badge>
+            <Badge variant="success">
+              {result.total} {result.total === 1 ? 'agent' : 'agents'}
+            </Badge>
             <span>Page {page}</span>
           </div>
         </div>
@@ -199,14 +201,28 @@ export default async function RegistryPage({
         )}
 
         <div className="mt-8 flex items-center justify-between gap-4">
-          <Button asChild variant="outline" disabled={page <= 1}>
-            <Link href={buildRegistryHref({ q, framework, capability, page: page - 1 })}>
+          {page <= 1 ? (
+            <Button variant="outline" disabled>
               Previous
-            </Link>
-          </Button>
-          <Button asChild variant="outline" disabled={!result.hasMore}>
-            <Link href={buildRegistryHref({ q, framework, capability, page: page + 1 })}>Next</Link>
-          </Button>
+            </Button>
+          ) : (
+            <Button asChild variant="outline">
+              <Link href={buildRegistryHref({ q, framework, capability, page: page - 1 })}>
+                Previous
+              </Link>
+            </Button>
+          )}
+          {!result.hasMore ? (
+            <Button variant="outline" disabled>
+              Next
+            </Button>
+          ) : (
+            <Button asChild variant="outline">
+              <Link href={buildRegistryHref({ q, framework, capability, page: page + 1 })}>
+                Next
+              </Link>
+            </Button>
+          )}
         </div>
       </section>
 

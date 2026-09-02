@@ -54,9 +54,5 @@
         "args": ["0xb7b19826a566ebd9e8b50bee986a8da04bbb2c0a"]
       }
     ]
-  },
-  "productionEnv": {
-    "RENEWAL_VAULT_ADDRESS": "0xb7b19826a566ebd9e8b50bee986a8da04bbb2c0a",
-    "NEXT_PUBLIC_RENEWAL_VAULT_ADDRESS": "0xb7b19826a566ebd9e8b50bee986a8da04bbb2c0a"
   }
 }

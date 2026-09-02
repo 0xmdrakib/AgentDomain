@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { request as httpRequest } from 'node:http';
 import { resolve } from 'node:path';
 import { frontendRoot } from '../scripts/verify-assets.mjs';
 
@@ -14,6 +15,27 @@ const origin = new URL(process.argv[2] ?? 'http://127.0.0.1:3108');
 if (origin.hostname !== '127.0.0.1' || origin.protocol !== 'http:')
   throw new Error('Smoke tests are loopback-only.');
 const id = '00000000-0000-4000-8000-000000000001';
+const unavailableId = '00000000-0000-4000-8000-000000000003';
+
+function requestWithHost(path, host) {
+  return new Promise((resolveResponse, reject) => {
+    const request = httpRequest(
+      {
+        hostname: origin.hostname,
+        port: origin.port,
+        path,
+        method: 'GET',
+        headers: { Host: host },
+      },
+      (response) => {
+        response.resume();
+        response.on('end', () => resolveResponse(response));
+      },
+    );
+    request.on('error', reject);
+    request.end();
+  });
+}
 
 test('public profile SSR uses sanitized DTOs without forwarding request credentials', async () => {
   const response = await fetch(new URL(`/agents/${id}`, origin), {
@@ -30,7 +52,13 @@ test('public profile SSR uses sanitized DTOs without forwarding request credenti
 test('registry and sitemap render backend-projected public records', async () => {
   const registry = await fetch(new URL('/registry', origin));
   assert.equal(registry.status, 200);
-  assert.match(await registry.text(), /Enterprise/);
+  const registryHtml = await registry.text();
+  const registryText = registryHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  assert.match(registryHtml, /Enterprise/);
+  assert.match(registryText, /\b1 agent\b/);
+  assert.doesNotMatch(registryText, /\b1 agents\b/);
+  assert.doesNotMatch(registryHtml, /<a[^>]*\sdisabled(?:=|\s|>)/);
+  assert.match(registryHtml, /<button[^>]*\sdisabled(?:=""|="disabled")[^>]*>Previous<\/button>/);
   const sitemap = await fetch(new URL('/sitemap-agents.xml', origin));
   assert.equal(sitemap.status, 200);
   assert.match(sitemap.headers.get('content-type'), /application\/xml/);
@@ -50,11 +78,15 @@ test('backend outage remains an error instead of an empty registry', async () =>
   const response = await fetch(new URL('/registry?q=upstream-error', origin));
   const body = await response.text();
   assert.doesNotMatch(body, /No agents found/);
-  assert.ok(
-    response.status >= 500 ||
-      body.includes('PublicBackendError') ||
-      body.includes('temporarily unavailable'),
-  );
+  assert.ok(response.status >= 500 || body.includes('temporarily unavailable'));
+  assert.doesNotMatch(body, /Synthetic upstream failure/);
+});
+
+test('agent outage never becomes a fabricated not-found identity', async () => {
+  const response = await fetch(new URL(`/agents/${unavailableId}`, origin));
+  const body = await response.text();
+  assert.ok(response.status >= 500 || body.includes('temporarily unavailable'));
+  assert.doesNotMatch(body, /Synthetic upstream failure/);
 });
 
 test('all public page families publish the new share image and correctly typed icons', async () => {
@@ -115,18 +147,55 @@ test('docs redirects preserve paths on the canonical docs origin', async () => {
   }
 });
 
+test('redirect-only routes reject unsafe methods without redirects or body forwarding', async () => {
+  for (const path of ['/docs/guides/email', '/api']) {
+    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']) {
+      const response = await fetch(new URL(path, origin), {
+        method,
+        body: method === 'OPTIONS' ? undefined : 'credential=must-not-move',
+        redirect: 'manual',
+      });
+      assert.equal(response.status, 405, `${method} ${path}`);
+      assert.equal(response.headers.get('location'), null);
+      assert.equal(response.headers.get('allow'), 'GET, HEAD');
+      assert.match(response.headers.get('cache-control') ?? '', /no-store/);
+      assert.match(response.headers.get('content-type') ?? '', /application\/json/);
+    }
+  }
+});
+
+test('unversioned API routes canonicalize and unknown frontend API routes use JSON errors', async () => {
+  for (const method of ['GET', 'HEAD']) {
+    const response = await fetch(new URL('/api?format=json', origin), {
+      method,
+      redirect: 'manual',
+    });
+    assert.equal(response.status, 308);
+    assert.equal(
+      response.headers.get('location'),
+      'https://api.agentdomain.app/api/v1?format=json',
+    );
+  }
+
+  const unknown = await fetch(new URL('/api/v2/private', origin));
+  assert.equal(unknown.status, 404);
+  assert.match(unknown.headers.get('content-type') ?? '', /application\/json/);
+  assert.match(unknown.headers.get('cache-control') ?? '', /no-store/);
+  assert.deepEqual(await unknown.json(), {
+    error: 'NOT_FOUND',
+    message: 'This API route does not exist.',
+  });
+});
+
 test('www redirects preserve the canonical root, paths and queries', async () => {
   for (const [path, destination] of [
     ['/', 'https://agentdomain.app/'],
     ['/?ref=test', 'https://agentdomain.app/?ref=test'],
     ['/registry?page=2', 'https://agentdomain.app/registry?page=2'],
   ]) {
-    const response = await fetch(new URL(path, origin), {
-      headers: { host: 'www.agentdomain.app' },
-      redirect: 'manual',
-    });
-    assert.equal(response.status, 308, path);
-    assert.equal(response.headers.get('location'), destination, path);
+    const response = await requestWithHost(path, 'www.agentdomain.app');
+    assert.equal(response.statusCode, 308, path);
+    assert.equal(response.headers.location, destination, path);
   }
 });
 

@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { useAccount, useConnect, useSwitchChain } from 'wagmi';
 import type { Connector } from 'wagmi';
 import { base } from 'wagmi/chains';
-import { injected } from 'wagmi/connectors';
+import { injected } from 'wagmi/connectors/injected';
 import { Check, Loader2, Wallet, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, type ButtonProps } from '@/components/ui/button';

@@ -86,7 +86,10 @@ function parseToolJson(result) {
 describe('MCP Builder Code configuration', () => {
   it('keeps read tools available and fails clearly only when a direct Base write needs config', async () => {
     const { apiUrl, requests } = await startApi();
-    const client = await startMcp(apiUrl, { AGENTDOMAIN_BUILDER_CODE: '' });
+    const client = await startMcp(apiUrl, {
+      AGENTDOMAIN_ENABLE_WRITE_TOOLS: 'true',
+      AGENTDOMAIN_BUILDER_CODE: '',
+    });
 
     const availability = parseToolJson(
       await client.callTool({
@@ -107,7 +110,10 @@ describe('MCP Builder Code configuration', () => {
 
   it('propagates configured Builder Code to the SDK direct-write result without live services', async () => {
     const { apiUrl, requests } = await startApi();
-    const client = await startMcp(apiUrl, { AGENTDOMAIN_BUILDER_CODE: builderCode });
+    const client = await startMcp(apiUrl, {
+      AGENTDOMAIN_ENABLE_WRITE_TOOLS: 'true',
+      AGENTDOMAIN_BUILDER_CODE: builderCode,
+    });
 
     const transaction = parseToolJson(
       await client.callTool({
