@@ -9,6 +9,7 @@ import { hashInput, verifyAssets } from '../scripts/verify-assets.mjs';
 import { validateFrontendProductionEnvironment } from '../scripts/production-release-gate.mjs';
 
 const read = (path) => readFileSync(resolve(root, path), 'utf8');
+const readRepository = (path) => readFileSync(resolve(root, '../..', path), 'utf8');
 const readJsonc = (path) => {
   const result = ts.parseConfigFileTextToJson(path, read(path));
   if (result.error) throw new Error(`Invalid JSONC: ${path}`);
@@ -128,6 +129,8 @@ test('Next config keeps only asset redirects while request routing owns host and
   const source = read('next.config.mjs');
   assert.match(source, /src\/lib\/brand-assets\.json/);
   assert.match(source, /initOpenNextCloudflareForDev/);
+  assert.match(source, /new URL\('\.\.\/\.\.\/frontend\.env'/);
+  assert.match(source, /override:\s*false/);
   assert.doesNotMatch(source, /apps\/web|materialize-assets|rewrites/);
   assert.equal(config.agentRules, false);
   const redirects = await config.redirects();
@@ -287,8 +290,9 @@ test('docs links are canonical and the frontend sitemap cannot publish the retir
 });
 
 test('frontend env template is blank, reviewed and local values stay ignored', () => {
+  assert.equal(existsSync(resolve(root, 'frontend.env')), false);
   assert.equal(
-    read('frontend.env.example').replaceAll('\r\n', '\n'),
+    readRepository('frontend.env.example').replaceAll('\r\n', '\n'),
     [
       'FRONTEND_PUBLIC_API_URL=',
       'NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=',
@@ -296,7 +300,7 @@ test('frontend env template is blank, reviewed and local values stay ignored', (
       '',
     ].join('\n'),
   );
-  const ignore = read('.gitignore');
+  const ignore = readRepository('.gitignore');
   assert.match(ignore, /^frontend\.env$/m);
   assert.match(ignore, /^!frontend\.env\.example$/m);
 });

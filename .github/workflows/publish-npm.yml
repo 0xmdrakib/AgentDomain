@@ -80,7 +80,7 @@ jobs:
 
           pack_release packages/shared
           pack_release packages/sdk
-          pack_release apps/mcp-server
+          pack_release packages/mcp-server
           pack_release packages/agentkit-plugin
           pack_release packages/eliza-plugin
 
