@@ -19,6 +19,7 @@ const allowedRootFiles = new Set([
   '.prettierrc.json',
   'CODE_OF_CONDUCT.md',
   'CONTRIBUTING.md',
+  'frontend.env.example',
   'LICENSE',
   'NOTICE',
   'README.md',
@@ -29,11 +30,11 @@ const allowedRootFiles = new Set([
   'tsconfig.base.json',
   'turbo.json',
 ]);
-const allowedApplicationRoots = new Set(['docs', 'frontend', 'mcp-server']);
+const allowedApplicationRoots = new Set(['docs', 'frontend']);
 const allowedPackageRoots = new Set([
   'agentkit-plugin',
-  'contracts',
   'eliza-plugin',
+  'mcp-server',
   'sdk',
   'shared',
 ]);
@@ -116,6 +117,7 @@ function repositoryScopeViolation(path) {
   const [topLevel, child] = path.split('/');
   if (!child) return allowedRootFiles.has(topLevel) ? null : 'unapproved root file';
   if (topLevel === '.github' || topLevel === 'scripts') return null;
+  if (topLevel === 'contracts') return null;
   if (topLevel === 'apps') {
     return allowedApplicationRoots.has(child) ? null : 'unapproved public application root';
   }
@@ -352,6 +354,16 @@ function checkRepository() {
 function runSelfTest() {
   assert.equal(repositoryScopeViolation('README.md'), null);
   assert.equal(repositoryScopeViolation('apps/frontend/src/app/page.tsx'), null);
+  assert.equal(repositoryScopeViolation('contracts/src/PaymentRouter.sol'), null);
+  assert.equal(repositoryScopeViolation('packages/mcp-server/src/index.ts'), null);
+  assert.equal(
+    repositoryScopeViolation('apps/mcp-server/src/index.ts'),
+    'unapproved public application root',
+  );
+  assert.equal(
+    repositoryScopeViolation('packages/contracts/src/PaymentRouter.sol'),
+    'unapproved public package root',
+  );
   assert.equal(
     repositoryScopeViolation('apps/backend/src/index.ts'),
     'unapproved public application root',

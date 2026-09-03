@@ -40,7 +40,7 @@ npm install @agentdomain/sdk
 ## Smart contracts
 
 Public smart-contract source and available Base deployment records are in
-[`packages/contracts`](packages/contracts). Review the published artifacts and
+[`contracts`](contracts). Review the published artifacts and
 verify relevant addresses onchain before integrating.
 
 ## Contributing and security

@@ -1,6 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare';
+import { config as loadEnvironment } from 'dotenv';
+
+loadEnvironment({
+  path: fileURLToPath(new URL('../../frontend.env', import.meta.url)),
+  override: false,
+});
 
 const brandConfig = JSON.parse(
   readFileSync(new URL('./src/lib/brand-assets.json', import.meta.url), 'utf8'),

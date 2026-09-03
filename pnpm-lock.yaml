@@ -137,6 +137,9 @@ importers:
       autoprefixer:
         specifier: ^10.5.3
         version: 10.5.4(postcss@8.5.26)
+      dotenv:
+        specifier: 16.4.7
+        version: 16.4.7
       eslint:
         specifier: ^9.17.0
         version: 9.39.5(jiti@1.21.7)
@@ -162,33 +165,14 @@ importers:
         specifier: 4.128.0
         version: 4.128.0
 
-  apps/mcp-server:
-    dependencies:
-      '@agentdomain/sdk':
-        specifier: workspace:^
-        version: link:../../packages/sdk
-      '@agentdomain/shared':
-        specifier: workspace:^
-        version: link:../../packages/shared
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.0.4
-        version: 1.29.0(zod@3.25.76)
-      viem:
-        specifier: ^2.55.2
-        version: 2.55.8(typescript@5.9.3)(zod@3.25.76)
-      zod:
-        specifier: ^3.24.1
-        version: 3.25.76
+  contracts:
     devDependencies:
-      '@types/node':
-        specifier: ^22.10.5
-        version: 22.20.1
-      tsx:
-        specifier: ^4.23.1
-        version: 4.23.1
-      typescript:
-        specifier: ^5.7.2
-        version: 5.9.3
+      '@openzeppelin/contracts':
+        specifier: ^5.6.1
+        version: 5.6.1
+      forge-std:
+        specifier: ^1.1.2
+        version: 1.1.2
 
   packages/agentkit-plugin:
     dependencies:
@@ -209,15 +193,6 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
-  packages/contracts:
-    devDependencies:
-      '@openzeppelin/contracts':
-        specifier: ^5.6.1
-        version: 5.6.1
-      forge-std:
-        specifier: ^1.1.2
-        version: 1.1.2
-
   packages/eliza-plugin:
     dependencies:
       '@agentdomain/sdk':
@@ -233,6 +208,34 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/mcp-server:
+    dependencies:
+      '@agentdomain/sdk':
+        specifier: workspace:^
+        version: link:../sdk
+      '@agentdomain/shared':
+        specifier: workspace:^
+        version: link:../shared
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.0.4
+        version: 1.29.0(zod@3.25.76)
+      viem:
+        specifier: ^2.55.2
+        version: 2.55.8(typescript@5.9.3)(zod@3.25.76)
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.5
+        version: 22.20.1
+      tsx:
+        specifier: ^4.23.1
+        version: 4.23.1
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
@@ -5451,10 +5454,10 @@ packages:
         integrity: sha512-6kZKyUajlDuqlHKVX1w7gyslj9MPIXzIFiz/rGu35uC1wMi+kMhQwGhl4lt9unC9Vb9INnY9Z3/ZA3+FhASLaw==,
       }
 
-  dotenv@16.6.1:
+  dotenv@16.4.7:
     resolution:
       {
-        integrity: sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==,
+        integrity: sha512-47qPchRCykZC03FhkYAhrvwU4xDBFIj1QPqaarj6mdM/hgUzfPHcpkHJOn3mJAufFeeAxAzeGsr5X0M4k6fLZQ==,
       }
     engines: { node: '>=12' }
 
@@ -11718,7 +11721,7 @@ snapshots:
   '@dotenvx/dotenvx@1.31.0':
     dependencies:
       commander: 11.1.0
-      dotenv: 16.6.1
+      dotenv: 16.4.7
       eciesjs: 0.4.18
       execa: 5.1.1
       fdir: 6.5.0(picomatch@4.0.7)
@@ -14758,7 +14761,7 @@ snapshots:
       domelementtype: 2.3.0
       domhandler: 5.0.3
 
-  dotenv@16.6.1: {}
+  dotenv@16.4.7: {}
 
   dset@3.1.4: {}
 

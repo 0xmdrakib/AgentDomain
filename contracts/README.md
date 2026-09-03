@@ -46,7 +46,7 @@ before relying on a published record.
 - Privileged functions enforce the access controls defined in contract source.
 
 Report suspected vulnerabilities through the repository's confidential
-[security process](../../SECURITY.md).
+[security process](../SECURITY.md).
 
 ## License
 

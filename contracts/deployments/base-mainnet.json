@@ -8,7 +8,7 @@
     "usdc": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
   },
   "renewalVault": {
-    "source": "packages/contracts/src/RenewalVault.sol",
+    "source": "contracts/src/RenewalVault.sol",
     "compiler": "0.8.34+commit.80d5c536",
     "compilerSettings": {
       "optimizerEnabled": false,
