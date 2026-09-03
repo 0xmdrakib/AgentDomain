@@ -1,12 +1,27 @@
 {
   "name": "@agentdomain/shared",
-  "version": "0.7.0",
-  "description": "Shared constants, schemas, types, and utilities for AgentDomain",
+  "version": "0.8.0",
+  "description": "Public TypeScript contracts, Zod schemas, constants, and utilities for AgentDomain",
+  "keywords": [
+    "agentdomain",
+    "ai-agents",
+    "typescript",
+    "schemas",
+    "zod",
+    "base"
+  ],
   "license": "Apache-2.0",
-  "repository": "https://github.com/0xmdrakib/AgentDomain.git",
-  "homepage": "https://docs.agentdomain.app",
-  "bugs": "https://github.com/0xmdrakib/AgentDomain/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/0xmdrakib/AgentDomain.git",
+    "directory": "packages/shared"
+  },
+  "homepage": "https://docs.agentdomain.app/sdk/typescript",
+  "bugs": {
+    "url": "https://github.com/0xmdrakib/AgentDomain/issues"
+  },
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

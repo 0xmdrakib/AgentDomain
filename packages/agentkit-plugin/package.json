@@ -1,12 +1,27 @@
 {
   "name": "@agentdomain/agentkit-plugin",
-  "version": "0.7.0",
-  "description": "Coinbase AgentKit action provider for AgentDomain",
+  "version": "0.8.0",
+  "description": "Coinbase AgentKit action provider for AgentDomain identity infrastructure",
+  "keywords": [
+    "agentdomain",
+    "ai-agents",
+    "coinbase-agentkit",
+    "identity",
+    "x402",
+    "base"
+  ],
   "license": "Apache-2.0",
-  "repository": "https://github.com/0xmdrakib/AgentDomain.git",
-  "homepage": "https://docs.agentdomain.app",
-  "bugs": "https://github.com/0xmdrakib/AgentDomain/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/0xmdrakib/AgentDomain.git",
+    "directory": "packages/agentkit-plugin"
+  },
+  "homepage": "https://docs.agentdomain.app/frameworks/agentkit",
+  "bugs": {
+    "url": "https://github.com/0xmdrakib/AgentDomain/issues"
+  },
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

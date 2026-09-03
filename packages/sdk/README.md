@@ -12,24 +12,44 @@ machine-readable service discovery document; human documentation is available at
 npm install @agentdomain/sdk viem
 ```
 
+## Quick start
+
+Public discovery and quotes do not require credentials:
+
 ```ts
 import { AgentDomain } from '@agentdomain/sdk';
 
-const ad = new AgentDomain({
-  apiUrl: 'https://api.agentdomain.app/api/v1',
-  walletClient,
-  builderCode: process.env.AGENTDOMAIN_BUILDER_CODE,
+const ad = new AgentDomain();
+
+const availability = await ad.checkAvailability('research-agent', {
+  tld: 'xyz',
 });
 
 const quote = await ad.quote({
   preferredName: 'research-agent',
   tld: 'xyz',
-  registerBasename: true,
+  registerBasename: false,
   registerEns: false,
   emailUsername: 'agent',
-  premiumPlan: 'pro',
+  premiumPlan: 'included',
 });
 ```
+
+Pass a viem `walletClient` only for wallet-authorized or paid operations. Pass an
+agent-scoped API key only to a trusted server or agent runtime; never expose it
+in browser-delivered configuration.
+
+## Authentication model
+
+- Public availability, quote, and registry search methods need no credential.
+- Owner operations use a wallet signature through the supplied `walletClient`.
+- Agent-scoped operations can use a narrowly scoped `apiKey`.
+- x402 purchases require an authorized Base wallet with sufficient USDC.
+- Direct Base writes also require the public `builderCode` attribution value.
+
+The SDK does not persist credentials. Applications remain responsible for
+keeping wallet and API-key material out of source, logs, client bundles, and
+untrusted process environments.
 
 `builderCode` is the public ERC-8021 app identifier assigned to your application;
 it is not a wallet secret. It is required when the SDK creates a direct Base
@@ -143,3 +163,10 @@ await ad.updatePrimaryEmail(agentId, 'support');
 await ad.createEmailAlias(agentId, 'billing');
 await ad.deleteEmailAlias(agentId, 'billing@research-agent.xyz');
 ```
+
+## Links
+
+- [TypeScript SDK guide](https://docs.agentdomain.app/sdk/typescript)
+- [API reference](https://docs.agentdomain.app/api-reference/overview)
+- [Source](https://github.com/0xmdrakib/AgentDomain/tree/main/packages/sdk)
+- [Security policy](https://github.com/0xmdrakib/AgentDomain/security/policy)

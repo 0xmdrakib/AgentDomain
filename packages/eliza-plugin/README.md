@@ -1,10 +1,25 @@
 # @agentdomain/eliza-plugin
 
-ElizaOS plugin for AgentDomain.
+ElizaOS actions for AgentDomain identity infrastructure.
+
+## Install
 
 ```bash
-npm install @agentdomain/eliza-plugin
+npm install @agentdomain/eliza-plugin @elizaos/core
 ```
+
+## Add the plugin
+
+```ts
+import agentDomainPlugin from '@agentdomain/eliza-plugin';
+
+export const character = {
+  name: 'Domain Agent',
+  plugins: [agentDomainPlugin],
+};
+```
+
+## Actions
 
 The plugin gives Eliza agents a complete AgentDomain lifecycle surface:
 
@@ -16,8 +31,21 @@ The plugin gives Eliza agents a complete AgentDomain lifecycle surface:
 - RenewalVault status, funding, and auto-renew
 - Per-agent Premium Plan status and upgrades
 
-Configure `AGENTDOMAIN_API_URL` only if you need a custom endpoint. The default is
-`https://api.agentdomain.app/api/v1`.
+## Runtime configuration
+
+The default API is `https://api.agentdomain.app/api/v1`. Configure
+`AGENTDOMAIN_API_URL` only for a documented alternate environment.
+
+- `AGENTDOMAIN_API_KEY` authorizes agent-scoped DNS, email, and management calls.
+- `AGENT_PRIVATE_KEY` is needed only for wallet-authorized or paid operations.
+- `AGENTDOMAIN_NETWORK` defaults to `base`.
+- `BASE_RPC_URL` optionally selects the Base RPC used for wallet operations.
+- `RENEWAL_VAULT_ADDRESS` is required for direct auto-renew actions.
+- `AGENTDOMAIN_BUILDER_CODE` identifies the public application for supported
+  direct Base transactions.
+
+Inject credentials with the runtime's secret facility. Do not place a private
+key or API key in a character file, repository, command line, or log.
 
 Set `AGENTDOMAIN_BUILDER_CODE` to your public ERC-8021 app identifier whenever
 the runtime can submit direct Base writes. The value is not a private key.
@@ -26,4 +54,9 @@ or invalid attribution stops the direct transaction before submission. Reads,
 offchain signatures, Ethereum L1 ENS operations, and standard x402 v2 paid
 requests are not changed.
 
-Request the default base URL directly to retrieve AgentDomain's machine-readable API discovery metadata.
+## Links
+
+- [ElizaOS guide](https://docs.agentdomain.app/frameworks/elizaos)
+- [API discovery](https://api.agentdomain.app/api/v1)
+- [Source](https://github.com/0xmdrakib/AgentDomain/tree/main/packages/eliza-plugin)
+- [Security policy](https://github.com/0xmdrakib/AgentDomain/security/policy)

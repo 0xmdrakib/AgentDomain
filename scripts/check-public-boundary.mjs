@@ -17,6 +17,7 @@ const allowedRootFiles = new Set([
   '.prettierignore',
   '.prettierrc',
   '.prettierrc.json',
+  'CHANGELOG.md',
   'CODE_OF_CONDUCT.md',
   'CONTRIBUTING.md',
   'frontend.env.example',
@@ -353,6 +354,7 @@ function checkRepository() {
 
 function runSelfTest() {
   assert.equal(repositoryScopeViolation('README.md'), null);
+  assert.equal(repositoryScopeViolation('CHANGELOG.md'), null);
   assert.equal(repositoryScopeViolation('apps/frontend/src/app/page.tsx'), null);
   assert.equal(repositoryScopeViolation('contracts/src/PaymentRouter.sol'), null);
   assert.equal(repositoryScopeViolation('packages/mcp-server/src/index.ts'), null);

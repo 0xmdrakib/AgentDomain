@@ -1,12 +1,30 @@
 {
   "name": "@agentdomain/mcp-server",
-  "version": "0.7.0",
-  "description": "MCP server exposing AgentDomain registration and management tools to any LLM",
+  "version": "0.8.0",
+  "description": "Secure-by-default MCP server for AgentDomain identity, DNS, email, and renewal workflows",
+  "keywords": [
+    "agentdomain",
+    "ai-agents",
+    "mcp",
+    "model-context-protocol",
+    "identity",
+    "x402",
+    "base"
+  ],
   "license": "Apache-2.0",
-  "repository": "https://github.com/0xmdrakib/AgentDomain.git",
-  "homepage": "https://docs.agentdomain.app",
-  "bugs": "https://github.com/0xmdrakib/AgentDomain/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/0xmdrakib/AgentDomain.git",
+    "directory": "packages/mcp-server"
+  },
+  "homepage": "https://docs.agentdomain.app/sdk/mcp",
+  "bugs": {
+    "url": "https://github.com/0xmdrakib/AgentDomain/issues"
+  },
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
