@@ -35,7 +35,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' data: https://fonts.gstatic.com",
       "img-src 'self' data: blob: https://upload.wikimedia.org https://rabby.io https://*.ipfs.dweb.link https://ipfs.io https://gateway.lighthouse.storage",
-      "connect-src 'self' https://mainnet.base.org https://challenges.cloudflare.com https://*.walletconnect.com https://*.walletconnect.org wss://*.walletconnect.com wss://*.walletconnect.org https://*.coinbase.com https://*.wallet.coinbase.com",
+      "connect-src 'self' https://mainnet.base.org https://challenges.cloudflare.com https://api.web3modal.org https://*.walletconnect.com https://*.walletconnect.org wss://*.walletconnect.com wss://*.walletconnect.org https://*.coinbase.com https://*.wallet.coinbase.com",
       "frame-src 'self' https://secure.walletconnect.com https://verify.walletconnect.com https://verify.walletconnect.org https://*.walletconnect.com https://*.walletconnect.org https://keys.coinbase.com https://*.coinbase.com https://*.wallet.coinbase.com https://challenges.cloudflare.com",
       "worker-src 'self' blob:",
       "base-uri 'self'",

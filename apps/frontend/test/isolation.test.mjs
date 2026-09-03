@@ -154,6 +154,7 @@ test('Next config keeps only asset redirects while request routing owns host and
     values['Content-Security-Policy'],
     /connect-src 'self' https:\/\/mainnet\.base\.org/,
   );
+  assert.match(values['Content-Security-Policy'], /connect-src[^;]*https:\/\/api\.web3modal\.org/);
   assert.doesNotMatch(values['Content-Security-Policy'], /connect-src[^;]*\shttps:\s/);
   assert.doesNotMatch(values['Content-Security-Policy'], /img-src[^;]*\shttps:\s/);
   assert.deepEqual(headers[1], {
