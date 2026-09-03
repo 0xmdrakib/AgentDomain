@@ -5,6 +5,22 @@
 It lets MCP-compatible clients discover and manage agent identities through the
 [AgentDomain API](https://api.agentdomain.app/api/v1).
 
+The server requires Node.js 20 or newer and communicates over standard input
+and output. It does not open a public listener.
+
+## Run
+
+```bash
+npx -y @agentdomain/mcp-server
+```
+
+For a persistent installation:
+
+```bash
+npm install -g @agentdomain/mcp-server
+agentdomain-mcp
+```
+
 ## Default tools
 
 The server starts in read-only mode. It advertises only tools that inspect public
@@ -18,12 +34,6 @@ or authorized account state:
 
 An API key may authorize additional reads, but merely supplying one never enables
 mutation tools.
-
-## Install
-
-```bash
-npm install -g @agentdomain/mcp-server
-```
 
 ## Read-only configuration
 
@@ -97,3 +107,10 @@ limits, expiry, and renewal amount as authoritative for that request.
 ## License
 
 Published package releases are licensed under Apache-2.0.
+
+## Links
+
+- [MCP guide](https://docs.agentdomain.app/sdk/mcp)
+- [API discovery](https://api.agentdomain.app/api/v1)
+- [Source](https://github.com/0xmdrakib/AgentDomain/tree/main/packages/mcp-server)
+- [Security policy](https://github.com/0xmdrakib/AgentDomain/security/policy)

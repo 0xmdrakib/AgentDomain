@@ -26,6 +26,9 @@ Install the SDK:
 npm install @agentdomain/sdk
 ```
 
+See the [changelog](CHANGELOG.md) for public package release notes and
+compatibility details.
+
 ## Tech stack
 
 | Surface                  | Technologies                                                   |
