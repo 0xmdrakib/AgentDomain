@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ENTERPRISE_EMAIL_TIERS, SERVICE_PLAN_KEYS } from './constants.js';
-import type { Address } from 'viem';
+import type { Address, Hex } from 'viem';
 import type { ServicePlanSku } from './types.js';
 import { isServicePlanSkuForPlan } from './utils.js';
 export { dnsBatchSchema, dnsImportSchema, dnsRecordSchema, dnsRecordTypeSchema } from './dns.js';
@@ -18,6 +18,118 @@ export const addressSchema = z
   .string()
   .regex(/^0x[a-fA-F0-9]{40}$/)
   .transform((v) => v as Address);
+
+export const registrationResultSchema = z.object({
+  registrationId: z.string().optional(),
+  agentId: z.string().min(1),
+  nftTokenId: z.number().int().nonnegative(),
+  domain: z.string().min(1),
+  basename: z.string().nullable(),
+  ensName: z.string().nullable(),
+  txHash: z
+    .string()
+    .regex(/^0x[0-9a-f]*$/i)
+    .transform((value) => value as Hex),
+  sslStatus: z.string(),
+  estimatedReadyAt: z.string(),
+  metadataUri: z.string(),
+  provisioningStatus: z.enum(['completed', 'processing', 'recovery_required']).optional(),
+  provisioningMessage: z.string().optional(),
+  renewalSnapshot: z
+    .object({
+      version: z.literal(1),
+      capturedAt: z.string(),
+      years: z.number(),
+      currency: z.literal('USDC'),
+      autoRenewTotalUsdc: z.string(),
+      autoRenewTotalAtomic: z.string(),
+      fullServiceTotalUsdc: z.string().nullable(),
+      fullServiceTotalAtomic: z.string().nullable(),
+      items: z.array(
+        z.object({
+          key: z.enum(['domain', 'platform', 'premium_plan', 'ssl', 'email', 'basename', 'ens']),
+          label: z.string(),
+          name: z.string().optional(),
+          selected: z.boolean(),
+          provisioned: z.boolean(),
+          includedInAutoRenew: z.boolean(),
+          amountUsdc: z.string().nullable(),
+          amountAtomic: z.string().nullable(),
+          source: z.enum(['spaceship', 'agentdomain', 'ses', 'basenames', 'ens']),
+          note: z.string().optional(),
+        }),
+      ),
+      warnings: z.array(z.string()),
+    })
+    .optional(),
+});
+
+const registrationProgressObjectSchema = z.object({
+  registrationId: z.string().min(1),
+  status: z.enum([
+    'processing',
+    'completed',
+    'action_required',
+    'failed',
+    'refunded',
+    'awaiting_payment',
+  ]),
+  statusUrl: z.string().min(1),
+  domain: z.string().min(1),
+  agentId: z.string().nullable(),
+  paymentStatus: z.enum(['unknown', 'pending', 'settled', 'not_charged', 'refunded']),
+  stage: z.enum([
+    'payment',
+    'domain',
+    'dns',
+    'ssl',
+    'email',
+    'basename',
+    'ens',
+    'mint',
+    'finalizing',
+    'complete',
+  ]),
+  messageCode: z.string().min(1),
+  startedAt: z.string().datetime({ offset: true }),
+  updatedAt: z.string().datetime({ offset: true }),
+  completedAt: z.string().datetime({ offset: true }).nullable(),
+  revision: z.number().int().nonnegative(),
+  estimatedDurationSeconds: z.number().finite().nonnegative().nullable(),
+  pollAfterSeconds: z.number().finite().positive(),
+  completionEventId: z.string().nullable(),
+  result: registrationResultSchema
+    .extend({
+      txHash: z
+        .string()
+        .regex(/^0x[0-9a-f]{64}$/i)
+        .transform((value) => value as Hex),
+      sslStatus: z.enum(['active', 'external']),
+    })
+    .nullable()
+    .optional(),
+});
+
+export const registrationProgressSchema = registrationProgressObjectSchema.refine(
+  (value) => value.result == null || value.status === 'completed',
+  { message: 'A result is only available for completed registrations', path: ['result'] },
+);
+
+export const registrationAcceptedSchema = registrationProgressObjectSchema.partial().extend({
+  registrationId: z.string().min(1),
+  status: z.literal('processing'),
+  statusUrl: z.string().min(1),
+  domain: z.string().min(1),
+  paymentStatus: z.literal('settled'),
+  pollAfterSeconds: z.number().finite().positive(),
+  result: z.null().optional(),
+});
+
+export const registrationListResultSchema = z.object({
+  items: z.array(registrationProgressSchema),
+  hasMore: z.boolean(),
+  total: z.number().int().nonnegative(),
+});
 
 export const domainLabelSchema = z
   .string()

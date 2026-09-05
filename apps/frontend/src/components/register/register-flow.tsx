@@ -6,13 +6,25 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ConnectWalletButton } from '@/components/wallet/connect-wallet-button';
-import { Check, X, Loader2, ArrowRight, Sparkles, ExternalLink, ChevronDown } from 'lucide-react';
+import {
+  Check,
+  X,
+  Loader2,
+  ArrowRight,
+  Sparkles,
+  ExternalLink,
+  ChevronDown,
+  ShieldCheck,
+  CircleAlert,
+} from 'lucide-react';
+import Link from 'next/link';
 import { cn, shortAddress } from '@/lib/utils';
 import { useUsdcBalance } from '@/hooks/use-usdc-balance';
-import { isRegistrationRecoveryError, useRegisterAgent } from '@/hooks/use-register-agent';
+import { useRegisterAgent } from '@/hooks/use-register-agent';
+import { useSiwe } from '@/hooks/use-siwe';
+import { useRegistrationSnapshot, useRegistrationTracker } from './registration-tracker-provider';
 import { TurnstileWidget } from '@/components/turnstile-widget';
 import { toast } from 'sonner';
-import { getTransactionErrorCopy } from '@/lib/transaction-errors';
 import {
   getBaseChainSwitchCopy,
   isBaseChainMismatchError,
@@ -50,13 +62,6 @@ interface AvailabilityResult {
   ensReason?: string;
   ensCostUsdc?: string;
   alternatives?: DomainAlternative[];
-}
-
-interface ApiErrorBody {
-  message?: string;
-  error?: string;
-  code?: string;
-  details?: { retryAfterSeconds?: number };
 }
 
 interface DomainAlternative {
@@ -99,6 +104,12 @@ export function RegisterFlow() {
     isLoading: balanceLoading,
   } = useUsdcBalance(address, effectiveChainId);
   const { state: regState, register: submitRegister, reset: resetRegister } = useRegisterAgent();
+  const { session, signIn, loading: signingIn, error: signInError } = useSiwe();
+  const tracker = useRegistrationTracker();
+  const tracking = useRegistrationSnapshot();
+  const payerAuthenticated = Boolean(
+    session.authenticated && address && session.address?.toLowerCase() === address.toLowerCase(),
+  );
 
   const [name, setName] = useState('');
   const [searchedName, setSearchedName] = useState('');
@@ -180,16 +191,13 @@ export function RegisterFlow() {
         });
         const res = await fetch(`/api/v1/domains/availability?${query.toString()}`);
         if (!res.ok) {
-          const body = (await safeJson(res)) as ApiErrorBody | null;
           if (!cancelled) {
             setAvailability({
               domain: `${searchedName}.${tld}`,
               available: false,
-              reason: body?.code ?? body?.error ?? 'api_error',
+              reason: 'api_error',
             });
-            setAvailabilityError(
-              body?.message ?? 'Availability check is unavailable. Search again in a moment.',
-            );
+            setAvailabilityError('Availability check is unavailable. Search again in a moment.');
           }
           return;
         }
@@ -250,8 +258,7 @@ export function RegisterFlow() {
     fetch(`/api/v1/agents/quote?${query.toString()}`, { signal: controller.signal })
       .then(async (r) => {
         if (!r.ok) {
-          const body = (await safeJson(r)) as ApiErrorBody | null;
-          throw new Error(body?.message ?? 'Price quote is unavailable.');
+          throw new Error('Price quote is unavailable.');
         }
         return (await r.json()) as QuoteResult;
       })
@@ -267,15 +274,11 @@ export function RegisterFlow() {
         setQuoteStatus('error');
         setQuoteError('Price quote is unavailable. Search again to check price again.');
       })
-      .catch((e) => {
+      .catch(() => {
         if (cancelled) return;
         setQuote(null);
         setQuoteStatus('error');
-        setQuoteError(
-          e instanceof Error
-            ? e.message
-            : 'Price quote timed out. Search again to check price again.',
-        );
+        setQuoteError('Price quote is unavailable. Search again to check price again.');
       });
     return () => {
       cancelled = true;
@@ -338,9 +341,11 @@ export function RegisterFlow() {
   const insufficientBalance =
     isConnected && isMainnet && totalCost > 0 && balanceNumber < totalCost;
   const wrongChain = isConnected && !isMainnet;
+  const existingPurchase = Boolean(address && tracker.hasPurchase(address, `${name}.${tld}`));
 
   const canSubmit = useMemo(() => {
     if (!isConnected || !address) return false;
+    if (!payerAuthenticated || tracking.connection !== 'ready' || existingPurchase) return false;
     if (wrongChain) return false;
     if (!validName || !availability?.available || checking) return false;
     if (!quoteReady) return false;
@@ -368,6 +373,9 @@ export function RegisterFlow() {
     turnstileToken,
     insufficientBalance,
     regState.phase,
+    payerAuthenticated,
+    tracking.connection,
+    existingPurchase,
   ]);
 
   const handleTurnstileToken = useCallback((token: string | null) => {
@@ -390,7 +398,7 @@ export function RegisterFlow() {
       return;
     }
     try {
-      const result = await submitRegister({
+      await submitRegister({
         preferredName: name,
         tld,
         registerBasename,
@@ -408,31 +416,16 @@ export function RegisterFlow() {
         autoRenew,
         turnstileToken: turnstileToken ?? undefined,
       });
-      toast.success(`Registered ${result.domain}!`, {
-        description: `Token #${result.nftTokenId} minted on Base.`,
-      });
     } catch (e) {
-      if (isRegistrationRecoveryError(e)) {
-        toast.warning('Provisioning needs recovery', {
-          description: e.recovery.message ?? 'Payment was accepted. Do not pay again.',
-        });
-        return;
-      }
       if (isBaseChainRequiredError(e) || isBaseChainMismatchError(e)) {
         const copy = getBaseChainSwitchCopy(e);
         toast.info(copy.title, { description: copy.description });
         return;
       }
-      const copy = getTransactionErrorCopy(e, {
-        action: 'Registration',
-        stage: 'signature',
-        fallback: 'Registration could not be completed. Please check your wallet and try again.',
+      toast.info('Checkout not submitted', {
+        description:
+          'No payment request was submitted. Check your payer sign-in and registration updates before continuing.',
       });
-      if (copy.kind === 'cancelled') {
-        toast.info(copy.title, { description: copy.description });
-      } else {
-        toast.error(copy.title, { description: copy.description });
-      }
     }
   }
 
@@ -459,6 +452,37 @@ export function RegisterFlow() {
 
   return (
     <div className="space-y-5 sm:space-y-6">
+      {isConnected && !payerAuthenticated && (
+        <div className="flex flex-col gap-3 border-b border-border pb-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold">Sign in before payment</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Use the paying wallet to keep access to your purchase progress. This sign-in does not
+              authorize payment.
+            </p>
+            {signInError && (
+              <p role="alert" className="mt-1 text-sm text-destructive">
+                Sign-in was not completed. Please try again.
+              </p>
+            )}
+          </div>
+          <Button
+            type="button"
+            disabled={signingIn}
+            onClick={async () => {
+              if (await ensureBaseChain()) await signIn();
+            }}
+            className="shrink-0"
+          >
+            {signingIn ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <ShieldCheck className="h-4 w-4" />
+            )}
+            {signingIn ? 'Signing in...' : 'Sign in with paying wallet'}
+          </Button>
+        </div>
+      )}
       {/* Wallet connection banner */}
       {!isConnected && (
         <Card className="premium-surface premium-elevated border-primary/35">
@@ -633,7 +657,6 @@ export function RegisterFlow() {
                   <X className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
                   <span className="wrap-anywhere text-destructive">
                     {availability.basename} is unavailable
-                    {availability.basenameReason ? ` (${availability.basenameReason})` : ''}
                   </span>
                 </>
               ) : availability.basenameAvailable === true ? (
@@ -654,7 +677,6 @@ export function RegisterFlow() {
                   <X className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
                   <span className="wrap-anywhere text-destructive">
                     {availability.ensName} is unavailable
-                    {availability.ensReason ? ` (${availability.ensReason})` : ''}
                   </span>
                 </>
               ) : availability.ensAvailable === true ? (
@@ -914,7 +936,7 @@ export function RegisterFlow() {
       )}
 
       {/* Status indicator during registration */}
-      {regState.phase !== 'idle' && regState.phase !== 'error' && regState.phase !== 'success' && (
+      {(regState.phase === 'preparing' || regState.phase === 'awaiting-signature') && (
         <Card className="premium-surface border-primary/50">
           <CardContent className="flex min-h-12 items-center gap-3 px-4 py-3">
             <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
@@ -928,28 +950,41 @@ export function RegisterFlow() {
       {regState.phase === 'error' && regState.error && (
         <Card className="border-destructive/60 bg-destructive/10">
           <CardContent className="p-4 text-sm text-destructive">
-            <div className="font-semibold mb-1">Registration failed</div>
+            <div className="font-semibold mb-1">Checkout not submitted</div>
             <div>{regState.error}</div>
           </CardContent>
         </Card>
       )}
 
-      {regState.phase === 'recovery' && regState.recovery && (
-        <Card className="border-amber-900/30 bg-amber-900/10">
-          <CardContent className="p-4 text-sm">
-            <div className="mb-1 font-semibold text-amber-900">Payment accepted</div>
-            <div className="text-muted-foreground">
-              {regState.recovery.message ??
-                'Provisioning needs recovery. Do not pay again; contact support.'}
-            </div>
-            {regState.recovery.registrationId && (
-              <div className="mt-2 font-mono text-xs text-muted-foreground">
-                Registration: {regState.recovery.registrationId}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      {regState.phase === 'action-required' && (
+        <div
+          role="status"
+          className="flex items-start gap-3 border-l-2 border-amber-600 px-4 py-3 text-sm"
+        >
+          <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+          <div className="min-w-0 space-y-1">
+            <p className="font-semibold">Purchase needs review</p>
+            <p className="break-words text-muted-foreground">{regState.message}</p>
+            <a
+              href="mailto:contact@agentdomain.app"
+              className="inline-block text-primary underline"
+            >
+              Contact support
+            </a>
+          </div>
+        </div>
       )}
+
+      {(regState.phase === 'processing' || existingPurchase) &&
+        regState.phase !== 'action-required' && (
+          <p className="text-sm text-muted-foreground">
+            This purchase is being tracked.{' '}
+            <Link href="/dashboard" className="text-primary underline">
+              View registration progress
+            </Link>
+            ; do not pay again.
+          </p>
+        )}
 
       {/* Step 4: Submit */}
       <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-end">
@@ -968,15 +1003,28 @@ export function RegisterFlow() {
           <Button
             variant="gradient"
             size="xl"
-            disabled={wrongChain ? switchingChain : !canSubmit}
+            disabled={
+              regState.phase === 'action-required' || (wrongChain ? switchingChain : !canSubmit)
+            }
             onClick={handleRegister}
             className="group w-full sm:w-auto"
           >
-            {regState.phase !== 'idle' && regState.phase !== 'error' ? (
+            {regState.phase === 'action-required' ? (
+              <>
+                <CircleAlert className="h-4 w-4" />
+                Purchase needs review
+              </>
+            ) : regState.phase !== 'idle' && regState.phase !== 'error' ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Registering...
               </>
+            ) : !payerAuthenticated ? (
+              'Sign in before paying'
+            ) : existingPurchase ? (
+              'Purchase already tracked'
+            ) : tracking.connection !== 'ready' ? (
+              'Waiting for registration updates'
             ) : wrongChain ? (
               switchingChain ? (
                 <>
@@ -1023,14 +1071,6 @@ export function RegisterFlow() {
       </div>
     </div>
   );
-}
-
-async function safeJson(res: Response): Promise<unknown> {
-  try {
-    return await res.json();
-  } catch {
-    return null;
-  }
 }
 
 function TldSelector({
@@ -1391,8 +1431,6 @@ function SuccessScreen({
   autoRenew: boolean;
   onReset: () => void;
 }) {
-  const provisioningProcessing = result.provisioningStatus === 'processing';
-  const hasBaseScanTx = result.txHash && result.txHash !== '0x';
   return (
     <Card className="premium-surface premium-elevated border-primary/20">
       <CardContent className="p-4 text-center sm:p-8">
@@ -1400,46 +1438,21 @@ function SuccessScreen({
           <Check className="h-8 w-8 text-green-900" />
         </div>
         <h2 className="text-2xl font-bold mb-2">Identity registered!</h2>
-        <p className="text-muted-foreground mb-6">
-          {result.provisioningMessage ??
-            (provisioningProcessing
-              ? 'Your identity is active. Selected add-ons are finishing in the background.'
-              : 'Your agent now has a complete onchain identity.')}
+        <p className="wrap-anywhere mb-6 text-muted-foreground">
+          {result.domain} registration is complete.
         </p>
 
-        <div className="mx-auto max-w-md space-y-3 rounded-lg border border-border/40 bg-card/40 p-4 text-left sm:p-6">
-          <Detail label="Domain" value={result.domain} />
-          {result.basename && <Detail label="Basename" value={result.basename} />}
-          {result.ensName && <Detail label="ENS" value={result.ensName} />}
-          <Detail label="Token ID" value={`#${result.nftTokenId}`} />
-          <Detail
-            label="Status"
-            value={provisioningProcessing ? 'Provisioning' : result.sslStatus}
-            badge
-          />
-        </div>
-
         <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-          {hasBaseScanTx && (
-            <a
-              href={`https://basescan.org/tx/${result.txHash}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Button variant="outline" className="w-full sm:w-auto">
-                View on BaseScan
-                <ExternalLink className="h-4 w-4" />
-              </Button>
-            </a>
-          )}
           <Button onClick={onReset} className="w-full sm:w-auto">
             Register another
           </Button>
-          <a href={`/agents/${result.agentId}`}>
-            <Button variant="secondary" className="w-full sm:w-auto">
-              Manage renewal
-            </Button>
-          </a>
+          {result.agentId && (
+            <Link href={`/agents/${encodeURIComponent(result.agentId)}`}>
+              <Button variant="secondary" className="w-full sm:w-auto">
+                Manage renewal
+              </Button>
+            </Link>
+          )}
         </div>
 
         {autoRenew && (
@@ -1452,21 +1465,6 @@ function SuccessScreen({
         )}
       </CardContent>
     </Card>
-  );
-}
-
-function Detail({ label, value, badge }: { label: string; value: string; badge?: boolean }) {
-  return (
-    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      {badge ? (
-        <Badge variant="success" className="font-mono text-xs">
-          {value}
-        </Badge>
-      ) : (
-        <span className="wrap-anywhere font-mono text-sm">{value}</span>
-      )}
-    </div>
   );
 }
 

@@ -36,6 +36,31 @@ import type {
   ServicePlanSku,
 } from '@agentdomain/shared';
 import { AGENTDOMAIN_API_BASE_URL, X402_NETWORK } from '@agentdomain/shared/constants';
+import {
+  RegistrationClient,
+  normalizeApiBaseUrl,
+  type RegistrationHandle,
+  type RegistrationListOptions,
+  type RegistrationRequestOptions,
+  type RegistrationWaitOptions,
+} from './registration.js';
+import type {
+  RegistrationAccepted,
+  RegistrationListResult,
+  RegistrationProgress,
+} from '@agentdomain/shared';
+export {
+  RegistrationPendingError,
+  RegistrationFailedError,
+  type RegistrationHandle,
+  type RegistrationListOptions,
+  type RegistrationRequestOptions,
+  type RegistrationWaitOptions,
+  type RegistrationPendingReason,
+  type RegistrationAccepted,
+  type RegistrationListResult,
+  type RegistrationProgress,
+} from './registration.js';
 
 const EIP3009_TYPES = {
   TransferWithAuthorization: [
@@ -68,6 +93,10 @@ export interface AgentDomainOptions {
   publicClient?: PublicClient<Transport, Chain>;
   network?: 'base' | 'base-sepolia';
   renewalVaultAddress?: Address;
+  /** Use an existing SIWE cookie instead of signing registration requests with walletClient. */
+  registrationAuth?: 'signature' | 'session';
+  /** Payer identity expected for registration session reads; this does not authenticate requests. */
+  registrationExpectedPayer?: Address;
   /**
    * Public ERC-8021 app identifier used for direct Base transactions created by this SDK.
    * Required only for direct onchain writes such as auto-renew and vault withdrawal.
@@ -488,18 +517,27 @@ export class AgentDomain {
   private apiKey?: string;
   private renewalVaultAddress?: Address;
   private readonly builderCode?: string;
+  private readonly registrationClient: RegistrationClient;
   readonly walletClient?: WalletClient<Transport, Chain, Account>;
   readonly publicClient?: PublicClient<Transport, Chain>;
   readonly network: 'base' | 'base-sepolia';
 
   constructor(opts?: AgentDomainOptions) {
-    this.apiUrl = opts?.apiUrl ?? AGENTDOMAIN_API_BASE_URL;
+    this.apiUrl = normalizeApiBaseUrl(opts?.apiUrl ?? AGENTDOMAIN_API_BASE_URL);
     this.apiKey = opts?.apiKey;
     this.walletClient = opts?.walletClient;
     this.publicClient = opts?.publicClient;
     this.network = opts?.network ?? 'base';
     this.renewalVaultAddress = opts?.renewalVaultAddress;
     this.builderCode = opts?.builderCode;
+    this.registrationClient = new RegistrationClient({
+      apiUrl: this.apiUrl,
+      walletClient: this.walletClient,
+      network: this.network,
+      authentication: opts?.registrationAuth,
+      expectedPayer: opts?.registrationExpectedPayer,
+      createPaymentHeaders: createX402PaymentHeaders,
+    });
   }
 
   private requireBuilderCode(operation: string): string {
@@ -550,68 +588,48 @@ export class AgentDomain {
     return res.json();
   }
 
-  async register(args: RegisterArgs): Promise<RegistrationResult> {
-    const walletAddress = (args.wallet || this.walletClient?.account?.address) as
-      Address | undefined;
-    if (!walletAddress) {
-      throw new Error(
-        'Registration requires a wallet address. Pass args.wallet or provide a walletClient with an account.',
-      );
-    }
+  async register(
+    args: RegisterArgs,
+    options: RegistrationWaitOptions = {},
+  ): Promise<RegistrationResult> {
+    const expectedPayer =
+      options.expectedPayer ?? args.wallet ?? this.walletClient?.account.address;
+    const result = await this.submitRegistration(args, { signal: options.signal, expectedPayer });
+    return 'status' in result
+      ? this.waitForRegistration(result, { ...options, expectedPayer })
+      : result;
+  }
 
-    const url = `${this.apiUrl}/agents/register`;
-    const body = JSON.stringify({
-      ...args,
-      wallet: walletAddress,
-      tld: args.tld ?? 'xyz',
-      registerBasename: args.registerBasename ?? true,
-      registerEns: args.registerEns ?? false,
-      emailEnabled: true,
-      emailUsername: args.emailUsername ?? 'agent',
-      premiumPlan: args.premiumPlan ?? 'included',
-      years: args.years ?? 1,
-      autoRenew: args.autoRenew ?? false,
-    });
+  async submitRegistration(
+    args: RegisterArgs,
+    options: RegistrationRequestOptions = {},
+  ): Promise<RegistrationAccepted | RegistrationResult> {
+    return this.registrationClient.submit(args, options);
+  }
 
-    let res = await fetch(url, {
-      method: 'POST',
-      headers: await this.authHeaders({ 'Content-Type': 'application/json' }),
-      body,
-    });
+  async getRegistration(
+    registrationId: string,
+    options: RegistrationRequestOptions = {},
+  ): Promise<RegistrationProgress> {
+    return this.registrationClient.get(registrationId, options);
+  }
 
-    if (res.status === 402) {
-      if (!this.walletClient || !walletAddress) {
-        throw new Error(
-          'Registration requires x402 payment. Provide a walletClient in AgentDomain constructor so the SDK can sign the USDC authorization.',
-        );
-      }
+  async getRegistrations(options: RegistrationListOptions = {}): Promise<RegistrationListResult> {
+    return this.registrationClient.list(options);
+  }
 
-      if (this.network !== 'base') {
-        throw new Error('AgentDomain x402 payments are supported only on Base mainnet.');
-      }
-      const paymentHeaders = await createX402PaymentHeaders(res, this.walletClient);
+  async waitForRegistration(
+    registration: string | RegistrationAccepted | RegistrationProgress | RegistrationHandle,
+    options: RegistrationWaitOptions = {},
+  ): Promise<RegistrationResult> {
+    return this.registrationClient.wait(registration, options);
+  }
 
-      res = await fetch(url, {
-        method: 'POST',
-        headers: await this.authHeaders({
-          'Content-Type': 'application/json',
-          ...paymentHeaders,
-        }),
-        body,
-      });
-    }
-
-    if (!res.ok) {
-      let detail = '';
-      try {
-        const errBody = await res.json();
-        detail = `: ${(errBody as { message?: string }).message ?? JSON.stringify(errBody)}`;
-      } catch {
-        // ignore
-      }
-      throw new Error(`HTTP ${res.status}${detail}`);
-    }
-    return res.json();
+  async recoverRegistration(
+    handle: RegistrationHandle,
+    options: RegistrationRequestOptions = {},
+  ): Promise<RegistrationProgress> {
+    return this.registrationClient.recover(handle, options);
   }
 
   private async buildEip3009Authorization(requirement: Eip3009RequirementForClient, from: Address) {

@@ -12,6 +12,12 @@ npm install @agentdomain/sdk@0.7.0 viem
 The default API base is `https://api.agentdomain.app/api/v1` and the default network is Base
 mainnet.
 
+In the unreleased SDK source described below, relative `apiUrl` values are resolved against
+the browser location at construction, before signing or payment. Non-browser clients must
+provide an absolute URL. HTTPS is required except for explicitly configured HTTP loopback
+hosts (`localhost`, `127.0.0.1`, or `[::1]`). API bases cannot contain credentials, a query,
+or a fragment.
+
 ## Construct a client
 
 ```ts
@@ -57,6 +63,89 @@ console.log(quote.totalUsdc, identity.agentId, identity.provisioningStatus);
 
 `register()` requires a wallet address, either in the request or from the wallet client. When the
 API returns an x402 challenge, the SDK signs and retries it on Base mainnet.
+
+## Asynchronous registration (unreleased source API)
+
+The following methods are new repository-source additions, not a claim about the pinned npm
+release installed above. No package version has been changed. Older published clients may treat
+HTTP `202` as a complete `RegistrationResult`; do not infer readiness from their return types.
+Use the [HTTP status contract](/api-reference/register/) directly or upgrade to a release containing
+these methods when available.
+
+```ts
+import { RegistrationPendingError } from '@agentdomain/sdk';
+
+const controller = new AbortController();
+try {
+  const submission = await agentDomain.submitRegistration(
+    { preferredName: 'research-agent', tld: 'com' },
+    { signal: controller.signal },
+  );
+  const result =
+    'status' in submission
+      ? await agentDomain.waitForRegistration(submission, {
+          timeoutMs: 600_000,
+          signal: controller.signal,
+        })
+      : submission;
+  console.log(result.agentId);
+} catch (error) {
+  if (!(error instanceof RegistrationPendingError)) throw error;
+  console.log(error.reason, error.handle);
+  // Read status later with the payer wallet. Do not start another paid checkout.
+}
+```
+
+`register(args, { timeoutMs, signal })` combines submission and waiting. It sends
+`Prefer: respond-async`, preserves legacy `200` results, and handles `202` by polling GETs only.
+Submission and individual reads default to a 60-second deadline; the wait defaults to ten minutes
+after acceptance. The wait timeout does not extend a submission deadline. Polling honors the
+server's interval and transient-read `Retry-After` with a five-second minimum and stops when user
+action is required.
+
+`getRegistration(id)` returns `RegistrationProgress`; `getRegistrations({ limit, offset })` returns
+the payer's paginated list, defaulting to 20 entries with a maximum of 50. These methods never
+authorize with an agent API key or payment header.
+Wallet clients sign `agentdomain.app api auth <timestampMs>` for `X-Agent-Signature`; the SDK caches
+the signature in memory for up to four minutes and refreshes before its five-minute expiry.
+Signing rejection and authorization failure stop the waiter, avoiding repeated wallet prompts.
+Signature-authenticated registration requests omit cookies so another wallet's SIWE session
+cannot override the signer. Status, list, and recovery reads send `expectedPayer` and verify
+`X-Authenticated-Wallet` on successful responses before decoding their bodies. The query parameter
+does not authenticate the request; it checks the authenticated identity against the intended payer.
+
+For an existing browser SIWE session, construct the client with `registrationAuth: 'session'`.
+Without a wallet client, also supply `registrationExpectedPayer` in the constructor or
+`expectedPayer` per request. Cookies are included and reads do not prompt the wallet. Unbound
+session-only reads fail locally, while a cookie belonging to another payer is rejected by the API.
+Use the same host for sign-in and reads.
+The payer is the authorized registration reader even when another wallet will own the NFT.
+
+On `completed`, the waiter returns `progress.result`. It never manufactures missing token IDs,
+transaction hashes, or metadata. Missing legacy results produce a pending recovery diagnostic.
+`RegistrationFailedError` represents a server-confirmed `failed` or `refunded` status;
+`RegistrationPendingError` represents timeout, abort, an unknown outcome, or an actionable state.
+Neither is an instruction to pay again.
+Minimal `202 action_required` responses also raise `RegistrationPendingError` with a reusable
+handle, without a second payment attempt.
+
+After a lost submission response, use its error handle with `getRegistration(handle.registrationId)`
+when an ID is known, or `recoverRegistration(handle)` when unknown. Recovery performs only
+payer-authenticated list/detail reads, matching the exact domain and inclusive submission time
+window. It scans at most ten pages of 50 entries (500 total) and refuses multiple matches, no match, or an
+incomplete search. Clock skew can prevent matching; no match is not proof that payment failed.
+No transport error triggers an automatic payment POST retry.
+SDK-generated pending handles also retain `payerAddress`; recovery cannot silently switch to a
+different signing wallet. Session-only callers can pass `handle.payerAddress` as `expectedPayer`
+when calling a detail read directly.
+Known-ID recovery checks the same domain, inclusive time window, and authenticated payer as
+unknown-ID discovery. An inconsistent handle is rejected rather than returning another purchase.
+When only the registration ID is known, use an authenticated `getRegistration()` call.
+
+HTTP `200` registration results are also schema-projected: required fields must be present,
+the returned domain must match the submitted request, and unknown fields are stripped,
+including unknown nested snapshot fields. Public snapshot values and items are retained without
+repricing or truncation. Invalid responses retain a pending handle and never trigger another payment.
 
 ## Email and DNS
 

@@ -2,12 +2,18 @@ import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { AgentDomainActionProvider } from '../dist/index.js';
 import { parseBuilderCodeAttribution } from '@agentdomain/sdk';
+import { registrationResultSchema } from '@agentdomain/shared';
 
 const owner = '0x1111111111111111111111111111111111111111';
 const vault = '0x2222222222222222222222222222222222222222';
 const txHash = `0x${'ab'.repeat(32)}`;
 const builderCode = 'agentkit_test';
 const originalFetch = globalThis.fetch;
+
+async function signReadMessage(message) {
+  assert.match(message, /^agentdomain\.app api auth \d+$/);
+  return `0x${'11'.repeat(65)}`;
+}
 
 function transactionReceipt(status) {
   return {
@@ -51,10 +57,23 @@ function pendingTransaction() {
 
 function mockRegistrationWithReceipt(status) {
   let receiptRequests = 0;
+  const registration = registrationResultSchema.parse({
+    registrationId: '11111111-1111-4111-8111-111111111111',
+    agentId: '22222222-2222-4222-8222-222222222222',
+    domain: 'receipt-test.xyz',
+    nftTokenId: 7,
+    basename: null,
+    ensName: null,
+    txHash,
+    sslStatus: 'active',
+    estimatedReadyAt: '2026-09-06T00:00:00.000Z',
+    metadataUri: 'ipfs://synthetic-registration-fixture',
+    provisioningStatus: 'completed',
+  });
   globalThis.fetch = async (input, init = {}) => {
     const url = String(input);
     if (url.endsWith('/agents/register')) {
-      return new Response(JSON.stringify({ domain: 'receipt-test.xyz', nftTokenId: '7' }), {
+      return new Response(JSON.stringify(registration), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -113,6 +132,7 @@ describe('AgentKit direct Base attribution', () => {
     });
     const walletProvider = {
       getAddress: () => owner,
+      signMessage: signReadMessage,
       sendTransaction: async (request) => {
         submitted = request;
         return txHash;
@@ -140,6 +160,7 @@ describe('AgentKit direct Base attribution', () => {
     });
     const walletProvider = {
       getAddress: () => owner,
+      signMessage: signReadMessage,
       sendTransaction: async () => txHash,
     };
     const action = provider.getActions().find(({ name }) => name === 'register_agent_identity');
@@ -164,6 +185,7 @@ describe('AgentKit direct Base attribution', () => {
     });
     const walletProvider = {
       getAddress: () => owner,
+      signMessage: signReadMessage,
       sendTransaction: async () => txHash,
     };
     const action = provider.getActions().find(({ name }) => name === 'register_agent_identity');

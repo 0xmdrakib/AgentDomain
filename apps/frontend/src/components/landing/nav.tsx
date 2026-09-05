@@ -34,7 +34,10 @@ export function LandingNav() {
   }, [open]);
 
   return (
-    <header className="agentdomain-sticky-header sticky top-0 z-40 w-full border-b border-border/80 bg-background/98 shadow-[0_12px_35px_-30px_rgba(20,21,18,0.45)] backdrop-blur-[12px] md:bg-background/82 md:backdrop-blur-xl">
+    <header
+      style={{ top: 'var(--registration-banner-height, 0px)' }}
+      className="agentdomain-sticky-header sticky z-40 w-full border-b border-border/80 bg-background/98 shadow-[0_12px_35px_-30px_rgba(20,21,18,0.45)] backdrop-blur-[12px] md:bg-background/82 md:backdrop-blur-xl"
+    >
       <div
         ref={menuRef}
         className="container relative flex h-16 items-center justify-between gap-3"

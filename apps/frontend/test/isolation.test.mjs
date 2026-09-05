@@ -234,9 +234,79 @@ test('production release requires complete browser config and the dedicated API 
 });
 
 test('browser APIs stay same-origin while server reads use the reviewed public API host', () => {
-  const registration = read('src/hooks/use-register-agent.ts');
-  assert.match(registration, /const apiUrl = '\/api\/v1'/);
-  assert.doesNotMatch(registration, /NEXT_PUBLIC_API_URL/);
+  function requestModule(path) {
+    const source = read(path);
+    const file = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true);
+    const calls = [];
+    const visit = (node) => {
+      if (ts.isCallExpression(node)) calls.push(node);
+      ts.forEachChild(node, visit);
+    };
+    visit(file);
+    assert.deepEqual(inspectSource(source, path).errors, [], path);
+    return { file, calls };
+  }
+  function imports(parsed, name, from) {
+    assert.ok(
+      parsed.file.statements.some(
+        (node) =>
+          ts.isImportDeclaration(node) &&
+          node.moduleSpecifier.text === from &&
+          node.importClause?.namedBindings?.elements?.some(
+            (item) => item.name.text === name && (item.propertyName?.text ?? name) === name,
+          ),
+      ),
+      `${parsed.file.fileName} must import ${name} from ${from}`,
+    );
+  }
+  const callsTo = (parsed, name) =>
+    parsed.calls.filter((node) => node.expression.getText(parsed.file) === name);
+  const targets = (parsed, name) =>
+    callsTo(parsed, name).map((node) => {
+      const argument = node.arguments[0];
+      return ts.isStringLiteralLike(argument) ? argument.text : argument.getText(parsed.file);
+    });
+
+  const registration = requestModule('src/hooks/use-register-agent.ts');
+  const submission = requestModule('src/lib/registration-submission.ts');
+  const progress = requestModule('src/lib/registration-progress.ts');
+  const tracker = requestModule('src/lib/registration-tracker.ts');
+  for (const parsed of [registration, submission, progress, tracker])
+    for (const directFetch of ['fetch', 'globalThis.fetch', 'window.fetch', 'this.fetcher'])
+      assert.equal(callsTo(parsed, directFetch).length, 0, parsed.file.fileName);
+  imports(registration, 'runRegistrationSubmission', '@/lib/registration-submission');
+  assert.equal(callsTo(registration, 'runRegistrationSubmission').length, 1);
+  imports(submission, 'submitPaidRegistration', './registration-progress');
+  imports(submission, 'readRegistrationSession', './registration-progress');
+  assert.equal(callsTo(submission, 'prepareRegistration').length, 1);
+  assert.equal(callsTo(submission, 'submitPaidRegistration').length, 1);
+  assert.equal(callsTo(submission, 'readRegistrationSession').length, 1);
+  assert.deepEqual(targets(submission, 'fetcher'), ['/api/v1/agents/register']);
+  assert.deepEqual(targets(progress, 'fetcher'), ['path', '/api/v1/agents/register']);
+  assert.deepEqual(targets(progress, 'registrationRead'), ['/api/v1/auth/session']);
+  imports(tracker, 'registrationRead', './registration-progress');
+  imports(tracker, 'registrationPath', './registration-progress');
+  imports(tracker, 'readRegistrationSession', './registration-progress');
+  assert.deepEqual(targets(tracker, 'registrationRead'), ['path']);
+  assert.equal(callsTo(tracker, 'readRegistrationSession').length, 1);
+  assert.deepEqual(targets(tracker, 'this.payerRead'), [
+    '`/api/v1/registrations?limit=${REGISTRATION_PAGE_SIZE}&offset=${offset}`',
+    'registrationPath(id)',
+  ]);
+  const detailPath = progress.file.statements.find(
+    (node) => ts.isFunctionDeclaration(node) && node.name?.text === 'registrationPath',
+  );
+  const returnedPath = detailPath?.body?.statements.find(ts.isReturnStatement)?.expression;
+  assert.ok(returnedPath && ts.isTemplateExpression(returnedPath));
+  assert.equal(returnedPath.head.text, '/api/v1/registrations/');
+  assert.equal(returnedPath.templateSpans.length, 1);
+  assert.equal(
+    returnedPath.templateSpans[0].expression.getText(progress.file),
+    'encodeURIComponent(id)',
+  );
+  assert.equal(returnedPath.templateSpans[0].literal.text, '');
+  for (const file of sourceFiles(resolve(root, 'src')))
+    assert.doesNotMatch(readFileSync(file, 'utf8'), /NEXT_PUBLIC_API_URL/, relative(root, file));
   const transport = read('src/lib/backend-transport.ts');
   assert.match(transport, /https:\/\/api\.agentdomain\.app\/api\/v1/);
   const solutions = read('src/lib/solution-pages.ts');

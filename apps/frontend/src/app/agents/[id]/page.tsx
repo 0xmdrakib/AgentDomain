@@ -3,7 +3,6 @@ import { cache } from 'react';
 import { notFound } from 'next/navigation';
 import { getPublicBackend } from '@/lib/backend-client';
 import { createPageMetadata } from '@/lib/seo';
-import { Providers } from '@/components/providers';
 import { AgentDetailClient } from '@/components/agents/agent-detail-client';
 
 export const dynamic = 'force-dynamic';
@@ -36,9 +35,5 @@ export default async function AgentDetailPage({ params }: PageProps) {
   const { id } = await params;
   const data = await getAgentData(id);
   if (!data) notFound();
-  return (
-    <Providers>
-      <AgentDetailClient agent={data.agent} />
-    </Providers>
-  );
+  return <AgentDetailClient agent={data.agent} />;
 }

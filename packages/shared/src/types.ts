@@ -65,6 +65,53 @@ export interface RegistrationResult {
   provisioningMessage?: string;
 }
 
+export interface RegistrationProgress {
+  registrationId: string;
+  status:
+    'processing' | 'completed' | 'action_required' | 'failed' | 'refunded' | 'awaiting_payment';
+  statusUrl: string;
+  domain: string;
+  agentId: string | null;
+  paymentStatus: 'unknown' | 'pending' | 'settled' | 'not_charged' | 'refunded';
+  stage:
+    | 'payment'
+    | 'domain'
+    | 'dns'
+    | 'ssl'
+    | 'email'
+    | 'basename'
+    | 'ens'
+    | 'mint'
+    | 'finalizing'
+    | 'complete';
+  messageCode: string;
+  startedAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+  revision: number;
+  estimatedDurationSeconds: number | null;
+  pollAfterSeconds: number;
+  completionEventId: string | null;
+  /** Only populated when the identity and all selected services are ready. */
+  result?: RegistrationResult | null;
+}
+
+/** Minimum asynchronous acceptance; servers may include the remaining progress fields. */
+export interface RegistrationAccepted extends Partial<RegistrationProgress> {
+  registrationId: string;
+  status: 'processing';
+  statusUrl: string;
+  domain: string;
+  paymentStatus: 'settled';
+  pollAfterSeconds: number;
+}
+
+export interface RegistrationListResult {
+  items: RegistrationProgress[];
+  hasMore: boolean;
+  total: number;
+}
+
 export interface AgentMetadata {
   name?: string;
   description?: string;

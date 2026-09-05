@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Geist } from 'next/font/google';
 import './globals.css';
+import { Providers } from '@/components/providers';
 import { BRAND_ICONS } from '@/lib/brand-assets';
 import {
   brandedTitle,
@@ -48,7 +49,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      <body className={`${geistSans.variable} font-sans antialiased`}>{children}</body>
+      <body className={`${geistSans.variable} font-sans antialiased`}>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

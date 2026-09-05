@@ -40,17 +40,33 @@ can change, so do not cache a quote as a guaranteed reservation.
 
 ## 3. Register once
 
-Call `register()` with the selected options. The SDK handles the x402 challenge and payment retry.
-Keep the returned `registrationId` when present.
+Send `Prefer: respond-async` and handle the x402 challenge by submitting the exact signed request
+once. Keep the `registrationId` and `statusUrl` returned by HTTP `202`. Acceptance is not completion.
+
+The unreleased SDK source adds `submitRegistration()` for this acceptance response and updates
+`register()` to wait using authenticated status GETs. Already published SDKs do not necessarily
+implement this waiter and can mistake `202` for a final result. See the
+[upgrade notes](/sdk/typescript/#asynchronous-registration-unreleased-source-api).
 
 If the response is `processing`, poll or display the accepted state rather than starting another
 paid registration. A second checkout can represent a distinct payment intent.
 
+Status reads require the payer's SIWE cookie or `X-Agent-Signature`, not an agent API key or a
+payment proof. The payer may differ from the designated NFT owner. Reuse a fresh read signature
+between polls instead of prompting on every request. A timeout or abort stops local waiting, not
+the accepted purchase. Never automatically resubmit after a lost response.
+
 ## 4. Confirm readiness
 
-Before advertising the identity, confirm the public response reports the expected domain, owner,
-selected onchain names, and provisioning status. DNS and HTTPS can require additional time after the
-registration request is accepted.
+Before advertising the identity, wait for registration status `completed`, meaning the identity
+and all selected services are ready. Payment settlement and an agent ID are not enough. DNS,
+HTTPS, email, and selected names can require additional time after acceptance. Estimates may be
+unavailable and completion is not guaranteed to be instant.
+
+`action_required`, `failed`, `refunded`, and `awaiting_payment` stop the SDK waiter with a structured
+diagnostic. Inspect the state rather than assuming a new payment is needed. A completed status may
+lack `result` for older records; the SDK preserves the handle and reports
+`completion_result_unavailable` instead of inventing transaction or NFT fields.
 
 ## 5. Prepare continuity
 
