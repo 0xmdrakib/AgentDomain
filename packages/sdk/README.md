@@ -8,6 +8,12 @@ The production API base is `https://api.agentdomain.app/api/v1`. A direct `GET` 
 machine-readable service discovery document; human documentation is available at
 `https://docs.agentdomain.app`.
 
+The SDK resolves a relative `apiUrl` against the browser location at construction,
+before any signing or payment. Outside a browser, configure an absolute URL.
+API bases must use HTTPS; explicitly configured HTTP `localhost`, `127.0.0.1`, and
+`[::1]` endpoints are allowed for local development. Embedded credentials, query
+strings, and fragments are rejected before requests begin.
+
 ```bash
 npm install @agentdomain/sdk viem
 ```
@@ -65,6 +71,88 @@ delegated EIP-3009 authorization followed by the server's vault workflow; it is
 not converted into an x402 paid resource. Email setup, SSL certification, DNS
 orchestration, and AgentID NFT mint/orchestration are included in the annual
 platform fee; Basename and ENS remain optional paid add-ons.
+
+## Asynchronous registration (unreleased source API)
+
+The methods in this section are additions in the repository source, not a claim that
+an already published npm version contains them. Package versions have not changed.
+Older SDKs may treat HTTP `202` as a `RegistrationResult`; their return type is not
+evidence that registration finished. Upgrade to a release containing these methods
+when available, or integrate the documented HTTP status contract directly.
+
+```ts
+import { AgentDomain, RegistrationPendingError } from '@agentdomain/sdk';
+
+const ad = new AgentDomain({ walletClient });
+const controller = new AbortController();
+try {
+  const identity = await ad.register(
+    { preferredName: 'research-agent', tld: 'xyz' },
+    { timeoutMs: 600_000, signal: controller.signal },
+  );
+  console.log(identity.agentId);
+} catch (error) {
+  if (!(error instanceof RegistrationPendingError)) throw error;
+  // Keep this non-secret handle. Timeout or abort does not cancel the purchase.
+  console.log(error.reason, error.handle);
+}
+```
+
+`submitRegistration(args, options)` sends `Prefer: respond-async` and returns either
+the minimum `RegistrationAccepted` response on `202` or the original
+`RegistrationResult` on `200`. `register()` calls it once, then waits on status GETs
+after `202`. `waitForRegistration(acceptedOrIdOrHandle, options)` resumes waiting
+without submitting any purchase. Completion returns the server-projected
+`progress.result`; missing results produce `completion_result_unavailable`, never
+invented NFT IDs, transaction hashes, or metadata fields. Legacy public `200` fields
+remain compatible and may still report unfinished provisioning. The SDK validates
+required fields and the requested domain, then returns the schema-projected result;
+unknown root or nested fields are not echoed to callers.
+
+`getRegistration(id)` and `getRegistrations({ limit, offset })` require the **payer**
+wallet, not a different designated NFT owner. They never send an agent API key or
+payment header as authorization. Lists default to 20 entries and accept at most 50.
+With a wallet client, they omit cookies and use `X-Agent-Signature`
+and reuse its in-memory signature for up to four minutes, then sign afresh. Rejected
+signing and authorization failures stop waiting instead of prompting repeatedly.
+Every status/list/recovery read sends `expectedPayer` from the signer, a recovery
+handle, or an explicit option. It is an identity consistency check, not authentication.
+The SDK rejects a missing or mismatched `X-Authenticated-Wallet` response header
+before reading the response body, preventing a different session wallet from being used.
+For an already signed-in browser, use `registrationAuth: 'session'` and supply
+`registrationExpectedPayer` in the constructor or `expectedPayer` per request when
+there is no wallet client. Session requests include cookies and do not request a
+read signature. Session-only reads without a known payer fail before fetching.
+Sign in and read status on the same API
+host. A server-side SIWE integration must provide a cookie-preserving fetch runtime;
+Node fetch does not acquire a browser session automatically.
+
+Waiting defaults to ten minutes after acceptance; individual requests and submission
+default to sixty seconds. Both support `AbortSignal` and `timeoutMs`. Status polling
+honors `pollAfterSeconds` and transient-read `Retry-After` with a five-second minimum. `action_required` and
+`awaiting_payment` stop the waiter with `RegistrationPendingError`; `failed` and
+`refunded` produce `RegistrationFailedError` containing the server progress. A wait
+timeout, abort, or read outage is not a failed-registration assertion.
+An HTTP `202` response containing a minimal `action_required` handle immediately
+produces `RegistrationPendingError` with that reason; read its status instead of paying again.
+
+On a lost POST response, the SDK raises `RegistrationPendingError` and never retries
+the POST or signs a new payment automatically. A known payment identifier is only a
+reference, never status authorization. Use `getRegistration()` when an ID is known.
+For an unknown ID, `recoverRegistration(error.handle)` performs authenticated list
+reads and requires exactly one match for the exact domain and inclusive submission
+time interval. Known-ID recovery enforces the same domain, time, and authenticated-payer
+binding; knowing an ID does not bypass handle validation. When only an ID is available,
+use a payer-authenticated `getRegistration()` read instead of inventing a recovery window.
+Discovery scans at most ten pages of 50 entries (500 total) and refuses multiple matches,
+incomplete searches, and no-match results. Clock skew can prevent a time match; do not
+interpret no match as proof that no payment occurred. Inspect the payer's list or
+contact support instead of starting another checkout.
+
+`completed` in the status contract means the identity and all selected services are
+ready, not merely that payment succeeded or an agent ID exists. DNS, HTTPS, email, and
+selected names can take additional time. Estimates may be `null`; there is no instant
+completion guarantee.
 
 ## Autonomous Premium Plan actions
 

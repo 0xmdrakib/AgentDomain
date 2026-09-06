@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { LandingNav } from '@/components/landing/nav';
@@ -24,8 +25,10 @@ import {
 import { useSiwe } from '@/hooks/use-siwe';
 import { normalizeAddress } from '@/lib/address';
 import { API_TIMEOUT_MS } from '@/lib/transport-policy';
+import { REGISTRATION_CHANGED_EVENT } from '@/lib/registration-progress';
 
 export function AgentDetailClient({ agent }: { agent: PublicAgentView }) {
+  const router = useRouter();
   const { address } = useAccount();
   const { session } = useSiwe();
   const wallet = normalizeAddress(address);
@@ -34,6 +37,15 @@ export function AgentDetailClient({ agent }: { agent: PublicAgentView }) {
   const [loaded, setLoaded] = useState<{ wallet: string; value: ManagementView } | null>(null);
   const [revision, setRevision] = useState(0);
   const [managementError, setManagementError] = useState(false);
+
+  useEffect(() => {
+    const refresh = () => {
+      setRevision((value) => value + 1);
+      router.refresh();
+    };
+    window.addEventListener(REGISTRATION_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(REGISTRATION_CHANGED_EVENT, refresh);
+  }, [router]);
 
   useEffect(() => {
     setLoaded(null);

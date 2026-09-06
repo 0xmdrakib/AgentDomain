@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { parseBuilderCodeAttribution } from '@agentdomain/sdk';
+import { registrationResultSchema } from '@agentdomain/shared';
 import { encodeElizaAutoRenewCalldata, registerIdentityAction } from '../dist/index.js';
 
 const vault = '0x2222222222222222222222222222222222222222';
@@ -81,10 +82,23 @@ function pendingTransaction() {
 
 function mockRegistrationWithReceipt(status) {
   let receiptRequests = 0;
+  const registration = registrationResultSchema.parse({
+    registrationId: '11111111-1111-4111-8111-111111111111',
+    agentId: '22222222-2222-4222-8222-222222222222',
+    domain: 'receipt-test.xyz',
+    nftTokenId: 9,
+    basename: null,
+    ensName: null,
+    txHash,
+    sslStatus: 'active',
+    estimatedReadyAt: '2026-09-06T00:00:00.000Z',
+    metadataUri: 'ipfs://synthetic-registration-fixture',
+    provisioningStatus: 'completed',
+  });
   globalThis.fetch = async (input, init = {}) => {
     const url = String(input);
     if (url.endsWith('/agents/register')) {
-      return new Response(JSON.stringify({ domain: 'receipt-test.xyz', nftTokenId: '9' }), {
+      return new Response(JSON.stringify(registration), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });

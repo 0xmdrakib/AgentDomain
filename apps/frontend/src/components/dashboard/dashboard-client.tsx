@@ -11,6 +11,9 @@ import { ConnectWalletButton } from '@/components/wallet/connect-wallet-button';
 import { useSiwe } from '@/hooks/use-siwe';
 import { useUsdcBalance } from '@/hooks/use-usdc-balance';
 import { shortAddress, formatDate } from '@/lib/utils';
+import { DashboardRegistrationUpdates } from '@/components/register/registration-updates';
+import { useRegistrationSnapshot } from '@/components/register/registration-tracker-provider';
+import { REGISTRATION_CHANGED_EVENT } from '@/lib/registration-progress';
 
 interface Agent {
   id: string;
@@ -35,28 +38,46 @@ export function DashboardClient() {
   const chainId = useChainId();
   const { session, signIn, loading: authLoading, error: authError } = useSiwe();
   const { balanceFormatted, isLoading: balanceLoading } = useUsdcBalance(address, chainId);
-  const [agents, setAgents] = useState<Agent[]>([]);
+  const [loadedAgents, setAgents] = useState<Agent[]>([]);
+  const [agentWallet, setAgentWallet] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [revision, setRevision] = useState(0);
+  const tracking = useRegistrationSnapshot();
+  const eligible = Boolean(
+    session.authenticated && address && session.address?.toLowerCase() === address.toLowerCase(),
+  );
+  const agents = eligible && agentWallet === address?.toLowerCase() ? loadedAgents : [];
+  const agentCountsKnown = eligible && agentWallet === address?.toLowerCase() && !loadError;
 
   useEffect(() => {
-    if (!address || !session.authenticated) {
+    const refresh = () => setRevision((value) => value + 1);
+    window.addEventListener(REGISTRATION_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(REGISTRATION_CHANGED_EVENT, refresh);
+  }, []);
+
+  useEffect(() => {
+    if (!address || !eligible) {
       setAgents([]);
       setLoading(false);
       return;
     }
     let cancelled = false;
     setLoading(true);
-    fetch(`/api/v1/agents/by-wallet/${address}`, { credentials: 'include' })
+    setLoadError(false);
+    fetch(`/api/v1/agents/by-wallet/${address}`, { credentials: 'include', cache: 'no-store' })
       .then(async (res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return (await res.json()) as Agent[];
       })
       .then((agentList) => {
         if (cancelled) return;
-        setAgents(Array.isArray(agentList) ? agentList : []);
+        if (!Array.isArray(agentList)) throw new Error('Invalid agent list');
+        setAgents(agentList);
+        setAgentWallet(address.toLowerCase());
       })
       .catch(() => {
-        if (!cancelled) setAgents([]);
+        if (!cancelled) setLoadError(true);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -64,7 +85,7 @@ export function DashboardClient() {
     return () => {
       cancelled = true;
     };
-  }, [address, session.authenticated]);
+  }, [address, eligible, revision]);
 
   // Prevent hydration flash
   if (!mounted) return null;
@@ -90,12 +111,20 @@ export function DashboardClient() {
         </Link>
       </div>
 
+      <DashboardRegistrationUpdates />
+
       {/* Stats grid */}
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat label="Total agents" value={String(agents.length)} loading={loading} />
+        <Stat
+          label="Total agents"
+          value={agentCountsKnown ? String(agents.length) : '-'}
+          loading={loading}
+        />
         <Stat
           label="Active identities"
-          value={String(agents.filter((a) => a.status === 'active').length)}
+          value={
+            agentCountsKnown ? String(agents.filter((a) => a.status === 'active').length) : '-'
+          }
           loading={loading}
         />
         <Stat
@@ -103,7 +132,11 @@ export function DashboardClient() {
           value={isConnected ? `$${Number(balanceFormatted).toFixed(2)}` : '—'}
           loading={balanceLoading}
         />
-        <Stat label="Renewals due" value={String(renewalsDueCount)} loading={loading} />
+        <Stat
+          label="Renewals due"
+          value={agentCountsKnown ? String(renewalsDueCount) : '-'}
+          loading={loading}
+        />
       </div>
 
       {/* Wallet not connected */}
@@ -118,7 +151,7 @@ export function DashboardClient() {
             <ConnectWalletButton variant="gradient" className="w-full sm:w-auto" />
           </CardContent>
         </Card>
-      ) : !session.authenticated ? (
+      ) : !eligible ? (
         <Card className="premium-surface">
           <CardContent className="py-12 text-center sm:py-16">
             <ShieldCheck className="h-10 w-10 text-muted-foreground mx-auto mb-4" />
@@ -151,19 +184,37 @@ export function DashboardClient() {
             )}
           </CardHeader>
           <CardContent>
-            {loading ? (
+            {loadError ? (
+              <div role="alert" className="py-6 text-sm text-muted-foreground">
+                Your agent list is temporarily unavailable. Registration tracking is preserved.
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="ml-3"
+                  onClick={() => setRevision((value) => value + 1)}
+                >
+                  Refresh
+                </Button>
+              </div>
+            ) : loading ? (
               <div className="py-12 text-center">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mx-auto" />
               </div>
             ) : agents.length === 0 ? (
               <div className="py-12 text-center">
-                <p className="text-muted-foreground mb-4">No agents yet.</p>
-                <Link href="/register">
-                  <Button variant="gradient">
-                    <Plus className="h-4 w-4" />
-                    Register your first agent
-                  </Button>
-                </Link>
+                <p className="text-muted-foreground mb-4">
+                  {tracking.attempts.length
+                    ? 'Your purchase is being tracked above. Completed identities will appear here.'
+                    : 'No agents yet.'}
+                </p>
+                {!tracking.attempts.length && (
+                  <Link href="/register">
+                    <Button variant="gradient">
+                      <Plus className="h-4 w-4" />
+                      Register your first agent
+                    </Button>
+                  </Link>
+                )}
               </div>
             ) : (
               <div className="divide-y divide-border/40">
