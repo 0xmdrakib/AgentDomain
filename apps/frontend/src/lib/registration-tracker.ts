@@ -51,6 +51,7 @@ interface TrackerOptions {
   fetcher?: typeof fetch;
   online?: () => boolean;
   enabled?: () => boolean;
+  canNotify?: () => boolean;
   onCompleted?: (item: RegistrationProgress, wallet: string) => void;
   onResolved?: (items: RegistrationProgress[], wallet: string) => void;
   lock?: (key: string, callback: () => void) => Promise<void>;
@@ -62,6 +63,7 @@ export class RegistrationTracker {
   private state = EMPTY_REGISTRATION_SNAPSHOT;
   private listeners = new Set<() => void>();
   private accepted = new Map<string, RegistrationAccepted>();
+  private deliveredResolutions = new Map<string, RegistrationProgress['status']>();
   private expectedWallet: string | null | undefined;
   private epoch = 0;
   private controller?: AbortController;
@@ -218,8 +220,16 @@ export class RegistrationTracker {
   }
 
   accept(attempt: RegistrationAttempt, accepted: RegistrationAccepted | null) {
-    if (accepted?.domain === attempt.domain) this.accepted.set(this.attemptKey(attempt), accepted);
+    if (accepted?.domain === attempt.domain) {
+      this.accepted.set(this.attemptKey(attempt), accepted);
+      this.update({});
+    }
     void this.refresh();
+  }
+
+  getAcceptance(attempt: RegistrationAttempt) {
+    if (attempt.wallet !== this.state.wallet) return undefined;
+    return this.accepted.get(this.attemptKey(attempt));
   }
 
   matches(attempt: RegistrationAttempt) {
@@ -245,6 +255,7 @@ export class RegistrationTracker {
     if (this.expectedWallet === normalized) return;
     this.expectedWallet = normalized;
     this.invalidate();
+    this.deliveredResolutions.clear();
     this.discoveryOffset = REGISTRATION_PAGE_SIZE;
     this.detailOffset = 0;
     this.update({
@@ -369,6 +380,7 @@ export class RegistrationTracker {
               ? { ...item, completionEventId: previous.completionEventId }
               : item;
           merged.set(item.registrationId, next);
+          if (!isRegistrationTerminal(next)) this.deliveredResolutions.delete(item.registrationId);
           if (previous && !isRegistrationTerminal(previous) && isRegistrationTerminal(item))
             resolved.set(item.registrationId, item);
         }
@@ -385,6 +397,7 @@ export class RegistrationTracker {
         discoveryComplete,
         discoveryLimited,
       });
+      if (epoch !== this.epoch) return false;
       // Discover purchases from the payer's server list, including another browser's work.
       for (const item of this.state.items) {
         if (
@@ -401,14 +414,38 @@ export class RegistrationTracker {
       for (const attempt of [...this.state.attempts]) {
         const item = this.matches(attempt);
         if (!item || !isRegistrationTerminal(item)) continue;
-        if (item.status === 'completed') await this.complete(item, session.wallet, epoch);
-        if (epoch !== this.epoch) return false;
         resolved.set(item.registrationId, item);
+      }
+      const resolutions = [...resolved.keys()]
+        .map((id) => merged.get(id)!)
+        .filter(
+          (item) =>
+            isRegistrationTerminal(item) &&
+            this.deliveredResolutions.get(item.registrationId) !== item.status,
+        );
+      if (resolutions.length) {
+        this.options.onResolved?.(resolutions, session.wallet);
+        if (epoch !== this.epoch) return false;
+        for (const item of resolutions)
+          this.deliveredResolutions.set(item.registrationId, item.status);
+      }
+      // Data refresh is delivered independently of whether a visible tab can show the toast.
+      for (const attempt of [...this.state.attempts]) {
+        const item = this.matches(attempt);
+        if (!item || !isRegistrationTerminal(item)) continue;
+        const acknowledged =
+          item.status !== 'completed' || (await this.complete(item, session.wallet, epoch));
+        if (epoch !== this.epoch) return false;
+        if (!acknowledged) continue;
         this.options.storage.removeItem(`${ATTEMPT_PREFIX}${attempt.clientId}`);
         this.accepted.delete(this.attemptKey(attempt));
       }
       this.hydrate();
-      if (resolved.size) this.options.onResolved?.([...resolved.values()], session.wallet);
+      const retained = new Set(
+        this.state.attempts.map((attempt) => this.matches(attempt)?.registrationId),
+      );
+      for (const id of this.deliveredResolutions.keys())
+        if (!retained.has(id)) this.deliveredResolutions.delete(id);
       return !detailUnavailable;
     } catch (error) {
       if (epoch === this.epoch) {
@@ -425,13 +462,22 @@ export class RegistrationTracker {
 
   private async complete(item: RegistrationProgress, wallet: string, epoch: number) {
     const key = `${COMPLETION_PREFIX}${wallet}:${item.registrationId}`;
+    let acknowledged = false;
     const claim = () => {
-      if (epoch !== this.epoch || this.options.storage.getItem(key)) return;
+      if (epoch !== this.epoch) return;
+      if (this.options.storage.getItem(key)) {
+        acknowledged = true;
+        return;
+      }
+      // A hidden tab must leave the saved attempt available for a visible return or refresh.
+      if (this.options.canNotify && !this.options.canNotify()) return;
       // A stable registration key also covers a temporarily missing completionEventId.
       this.options.storage.setItem(key, item.completionEventId ?? 'completed');
       this.options.onCompleted?.(item, wallet);
+      acknowledged = true;
     };
     if (this.options.lock) await this.options.lock(key, claim);
     else claim();
+    return acknowledged;
   }
 }

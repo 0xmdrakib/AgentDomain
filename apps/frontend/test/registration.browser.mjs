@@ -83,7 +83,12 @@ await context.route('**/*', async (route) => {
   return route.fulfill({ status: 404, json: {} });
 });
 await context.addInitScript(
-  ({ payer, attempt }) => {
+  ({ payer, attempt, origin }) => {
+    if (window.location.origin !== origin) return;
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => window.syntheticVisibility ?? 'visible',
+    });
     if (!localStorage.getItem('synthetic-fixture-seeded')) {
       localStorage.setItem(
         `agentdomain:registration-attempt:${attempt.clientId}`,
@@ -93,11 +98,16 @@ await context.addInitScript(
     }
     let account = payer;
     const handlers = new Map();
+    window.syntheticResolutionEvents = 0;
+    window.addEventListener(
+      'agentdomain:registration-completed',
+      () => window.syntheticResolutionEvents++,
+    );
     window.syntheticWallet = {
       signatureRequests: 0,
       switchAccount(next) {
         account = next;
-        for (const callback of handlers.get('accountsChanged') ?? []) callback([next]);
+        for (const callback of handlers.get('accountsChanged') ?? []) callback(next ? [next] : []);
       },
     };
     window.ethereum = {
@@ -112,7 +122,8 @@ await context.addInitScript(
         );
       },
       async request({ method }) {
-        if (['eth_accounts', 'eth_requestAccounts'].includes(method)) return [account];
+        if (['eth_accounts', 'eth_requestAccounts'].includes(method))
+          return account ? [account] : [];
         if (method === 'eth_chainId') return '0x2105';
         if (method === 'wallet_requestPermissions' || method === 'wallet_getPermissions')
           return [{ parentCapability: 'eth_accounts' }];
@@ -125,7 +136,7 @@ await context.addInitScript(
       },
     };
   },
-  { payer, attempt },
+  { payer, attempt, origin },
 );
 
 const page = await context.newPage();
@@ -142,6 +153,10 @@ try {
   assert.equal(await page.locator('[data-registration-pending]').count(), 1);
   assert.match(
     await page.locator('[data-registration-banner]').innerText(),
+    /Payment confirmed.*Current step: DNS setup/s,
+  );
+  assert.match(
+    await page.locator('[data-registration-banner]').innerText(),
     /Elapsed.*no estimate available/s,
   );
   assert.doesNotMatch(
@@ -149,6 +164,31 @@ try {
     /Registration failed|PRIVATE_PROVIDER_ERROR|No agents yet/,
   );
   await page.screenshot({ path: '.qa/registration-desktop.png', fullPage: true });
+
+  for (const [stage, label] of [
+    ['domain', 'Domain registration'],
+    ['ssl', 'HTTPS setup'],
+    ['email', 'Email setup'],
+    ['basename', 'Basename registration'],
+    ['ens', 'ENS registration'],
+  ]) {
+    record.stage = stage;
+    record.messageCode = 'REGISTRATION_RETRY_SCHEDULED';
+    record.revision++;
+    record.updatedAt = new Date().toISOString();
+    record.estimatedDurationSeconds = 125;
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await page.locator('[data-registration-banner]').getByText(`Current step: ${label}`).waitFor();
+    assert.match(
+      await page.locator('[data-registration-banner]').innerText(),
+      /Estimated setup: about 2m 5s\. Timing varies/,
+    );
+  }
+  record.stage = 'dns';
+  record.messageCode = 'DNS_PROPAGATION_PENDING';
+  record.estimatedDurationSeconds = null;
+  record.revision++;
+  record.updatedAt = new Date().toISOString();
 
   await page.goto(`${origin}/privacy`);
   await page
@@ -230,7 +270,7 @@ try {
   record.updatedAt = new Date().toISOString();
   record.messageCode = 'REGISTRATION_REVIEW_REQUIRED';
   record.pollAfterSeconds = 30;
-  record.revision = 2;
+  record.revision++;
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await page
     .getByText('Registration needs review. Do not pay again.', { exact: true })
@@ -244,7 +284,7 @@ try {
   record.agentId = 'synthetic-agent';
   record.stage = 'complete';
   record.messageCode = 'REGISTRATION_COMPLETED';
-  record.revision = 3;
+  record.revision++;
   record.completedAt = new Date().toISOString();
   record.updatedAt = record.completedAt;
   record.completionEventId = 'synthetic-complete';
@@ -262,6 +302,14 @@ try {
     priorAgentReads + 1,
     'completion must refresh normal dashboard data exactly once',
   );
+  const firstToast = page
+    .locator('[data-sonner-toast]')
+    .filter({ hasText: `${attempt.domain} registration complete` });
+  await firstToast.hover();
+  await page.evaluate((address) => window.syntheticWallet.switchAccount(address), other);
+  await firstToast.waitFor({ state: 'hidden' });
+  assert.equal(await page.getByRole('button', { name: 'View identity', exact: true }).count(), 0);
+  await page.evaluate((address) => window.syntheticWallet.switchAccount(address), payer);
   await page.reload();
   await page.getByRole('heading', { name: 'Dashboard', exact: true }).waitFor();
   await page.waitForTimeout(1500);
@@ -269,11 +317,124 @@ try {
     await page.getByText(`${attempt.domain} registration complete`, { exact: true }).count(),
     0,
   );
+
+  const awayStartedAt = new Date().toISOString();
+  const awayAttempt = {
+    wallet: payer,
+    domain: 'completed-while-away.test',
+    clientId: `${Date.parse(awayStartedAt)}-away-fixture`,
+  };
+  Object.assign(record, {
+    registrationId: 'synthetic-away',
+    statusUrl: '/api/v1/registrations/synthetic-away',
+    domain: awayAttempt.domain,
+    agentId: null,
+    status: 'processing',
+    stage: 'email',
+    messageCode: 'REGISTRATION_RETRY_SCHEDULED',
+    startedAt: awayStartedAt,
+    updatedAt: awayStartedAt,
+    completedAt: null,
+    completionEventId: null,
+    revision: 1,
+    pollAfterSeconds: 5,
+  });
+  await page.evaluate((saved) => {
+    localStorage.setItem(
+      `agentdomain:registration-attempt:${saved.clientId}`,
+      JSON.stringify(saved),
+    );
+    window.dispatchEvent(new Event('focus'));
+  }, awayAttempt);
+  await page
+    .locator('[data-registration-pending]')
+    .filter({ hasText: awayAttempt.domain })
+    .waitFor();
+  const awayResolutionBaseline = await page.evaluate(() => window.syntheticResolutionEvents);
+  const awayAgentReadBaseline = agentReads;
+  await page.evaluate(() => {
+    window.syntheticVisibility = 'hidden';
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  Object.assign(record, {
+    agentId: 'synthetic-away-agent',
+    status: 'completed',
+    stage: 'complete',
+    messageCode: 'REGISTRATION_COMPLETED',
+    completedAt: new Date().toISOString(),
+    completionEventId: 'synthetic-away-complete',
+    revision: 2,
+  });
+  record.updatedAt = record.completedAt;
+  await page.waitForFunction(
+    () => document.querySelectorAll('[data-registration-pending]').length === 0,
+  );
+  assert.equal(
+    await page.getByText(`${awayAttempt.domain} registration complete`, { exact: true }).count(),
+    0,
+  );
+  assert.deepEqual(
+    await page.evaluate(
+      ({ payer, clientId }) => ({
+        acknowledged: localStorage.getItem(
+          `agentdomain:registration-completed:${payer}:synthetic-away`,
+        ),
+        saved: localStorage.getItem(`agentdomain:registration-attempt:${clientId}`) !== null,
+      }),
+      { payer, clientId: awayAttempt.clientId },
+    ),
+    { acknowledged: null, saved: true },
+  );
+  await page.waitForFunction(
+    (baseline) => window.syntheticResolutionEvents === baseline + 1,
+    awayResolutionBaseline,
+  );
+  await page.waitForTimeout(6500);
+  assert.equal(
+    await page.evaluate(() => window.syntheticResolutionEvents),
+    awayResolutionBaseline + 1,
+  );
+  await page.evaluate(() => {
+    window.syntheticVisibility = 'visible';
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await page.getByText(`${awayAttempt.domain} registration complete`, { exact: true }).waitFor();
+  assert.equal(
+    await page.evaluate(() => window.syntheticResolutionEvents),
+    awayResolutionBaseline + 1,
+  );
+  assert.equal(
+    agentReads,
+    awayAgentReadBaseline + 1,
+    'hidden completion and visible return refresh dashboard data only once',
+  );
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.locator('[data-sonner-toast][data-mounted="true"]').waitFor();
+  await page.screenshot({
+    path: '.qa/registration-return-completed.png',
+    fullPage: true,
+    animations: 'disabled',
+  });
+  const awayToast = page
+    .locator('[data-sonner-toast]')
+    .filter({ hasText: `${awayAttempt.domain} registration complete` });
+  await awayToast.hover();
+  await page.evaluate(() => window.syntheticWallet.switchAccount(null));
+  await awayToast.waitFor({ state: 'hidden' });
+  assert.equal(await page.getByRole('button', { name: 'View identity', exact: true }).count(), 0);
+  await page.evaluate((address) => window.syntheticWallet.switchAccount(address), payer);
+  await page.reload();
+  await page.getByRole('heading', { name: 'Dashboard', exact: true }).waitFor();
+  await page.waitForTimeout(1500);
+  assert.equal(
+    await page.getByText(`${awayAttempt.domain} registration complete`, { exact: true }).count(),
+    0,
+  );
   assert.equal(await page.evaluate(() => window.syntheticWallet.signatureRequests), 0);
   assert.equal(paidPosts.length, 0);
   assert.deepEqual(errors, []);
   console.log(
-    'Browser checks passed: desktop/mobile, navigation/reload, unavailable reads, payer switch, 30-second review polling, one completion notification and dashboard refresh.',
+    'Browser checks passed: desktop/mobile, selected stages, indicative timing, navigation/reload, unavailable reads, payer switch/disconnect after visible toast, review polling, one hidden-completion resolution/data refresh and one visible-return toast.',
   );
 } catch (error) {
   await page.screenshot({ path: '.qa/registration-browser-failure.png', fullPage: true });

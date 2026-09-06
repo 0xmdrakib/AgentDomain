@@ -8,6 +8,10 @@ import {
   attemptStartedAt,
   durationLabel,
   registrationCopy,
+  registrationEstimateCopy,
+  registrationPaymentStatus,
+  registrationStageLabel,
+  type RegistrationAccepted,
   type RegistrationProgress,
 } from '@/lib/registration-progress';
 
@@ -21,6 +25,7 @@ function useRegistrationRows() {
       domain: attempt.domain,
       startedAt: attemptStartedAt(attempt),
       progress: tracker.matches(attempt),
+      accepted: tracker.getAcceptance(attempt),
     }))
     .filter((row) => {
       const key = row.progress?.registrationId ?? row.domain;
@@ -28,7 +33,11 @@ function useRegistrationRows() {
       seen.add(key);
       return true;
     });
-  return { rows, connection: snapshot.connection, hasSavedAttempts: snapshot.hasSavedAttempts };
+  return {
+    rows,
+    connection: snapshot.connection,
+    hasSavedAttempts: snapshot.hasSavedAttempts && !snapshot.attempts.length,
+  };
 }
 
 function ProgressTime({
@@ -54,11 +63,7 @@ function ProgressTime({
         <Clock3 className="h-3 w-3" aria-hidden />
         Elapsed {elapsed === null ? '...' : durationLabel(elapsed)}
       </span>
-      <span>
-        {estimate == null
-          ? 'Timing varies; no estimate available.'
-          : `Historical typical duration: ${durationLabel(estimate)}${elapsed !== null && elapsed > estimate ? '. Taking longer than typical.' : '.'}`}
-      </span>
+      <span>{registrationEstimateCopy(estimate, elapsed)}</span>
     </span>
   );
 }
@@ -66,10 +71,25 @@ function ProgressTime({
 const paymentLabels: Record<RegistrationProgress['paymentStatus'], string> = {
   unknown: 'Payment confirmation pending',
   pending: 'Payment pending',
-  settled: 'Payment settled',
+  settled: 'Payment confirmed',
   not_charged: 'Not charged',
   refunded: 'Payment refunded',
 };
+
+function RegistrationStatusDetails({
+  progress,
+  accepted,
+}: {
+  progress?: RegistrationProgress;
+  accepted?: RegistrationAccepted;
+}) {
+  return (
+    <p className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+      <span>{paymentLabels[registrationPaymentStatus(progress, accepted)]}</span>
+      {progress && <span>Current step: {registrationStageLabel(progress.stage)}</span>}
+    </p>
+  );
+}
 
 function ConnectionNotice({
   connection,
@@ -127,10 +147,11 @@ export function RegistrationBanner() {
                   />
                 )}
                 <span className="wrap-anywhere">
-                  {row.domain}: {registrationCopy(row.progress)}
+                  {row.domain}: {registrationCopy(row.progress, row.accepted)}
                   {rows.length > 1 ? ` (+${rows.length - 1} more)` : ''}
                 </span>
               </p>
+              <RegistrationStatusDetails progress={row.progress} accepted={row.accepted} />
               <ProgressTime startedAt={row.startedAt} progress={row.progress} />
               <ConnectionNotice connection={connection} />
             </div>
@@ -190,11 +211,9 @@ export function DashboardRegistrationUpdates() {
             <div className="min-w-0 space-y-2">
               <h3 className="wrap-anywhere font-semibold">{row.domain}</h3>
               <p role="status" className="text-sm">
-                {registrationCopy(row.progress)}
+                {registrationCopy(row.progress, row.accepted)}
               </p>
-              <p className="text-xs text-muted-foreground">
-                {paymentLabels[row.progress?.paymentStatus ?? 'unknown']}
-              </p>
+              <RegistrationStatusDetails progress={row.progress} accepted={row.accepted} />
               <ProgressTime startedAt={row.startedAt} progress={row.progress} />
               {row.progress?.agentId && (
                 <Link

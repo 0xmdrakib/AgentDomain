@@ -17,6 +17,9 @@ import {
   registrationProgressSchema,
   registrationAcceptedSchema,
   registrationCopy,
+  registrationEstimateCopy,
+  registrationPaymentStatus,
+  registrationStageLabel,
   matchAttempt,
   durationLabel,
   submitPaidRegistration,
@@ -98,7 +101,13 @@ class MemoryStorage implements Storage {
   }
 }
 
-function fixture(storage = new MemoryStorage()) {
+function fixture(
+  storage = new MemoryStorage(),
+  options: Pick<
+    ConstructorParameters<typeof RegistrationTracker>[0],
+    'canNotify' | 'lock' | 'onResolved'
+  > = {},
+) {
   const backend = {
     session: payer,
     items: [progress()],
@@ -133,6 +142,7 @@ function fixture(storage = new MemoryStorage()) {
     online: () => backend.online,
     onCompleted: (item) => completed.push(item.registrationId),
     onResolved: (items) => resolved.push(items.map((item) => item.registrationId)),
+    ...options,
   });
   return { storage, backend, completed, resolved, tracker };
 }
@@ -192,6 +202,111 @@ test('lost-response matching requires domain and attempt time, and refuses ambig
     matchAttempt(attempt, [progress(), progress({ registrationId: 'registration-2' })]),
     undefined,
   );
+});
+
+test('every reported stage has a public label independent of retry or unknown messages', () => {
+  const labels = {
+    payment: 'Payment',
+    domain: 'Domain registration',
+    dns: 'DNS setup',
+    ssl: 'HTTPS setup',
+    email: 'Email setup',
+    basename: 'Basename registration',
+    ens: 'ENS registration',
+    mint: 'Onchain identity',
+    finalizing: 'Final checks',
+    complete: 'Complete',
+  };
+  for (const [stage, label] of Object.entries(labels)) {
+    const item = progress({ stage: stage as RegistrationProgress['stage'] });
+    assert.equal(registrationStageLabel(item.stage), label);
+    assert.doesNotMatch(
+      registrationCopy({ ...item, messageCode: 'PRIVATE_PROVIDER_ERROR' }),
+      /PRIVATE_PROVIDER_ERROR|Registration complete/,
+    );
+  }
+});
+
+test('timing stays indicative and never fabricates an estimate without server data', () => {
+  for (const estimate of [undefined, null])
+    assert.equal(registrationEstimateCopy(estimate, 600), 'Timing varies; no estimate available.');
+  assert.equal(registrationEstimateCopy(125, 60), 'Estimated setup: about 2m 5s. Timing varies.');
+  assert.equal(
+    registrationEstimateCopy(125, 126),
+    'Estimated setup: about 2m 5s. Timing varies. Taking longer than estimated.',
+  );
+});
+
+test('confirmed acceptance notifies view subscribers immediately without inventing progress', async () => {
+  const { tracker, backend, storage } = fixture();
+  backend.items = [];
+  await connect(tracker);
+  tracker.remember(attempt);
+  const accepted = registrationAcceptedSchema.parse({
+    registrationId: 'registration-1',
+    status: 'processing',
+    statusUrl: progress().statusUrl,
+    domain: attempt.domain,
+    paymentStatus: 'settled',
+    pollAfterSeconds: 5,
+  });
+  const before = tracker.getSnapshot();
+  let updates = 0;
+  tracker.subscribe(() => updates++);
+  tracker.accept(attempt, accepted);
+  assert.ok(updates > 0);
+  assert.notEqual(tracker.getSnapshot(), before);
+  assert.deepEqual(tracker.getAcceptance(attempt), accepted);
+  assert.equal(tracker.matches(attempt), undefined);
+  assert.equal(
+    registrationCopy(tracker.matches(attempt), tracker.getAcceptance(attempt)),
+    'Payment confirmed. Registration is processing.',
+  );
+  assert.equal(tracker.isSubmissionUnconfirmed(attempt, Date.parse(startedAt) + 600_000), false);
+  assert.deepEqual(JSON.parse(storage.getItem(`${ATTEMPT_PREFIX}${attempt.clientId}`)!), attempt);
+  await tracker.refresh();
+  backend.status = 503;
+  await poll(tracker);
+  assert.deepEqual(tracker.getAcceptance(attempt), accepted);
+  assert.equal(tracker.matches(attempt), undefined);
+  assert.equal(tracker.getSnapshot().connection, 'unavailable');
+  await connect(tracker, recipient);
+  assert.equal(tracker.getAcceptance(attempt), undefined);
+});
+
+test('an unknown submission is never presented as confirmed payment', async () => {
+  const { tracker, backend } = fixture();
+  backend.items = [];
+  await connect(tracker);
+  tracker.remember(attempt);
+  tracker.accept(attempt, null);
+  assert.equal(tracker.getAcceptance(attempt), undefined);
+  assert.equal(
+    registrationCopy(tracker.matches(attempt), tracker.getAcceptance(attempt)),
+    'Confirming payment and registration status. Do not pay again.',
+  );
+});
+
+test('a confirmed receipt supersedes pending observations without masking explicit payment resolution', () => {
+  const accepted = registrationAcceptedSchema.parse({
+    registrationId: 'registration-1',
+    status: 'processing',
+    statusUrl: progress().statusUrl,
+    domain: attempt.domain,
+    paymentStatus: 'settled',
+    pollAfterSeconds: 5,
+  });
+  for (const paymentStatus of ['unknown', 'pending'] as const) {
+    const item = progress({ paymentStatus, stage: 'payment', messageCode: 'PAYMENT_PENDING' });
+    assert.equal(registrationPaymentStatus(item, accepted), 'settled');
+    assert.equal(
+      registrationCopy(item, accepted),
+      'Payment confirmed. Registration is processing.',
+    );
+    assert.equal(registrationPaymentStatus(item), paymentStatus);
+  }
+  for (const paymentStatus of ['refunded', 'not_charged', 'settled'] as const)
+    assert.equal(registrationPaymentStatus(progress({ paymentStatus }), accepted), paymentStatus);
 });
 
 test('persisted attempts contain wallet/domain/clientId only, and storage failure blocks remembering', () => {
@@ -396,6 +511,165 @@ test('two trackers share a persistent completion acknowledgment across remounts'
   await connect(first.tracker);
   await connect(second.tracker);
   assert.equal(first.completed.length + second.completed.length, 1);
+});
+
+test('a saved purchase completed while the browser was closed is acknowledged once on return', async () => {
+  const first = fixture();
+  first.tracker.remember(attempt);
+  const returned = fixture(first.storage);
+  returned.backend.items = [
+    progress({ status: 'completed', completionEventId: 'completion-away', completedAt: startedAt }),
+  ];
+  await connect(returned.tracker);
+  assert.deepEqual(returned.completed, ['registration-1']);
+  assert.deepEqual(returned.resolved, [['registration-1']]);
+  assert.equal(first.storage.getItem(`${ATTEMPT_PREFIX}${attempt.clientId}`), null);
+  const refreshed = fixture(first.storage);
+  refreshed.backend.items = returned.backend.items;
+  await connect(refreshed.tracker);
+  assert.deepEqual(refreshed.completed, []);
+});
+
+test('hidden completion keeps the attempt unacknowledged through polling and refresh', async () => {
+  const hidden = fixture(new MemoryStorage(), { canNotify: () => false });
+  hidden.tracker.remember(attempt);
+  hidden.backend.items = [
+    progress({ status: 'completed', completionEventId: 'completion-away', completedAt: startedAt }),
+  ];
+  await connect(hidden.tracker);
+  await poll(hidden.tracker);
+  assert.deepEqual(hidden.completed, []);
+  assert.equal(hidden.storage.getItem(`${COMPLETION_PREFIX}${payer}:registration-1`), null);
+  assert.ok(hidden.storage.getItem(`${ATTEMPT_PREFIX}${attempt.clientId}`));
+  const returned = fixture(hidden.storage, { canNotify: () => true });
+  returned.backend.items = hidden.backend.items;
+  await connect(returned.tracker);
+  assert.deepEqual(returned.completed, ['registration-1']);
+  await poll(hidden.tracker);
+  assert.deepEqual(hidden.completed, []);
+  assert.equal(hidden.tracker.getSnapshot().attempts.length, 0);
+  const refreshed = fixture(hidden.storage);
+  refreshed.backend.items = hidden.backend.items;
+  await connect(refreshed.tracker);
+  assert.deepEqual(refreshed.completed, []);
+});
+
+test('returning to a visible tab acknowledges completion once without another submission', async () => {
+  let visible = false;
+  const { tracker, backend, completed, storage } = fixture(new MemoryStorage(), {
+    canNotify: () => visible,
+  });
+  tracker.remember(attempt);
+  backend.items = [progress({ status: 'completed', completedAt: startedAt })];
+  await connect(tracker);
+  assert.deepEqual(completed, []);
+  visible = true;
+  await poll(tracker);
+  await poll(tracker);
+  assert.deepEqual(completed, ['registration-1']);
+  assert.equal(storage.getItem(`${COMPLETION_PREFIX}${payer}:registration-1`), 'completed');
+  assert.equal(
+    backend.calls.some((path) => path.includes('/agents/register')),
+    false,
+  );
+});
+
+test('processing to hidden completion to visible return delivers one resolution and one visible toast', async () => {
+  let visible = false;
+  const { tracker, backend, completed, resolved } = fixture(new MemoryStorage(), {
+    canNotify: () => visible,
+  });
+  tracker.remember(attempt);
+  await connect(tracker);
+  assert.deepEqual(resolved, []);
+  backend.items = [progress({ status: 'completed', revision: 2, completedAt: startedAt })];
+  await poll(tracker);
+  assert.deepEqual(resolved, [['registration-1']]);
+  assert.deepEqual(completed, []);
+  await poll(tracker);
+  assert.deepEqual(resolved, [['registration-1']]);
+  visible = true;
+  await poll(tracker);
+  await poll(tracker);
+  assert.deepEqual(resolved, [['registration-1']]);
+  assert.deepEqual(completed, ['registration-1']);
+  assert.equal(tracker.getSnapshot().attempts.length, 0);
+});
+
+test('notification lock failure does not replay already delivered resolution on retry', async () => {
+  let failLock = true;
+  const { tracker, backend, completed, resolved } = fixture(new MemoryStorage(), {
+    lock: async (_key, callback) => {
+      if (failLock) throw new Error('Fixture lock failure');
+      callback();
+    },
+  });
+  tracker.remember(attempt);
+  await connect(tracker);
+  backend.items = [progress({ status: 'completed', revision: 2, completedAt: startedAt })];
+  await poll(tracker);
+  assert.deepEqual(resolved, [['registration-1']]);
+  assert.deepEqual(completed, []);
+  failLock = false;
+  await poll(tracker);
+  assert.deepEqual(resolved, [['registration-1']]);
+  assert.deepEqual(completed, ['registration-1']);
+});
+
+test('a later refund resolves independently of a hidden completion without a success toast', async () => {
+  const { tracker, backend, completed, resolved } = fixture(new MemoryStorage(), {
+    canNotify: () => false,
+  });
+  tracker.remember(attempt);
+  await connect(tracker);
+  backend.items = [progress({ status: 'completed', revision: 2, completedAt: startedAt })];
+  await poll(tracker);
+  backend.items = [
+    progress({ status: 'refunded', revision: 3, updatedAt: '2026-09-06T10:00:01.000Z' }),
+  ];
+  await poll(tracker);
+  await poll(tracker);
+  assert.deepEqual(resolved, [['registration-1'], ['registration-1']]);
+  assert.deepEqual(completed, []);
+  assert.equal(tracker.getSnapshot().attempts.length, 0);
+});
+
+test('notification visibility is checked inside the cross-tab completion lock', async () => {
+  let visible = true;
+  const { tracker, backend, completed, storage } = fixture(new MemoryStorage(), {
+    canNotify: () => visible,
+    lock: async (_key, callback) => {
+      visible = false;
+      callback();
+    },
+  });
+  tracker.remember(attempt);
+  backend.items = [progress({ status: 'completed', completedAt: startedAt })];
+  await connect(tracker);
+  assert.deepEqual(completed, []);
+  assert.equal(storage.getItem(`${COMPLETION_PREFIX}${payer}:registration-1`), null);
+  assert.ok(storage.getItem(`${ATTEMPT_PREFIX}${attempt.clientId}`));
+});
+
+test('resolution is delivered for its current payer before a later switch blocks the completion claim', async () => {
+  const deliveryWallets: Array<string | null> = [];
+  const current = fixture(new MemoryStorage(), {
+    onResolved: () => deliveryWallets.push(current.tracker.getSnapshot().wallet),
+    lock: async (_key, callback) => {
+      current.tracker.setExpectedWallet(recipient);
+      callback();
+    },
+  });
+  current.tracker.remember(attempt);
+  await connect(current.tracker);
+  current.backend.items = [progress({ status: 'completed', completedAt: startedAt, revision: 2 })];
+  await poll(current.tracker);
+  assert.equal(current.tracker.getSnapshot().wallet, recipient);
+  assert.deepEqual(current.completed, []);
+  assert.deepEqual(current.resolved, []);
+  assert.deepEqual(deliveryWallets, [payer]);
+  assert.equal(current.storage.getItem(`${COMPLETION_PREFIX}${payer}:registration-1`), null);
+  assert.ok(current.storage.getItem(`${ATTEMPT_PREFIX}${attempt.clientId}`));
 });
 
 test('refunded is terminal without a success notification; action-required continues reconciliation', async () => {

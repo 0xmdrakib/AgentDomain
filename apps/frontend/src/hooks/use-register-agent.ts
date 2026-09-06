@@ -55,6 +55,10 @@ export function useRegisterAgent() {
   const [reviewAfter, setReviewAfter] = useState<number | null>(null);
   const progress =
     attempt && attempt.wallet === address?.toLowerCase() ? tracker.matches(attempt) : undefined;
+  const accepted =
+    attempt && attempt.wallet === address?.toLowerCase()
+      ? tracker.getAcceptance(attempt)
+      : undefined;
   const walletReady = Boolean(
     address &&
     walletClient?.account?.address?.toLowerCase() === address.toLowerCase() &&
@@ -63,7 +67,13 @@ export function useRegisterAgent() {
   );
 
   useEffect(() => {
-    if (!attempt || progress || reviewAfter === null || attempt.wallet !== address?.toLowerCase())
+    if (
+      !attempt ||
+      progress ||
+      accepted ||
+      reviewAfter === null ||
+      attempt.wallet !== address?.toLowerCase()
+    )
       return;
     const timer = window.setTimeout(
       () =>
@@ -75,7 +85,7 @@ export function useRegisterAgent() {
       Math.max(0, reviewAfter - Date.now()),
     );
     return () => window.clearTimeout(timer);
-  }, [attempt, progress, reviewAfter, address]);
+  }, [attempt, progress, accepted, reviewAfter, address]);
 
   async function register(
     params: Omit<RegistrationParams, 'wallet'> & { turnstileToken?: string },

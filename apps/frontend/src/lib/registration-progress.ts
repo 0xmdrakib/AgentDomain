@@ -163,14 +163,44 @@ export function canAdvanceRegistration(previous: RegistrationProgress, next: Reg
   );
 }
 
-export function registrationCopy(item?: RegistrationProgress) {
-  if (!item) return 'Confirming payment and registration status. Do not pay again.';
+export function registrationStageLabel(stage: RegistrationProgress['stage']) {
+  const labels: Record<RegistrationProgress['stage'], string> = {
+    payment: 'Payment',
+    domain: 'Domain registration',
+    dns: 'DNS setup',
+    ssl: 'HTTPS setup',
+    email: 'Email setup',
+    basename: 'Basename registration',
+    ens: 'ENS registration',
+    mint: 'Onchain identity',
+    finalizing: 'Final checks',
+    complete: 'Complete',
+  };
+  return labels[stage];
+}
+
+export function registrationPaymentStatus(
+  item?: RegistrationProgress,
+  accepted?: RegistrationAccepted,
+) {
+  const observed = item?.paymentStatus;
+  return accepted && (observed == null || observed === 'unknown' || observed === 'pending')
+    ? 'settled'
+    : (observed ?? 'unknown');
+}
+
+export function registrationCopy(item?: RegistrationProgress, accepted?: RegistrationAccepted) {
+  if (!item)
+    return accepted
+      ? 'Payment confirmed. Registration is processing.'
+      : 'Confirming payment and registration status. Do not pay again.';
   if (item.status === 'completed') return 'Registration complete';
   if (item.status === 'refunded') return 'Payment refunded';
   if (item.status === 'failed')
     return 'Registration could not be completed. Review payment status below.';
+  const confirmed = registrationPaymentStatus(item, accepted) === 'settled';
   const stages: Record<RegistrationProgress['stage'], string> = {
-    payment: 'Confirming payment',
+    payment: confirmed ? 'Payment confirmed. Registration is processing.' : 'Confirming payment',
     domain: 'Registering domain',
     dns: 'Setting up DNS',
     ssl: 'Preparing HTTPS',
@@ -189,8 +219,10 @@ export function registrationCopy(item?: RegistrationProgress) {
     SSL_VALIDATION_PENDING: 'Waiting for HTTPS validation',
     EMAIL_VERIFICATION_PENDING: 'Waiting for email verification',
     REGISTRATION_REVIEW_REQUIRED: 'Registration needs review. Do not pay again.',
-    PAYMENT_PENDING: 'Confirming payment. Do not pay again.',
-    PAYMENT_CONFIRMATION_REQUIRED: 'Checking payment confirmation. Do not pay again.',
+    PAYMENT_PENDING: confirmed ? stages[item.stage] : 'Confirming payment. Do not pay again.',
+    PAYMENT_CONFIRMATION_REQUIRED: confirmed
+      ? stages[item.stage]
+      : 'Checking payment confirmation. Do not pay again.',
   };
   // Completion/refund codes alone never override the authoritative status.
   return Object.hasOwn(messages, item.messageCode)
@@ -203,6 +235,11 @@ export function durationLabel(seconds: number) {
   return minutes < 60
     ? `${minutes}m ${Math.floor(Math.max(0, seconds) % 60)}s`
     : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
+export function registrationEstimateCopy(estimate?: number | null, elapsed?: number | null) {
+  if (estimate == null) return 'Timing varies; no estimate available.';
+  return `Estimated setup: about ${durationLabel(estimate)}. Timing varies.${elapsed != null && elapsed > estimate ? ' Taking longer than estimated.' : ''}`;
 }
 
 export class RegistrationReadError extends Error {

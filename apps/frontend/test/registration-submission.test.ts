@@ -508,6 +508,7 @@ function hookHarness(current: ReturnType<typeof fixture>) {
         remember: current.dependencies.remember,
         accept: current.dependencies.accept,
         matches: () => undefined,
+        getAcceptance: () => current.state.accepted ?? undefined,
       }),
     },
     '@/lib/registration-submission': submissionModule,
@@ -622,5 +623,24 @@ test('actual hook cancellation returns to idle and post-sign wallet changes cann
     } finally {
       hook.dispose();
     }
+  }
+});
+
+test('actual hook does not label confirmed acceptance as an unconfirmed submission while status is unavailable', async (context) => {
+  context.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1_000_000 });
+  const current = fixture();
+  context.mock.method(globalThis, 'fetch', current.dependencies.fetcher!);
+  const hook = hookHarness(current);
+  const params = input.body as Parameters<ReturnType<typeof hook.render>['register']>[0];
+  try {
+    await hook.render().register(params);
+    assert.equal(hook.render().state.phase, 'processing');
+    context.mock.timers.tick(SUBMISSION_REVIEW_AFTER_MS + 1);
+    assert.equal(hook.render().state.phase, 'processing');
+    assert.equal(hook.render().state.messageCode, undefined);
+    assert.equal(current.state.paidRequests, 1);
+    assert.equal(current.state.signatures, 1);
+  } finally {
+    hook.dispose();
   }
 });

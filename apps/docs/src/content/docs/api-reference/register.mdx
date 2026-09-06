@@ -152,6 +152,15 @@ and selected onchain names. Payment settlement, minting, or an agent ID alone is
 There is no instant completion guarantee. Stop automatic waiting on `action_required`, `failed`,
 `refunded`, or `awaiting_payment` and inspect the state; none automatically authorizes repayment.
 
+Show confirmed payment as soon as the acceptance response reports `paymentStatus: settled`,
+then show the current `stage` independently of the progress message. A stage is not a checklist
+of services already completed; only authoritative `completed` status establishes total completion.
+The historical duration estimate is indicative, not an exact finish time or countdown. When
+`estimatedDurationSeconds` is `null`, no estimate is available; do not substitute a fixed duration.
+Registration continues independently of the browser. After returning, authenticate as the payer
+and read status again. The web app acknowledges completion once per saved purchase in that browser,
+when the notification can be shown in a visible tab; clearing browser storage removes that local history.
+
 ## Lost responses and upgrades
 
 If the submission response is lost, authenticate as the payer and read the registration list.

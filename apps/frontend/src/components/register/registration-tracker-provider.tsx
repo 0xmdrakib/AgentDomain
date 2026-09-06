@@ -44,21 +44,24 @@ const browserStorage: Storage = {
 
 export function RegistrationTrackerProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const [tracker] = useState(
+  const [tracker] = useState<RegistrationTracker>(
     () =>
       new RegistrationTracker({
         storage: browserStorage,
         online: () => navigator.onLine,
         enabled: isApplicationHost,
+        canNotify: () => document.visibilityState === 'visible',
         lock: (key, callback) =>
           navigator.locks ? navigator.locks.request(key, callback) : Promise.resolve(callback()),
         onCompleted: (item, wallet) => {
+          const id = `registration:${wallet}:${item.registrationId}`;
           toast.success(`${item.domain} registration complete`, {
-            id: `registration:${wallet}:${item.registrationId}`,
+            id,
             action: item.agentId
               ? {
                   label: 'View identity',
                   onClick: () => {
+                    if (!toast.getToasts().some((active) => active.id === id)) return;
                     router.push(`/agents/${encodeURIComponent(item.agentId!)}`);
                   },
                 }
@@ -80,6 +83,13 @@ export function RegistrationTrackerProvider({ children }: { children: ReactNode 
     if (!isApplicationHost()) return;
     let timer: number | undefined;
     let stopped = false;
+    const dismissRegistrationToasts = (wallet: string | null) => {
+      for (const { id } of toast.getToasts()) {
+        if (typeof id !== 'string' || !id.startsWith('registration:')) continue;
+        if (wallet && id.startsWith(`registration:${wallet}:`)) continue;
+        toast.dismiss(id);
+      }
+    };
     const refresh = () => {
       if (stopped) return;
       void tracker.refresh().finally(schedule);
@@ -101,6 +111,8 @@ export function RegistrationTrackerProvider({ children }: { children: ReactNode 
       if (stopped) return;
       window.clearTimeout(timer);
       const snapshot = tracker.getSnapshot();
+      const wallet = snapshot.connection === 'unauthorized' ? null : snapshot.wallet;
+      dismissRegistrationToasts(wallet);
       if (
         snapshot.connection === 'unauthorized' ||
         (!snapshot.attempts.length && snapshot.discoveryComplete)
@@ -123,16 +135,19 @@ export function RegistrationTrackerProvider({ children }: { children: ReactNode 
     window.addEventListener('online', refresh);
     window.addEventListener('offline', refresh);
     window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
     window.addEventListener('storage', storageChanged);
     return () => {
       stopped = true;
       unsubscribe();
+      dismissRegistrationToasts(null);
       window.clearTimeout(timer);
       tracker.invalidate();
       window.removeEventListener('agentdomain:session-changed', sessionChanged);
       window.removeEventListener('online', refresh);
       window.removeEventListener('offline', refresh);
       window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
       window.removeEventListener('storage', storageChanged);
     };
   }, [tracker]);
