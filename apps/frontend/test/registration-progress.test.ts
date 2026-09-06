@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   ATTEMPT_PREFIX,
   COMPLETION_PREFIX,
+  REGISTRATION_NOTICE_PREFIX,
   REGISTRATION_POLL_MS,
   REGISTRATION_PAGE_SIZE,
   REGISTRATION_LIST_PAGES_PER_POLL,
@@ -19,6 +20,7 @@ import {
   registrationCopy,
   registrationEstimateCopy,
   registrationPaymentStatus,
+  registrationNoticeEligible,
   registrationStageLabel,
   matchAttempt,
   durationLabel,
@@ -235,6 +237,286 @@ test('timing stays indicative and never fabricates an estimate without server da
     registrationEstimateCopy(125, 126),
     'Estimated setup: about 2m 5s. Timing varies. Taking longer than estimated.',
   );
+});
+
+test('unknown historical status stays neutral without suppressing old settled work or assuming payment', () => {
+  const unknown = progress({
+    startedAt: '2026-05-23T10:00:00.000Z',
+    paymentStatus: 'unknown',
+    status: 'action_required',
+    stage: 'payment',
+    messageCode: 'PAYMENT_CONFIRMATION_REQUIRED',
+  });
+  assert.equal(registrationNoticeEligible(unknown), false);
+  assert.equal(registrationPaymentStatus(unknown), 'unknown');
+  assert.equal(
+    registrationCopy(unknown),
+    'Registration status needs verification. Do not pay again.',
+  );
+  assert.equal(registrationNoticeEligible({ ...unknown, paymentStatus: 'settled' }), true);
+  assert.equal(registrationNoticeEligible({ ...unknown, paymentStatus: 'pending' }), true);
+  assert.equal(
+    registrationNoticeEligible(),
+    true,
+    'a locally saved lost response remains discoverable',
+  );
+  const accepted = registrationAcceptedSchema.parse({
+    registrationId: unknown.registrationId,
+    statusUrl: unknown.statusUrl,
+    domain: unknown.domain,
+    status: 'processing',
+    paymentStatus: 'settled',
+    pollAfterSeconds: 5,
+  });
+  assert.equal(registrationNoticeEligible(unknown, accepted), true);
+  assert.equal(registrationPaymentStatus(unknown, accepted), 'settled');
+});
+
+test('dismissal survives polling/remount and remains payer-scoped without touching replay protection', async () => {
+  const { tracker, storage } = fixture();
+  tracker.remember(attempt);
+  await connect(tracker);
+  const reservationKey = `${REGISTRATION_SUBMISSION_PREFIX}${payer}:${attempt.domain}`;
+  const reservation = JSON.stringify({ phase: 'possibly_paid', clientId: attempt.clientId });
+  storage.setItem(reservationKey, reservation);
+  const attemptKey = `${ATTEMPT_PREFIX}${attempt.clientId}`;
+  const originalAttempt = storage.getItem(attemptKey);
+  const originalItems = tracker.getSnapshot().items;
+  tracker.dismissNotices([attempt]);
+  assert.equal(tracker.isNoticeDismissed(attempt), true);
+  assert.equal(tracker.hasPurchase(payer, attempt.domain), true);
+  assert.deepEqual(tracker.getSnapshot().items, originalItems);
+  await poll(tracker);
+  assert.equal(tracker.isNoticeDismissed(attempt), true);
+  const restored = fixture(storage);
+  await connect(restored.tracker);
+  assert.equal(restored.tracker.isNoticeDismissed(attempt), true);
+  assert.equal(restored.tracker.hasPurchase(payer, attempt.domain), true);
+  assert.equal(storage.getItem(attemptKey), originalAttempt);
+  assert.equal(storage.getItem(reservationKey), reservation);
+  const otherAttempt = {
+    ...attempt,
+    wallet: recipient,
+    clientId: `${Date.parse(startedAt)}-other`,
+  };
+  restored.tracker.dismissNotices([otherAttempt]);
+  assert.equal(restored.tracker.isNoticeDismissed(otherAttempt), false);
+  await connect(restored.tracker, recipient);
+  restored.tracker.remember(otherAttempt);
+  assert.equal(restored.tracker.isNoticeDismissed(otherAttempt), false);
+  restored.tracker.dismissNotices([otherAttempt]);
+  assert.equal(restored.tracker.isNoticeDismissed(otherAttempt), true);
+  await connect(restored.tracker, payer);
+  assert.equal(restored.tracker.isNoticeDismissed(attempt), true);
+  const newAttempt = { ...attempt, clientId: `${Date.parse(startedAt)}-new` };
+  restored.tracker.remember(newAttempt);
+  assert.equal(restored.tracker.isNoticeDismissed(newAttempt), false);
+});
+
+test('dismissal does not acknowledge completion; terminal reconciliation prunes only its presentation marker', async () => {
+  const { tracker, backend, storage, completed } = fixture();
+  tracker.remember(attempt);
+  await connect(tracker);
+  tracker.dismissNotices([attempt]);
+  const noticeKey = `${REGISTRATION_NOTICE_PREFIX}${payer}:${attempt.clientId}`;
+  assert.equal(storage.getItem(noticeKey), 'dismissed');
+  assert.equal(storage.getItem(`${COMPLETION_PREFIX}${payer}:registration-1`), null);
+  backend.items = [progress({ status: 'completed', revision: 2 })];
+  await poll(tracker);
+  assert.deepEqual(completed, ['registration-1']);
+  assert.equal(storage.getItem(noticeKey), null);
+  assert.equal(tracker.getSnapshot().attempts.length, 0);
+});
+
+test('settled legacy completion with no workflow timestamp or event creates no false pending attempt', async () => {
+  const { tracker, backend, completed } = fixture();
+  backend.items = [
+    progress({
+      status: 'completed',
+      startedAt: '2026-05-23T10:00:00.000Z',
+      updatedAt: '2026-05-23T10:00:00.000Z',
+      revision: 0,
+      completedAt: null,
+      completionEventId: null,
+    }),
+  ];
+  await connect(tracker);
+  await poll(tracker);
+  assert.equal(tracker.getSnapshot().items[0].status, 'completed');
+  assert.equal(tracker.getSnapshot().attempts.length, 0);
+  assert.deepEqual(completed, []);
+});
+
+test('authoritative legacy completion can replace unknown review at the same revision and timestamps only with coherent evidence', async () => {
+  const { tracker, backend, completed, resolved } = fixture();
+  const legacy = progress({
+    status: 'action_required',
+    paymentStatus: 'unknown',
+    stage: 'payment',
+    agentId: 'legacy-agent',
+    messageCode: 'PAYMENT_CONFIRMATION_REQUIRED',
+    startedAt: '2026-05-23T10:00:00.000Z',
+    updatedAt: '2026-05-23T10:00:00.000Z',
+    revision: 0,
+  });
+  const recovered = {
+    ...legacy,
+    status: 'completed' as const,
+    paymentStatus: 'settled' as const,
+    stage: 'complete' as const,
+    messageCode: 'REGISTRATION_COMPLETED',
+    completionEventId: 'registration-1:completed',
+  };
+  assert.equal(registrationProgressSchema.safeParse(recovered).success, true);
+  assert.equal(canAdvanceRegistration(legacy, recovered), true);
+  for (const patch of [
+    { paymentStatus: 'unknown' as const },
+    { stage: 'payment' as const },
+    { agentId: null },
+    { agentId: 'unrelated-agent' },
+    { domain: 'unrelated.test' },
+    { registrationId: 'unrelated' },
+    { startedAt },
+    { updatedAt: '2026-05-22T10:00:00.000Z' },
+  ])
+    assert.equal(canAdvanceRegistration(legacy, { ...recovered, ...patch }), false);
+  assert.equal(canAdvanceRegistration({ ...legacy, paymentStatus: 'refunded' }, recovered), false);
+  assert.equal(
+    canAdvanceRegistration(progress(), {
+      ...progress(),
+      status: 'completed',
+      agentId: 'agent-1',
+      stage: 'complete',
+    }),
+    false,
+  );
+  backend.items = [legacy];
+  await connect(tracker);
+  assert.equal(tracker.getSnapshot().attempts.length, 1);
+  backend.items = [recovered];
+  await poll(tracker);
+  await poll(tracker);
+  assert.equal(tracker.getSnapshot().attempts.length, 0);
+  assert.deepEqual(completed, ['registration-1']);
+  assert.deepEqual(resolved, [['registration-1']]);
+  backend.items = [legacy];
+  await poll(tracker);
+  assert.equal(tracker.getSnapshot().items[0].status, 'completed');
+  assert.equal(tracker.getSnapshot().attempts.length, 0);
+});
+
+test('settled legacy finalizing projection promotes at identical revision/time without admitting other prior states or rollback', async () => {
+  const { tracker, backend, completed, resolved } = fixture();
+  const legacy = progress({
+    status: 'processing',
+    paymentStatus: 'settled',
+    stage: 'finalizing',
+    messageCode: 'REGISTRATION_PROCESSING',
+    agentId: 'legacy-finalizing-agent',
+    startedAt: '2026-08-18T10:00:00.000Z',
+    updatedAt: '2026-08-18T10:01:00.000Z',
+    revision: 0,
+    completedAt: null,
+    completionEventId: null,
+  });
+  const recovered = {
+    ...legacy,
+    status: 'completed' as const,
+    stage: 'complete' as const,
+    messageCode: 'REGISTRATION_COMPLETED',
+    completionEventId: 'registration-1:completed',
+  };
+  for (const completedAt of [null, legacy.updatedAt]) {
+    const next = { ...recovered, completedAt };
+    assert.equal(registrationProgressSchema.safeParse(next).success, true);
+    assert.equal(canAdvanceRegistration(legacy, next), true);
+  }
+  for (const stage of [
+    'payment',
+    'domain',
+    'dns',
+    'ssl',
+    'email',
+    'basename',
+    'ens',
+    'mint',
+    'complete',
+  ] as const)
+    assert.equal(canAdvanceRegistration({ ...legacy, stage }, recovered), false);
+  for (const paymentStatus of ['unknown', 'pending', 'not_charged', 'refunded'] as const)
+    assert.equal(canAdvanceRegistration({ ...legacy, paymentStatus }, recovered), false);
+  for (const status of ['action_required', 'failed', 'refunded', 'awaiting_payment'] as const)
+    assert.equal(canAdvanceRegistration({ ...legacy, status }, recovered), false);
+  for (const patch of [
+    { agentId: null },
+    { messageCode: 'REGISTRATION_RETRY_SCHEDULED' },
+    { completedAt: legacy.updatedAt },
+    { completionEventId: 'registration-1:completed' },
+  ])
+    assert.equal(canAdvanceRegistration({ ...legacy, ...patch }, recovered), false);
+  assert.equal(
+    canAdvanceRegistration({ ...legacy, revision: 1 }, { ...recovered, revision: 1 }),
+    false,
+  );
+  for (const patch of [
+    { agentId: null },
+    { agentId: 'different-agent' },
+    { registrationId: 'different-registration' },
+    { domain: 'different.test' },
+    { startedAt },
+    { revision: -1 },
+    { updatedAt: legacy.startedAt },
+    { status: 'processing' as const },
+    { status: 'refunded' as const, paymentStatus: 'refunded' as const },
+    { stage: 'finalizing' as const },
+    { paymentStatus: 'unknown' as const },
+    { paymentStatus: 'pending' as const },
+    { paymentStatus: 'not_charged' as const },
+    { paymentStatus: 'refunded' as const },
+  ])
+    assert.equal(canAdvanceRegistration(legacy, { ...recovered, ...patch }), false);
+  assert.equal(canAdvanceRegistration(recovered, legacy), false);
+  assert.equal(
+    canAdvanceRegistration(recovered, {
+      ...legacy,
+      revision: 1,
+      updatedAt: '2026-08-18T10:02:00.000Z',
+    }),
+    false,
+  );
+  assert.equal(
+    canAdvanceRegistration(recovered, { ...recovered, completionEventId: 'different-completion' }),
+    false,
+  );
+  backend.items = [legacy];
+  await connect(tracker);
+  assert.equal(tracker.getSnapshot().attempts.length, 1);
+  backend.items = [recovered];
+  await poll(tracker);
+  await poll(tracker);
+  assert.equal(tracker.getSnapshot().attempts.length, 0);
+  assert.deepEqual(completed, ['registration-1']);
+  assert.deepEqual(resolved, [['registration-1']]);
+  backend.items = [legacy];
+  await poll(tracker);
+  assert.equal(tracker.getSnapshot().items[0].status, 'completed');
+  assert.equal(tracker.getSnapshot().attempts.length, 0);
+});
+
+test('presentation storage failure dismisses in memory without weakening the saved purchase guard', async () => {
+  const { tracker, storage } = fixture();
+  tracker.remember(attempt);
+  await connect(tracker);
+  const original = storage.setItem.bind(storage);
+  storage.setItem = (key, value) => {
+    if (key.startsWith(REGISTRATION_NOTICE_PREFIX)) throw new Error('Storage denied');
+    original(key, value);
+  };
+  tracker.dismissNotices([attempt]);
+  await poll(tracker);
+  assert.equal(tracker.isNoticeDismissed(attempt), true);
+  assert.equal(tracker.hasPurchase(payer, attempt.domain), true);
+  assert.ok(storage.getItem(`${ATTEMPT_PREFIX}${attempt.clientId}`));
 });
 
 test('confirmed acceptance notifies view subscribers immediately without inventing progress', async () => {
