@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Clock3, Loader2, CircleAlert } from 'lucide-react';
+import { Clock3, Loader2, CircleAlert, ArrowRight, X } from 'lucide-react';
 import { useRegistrationSnapshot, useRegistrationTracker } from './registration-tracker-provider';
 import {
   attemptStartedAt,
@@ -10,22 +10,34 @@ import {
   registrationCopy,
   registrationEstimateCopy,
   registrationPaymentStatus,
+  registrationNoticeEligible,
   registrationStageLabel,
   type RegistrationAccepted,
   type RegistrationProgress,
 } from '@/lib/registration-progress';
+import { SUBMISSION_UNCONFIRMED_MESSAGE } from '@/lib/registration-submission';
 
 function useRegistrationRows() {
   const snapshot = useRegistrationSnapshot();
   const tracker = useRegistrationTracker();
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    if (!snapshot.attempts.length) return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [snapshot.attempts.length]);
   const seen = new Set<string>();
   const rows = snapshot.attempts
     .map((attempt) => ({
       key: attempt.clientId,
+      attempt,
       domain: attempt.domain,
       startedAt: attemptStartedAt(attempt),
       progress: tracker.matches(attempt),
       accepted: tracker.getAcceptance(attempt),
+      dismissed: tracker.isNoticeDismissed(attempt),
+      unconfirmed: now !== null && tracker.isSubmissionUnconfirmed(attempt, now),
     }))
     .filter((row) => {
       const key = row.progress?.registrationId ?? row.domain;
@@ -36,7 +48,6 @@ function useRegistrationRows() {
   return {
     rows,
     connection: snapshot.connection,
-    hasSavedAttempts: snapshot.hasSavedAttempts && !snapshot.attempts.length,
   };
 }
 
@@ -69,7 +80,7 @@ function ProgressTime({
 }
 
 const paymentLabels: Record<RegistrationProgress['paymentStatus'], string> = {
-  unknown: 'Payment confirmation pending',
+  unknown: 'Payment status unavailable',
   pending: 'Payment pending',
   settled: 'Payment confirmed',
   not_charged: 'Not charged',
@@ -86,7 +97,9 @@ function RegistrationStatusDetails({
   return (
     <p className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
       <span>{paymentLabels[registrationPaymentStatus(progress, accepted)]}</span>
-      {progress && <span>Current step: {registrationStageLabel(progress.stage)}</span>}
+      {progress && registrationPaymentStatus(progress, accepted) !== 'unknown' && (
+        <span>Current step: {registrationStageLabel(progress.stage)}</span>
+      )}
     </p>
   );
 }
@@ -108,76 +121,82 @@ function ConnectionNotice({
   );
 }
 
-export function RegistrationBanner() {
-  const { rows, connection, hasSavedAttempts } = useRegistrationRows();
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-    const update = () =>
-      document.documentElement.style.setProperty(
-        '--registration-banner-height',
-        `${element.getBoundingClientRect().height}px`,
-      );
-    const observer = new ResizeObserver(update);
-    observer.observe(element);
-    update();
-    return () => {
-      observer.disconnect();
-      document.documentElement.style.removeProperty('--registration-banner-height');
-    };
-  }, []);
-  const row = rows[0];
+function UnconfirmedSubmissionNotice() {
   return (
-    <div ref={ref} className="sticky top-0 z-40 w-full" data-registration-banner>
-      {row && (
-        <div className="border-b border-emerald-800/20 bg-background">
-          <div className="container flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0 space-y-1">
-              <p role="status" className="flex items-start gap-2 text-sm font-medium">
-                {row.progress?.status === 'action_required' || row.progress?.status === 'failed' ? (
-                  <CircleAlert
-                    className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
-                    aria-hidden
-                  />
-                ) : (
-                  <Loader2
-                    className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-primary"
-                    aria-hidden
-                  />
-                )}
-                <span className="wrap-anywhere">
-                  {row.domain}: {registrationCopy(row.progress, row.accepted)}
-                  {rows.length > 1 ? ` (+${rows.length - 1} more)` : ''}
-                </span>
-              </p>
-              <RegistrationStatusDetails progress={row.progress} accepted={row.accepted} />
-              <ProgressTime startedAt={row.startedAt} progress={row.progress} />
-              <ConnectionNotice connection={connection} />
-            </div>
-            <Link
-              className="shrink-0 text-sm font-medium text-primary underline underline-offset-4"
-              href="/dashboard"
-            >
-              {connection === 'unauthorized' ? 'Sign in to view progress' : 'View progress'}
-            </Link>
-          </div>
-        </div>
-      )}
-      {!row && hasSavedAttempts && (
-        <div className="border-b border-border bg-background">
-          <div className="container flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
-            <p role="status">
-              Registration updates paused. Connect and sign in with the paying wallet; do not pay
-              again.
-            </p>
-            <Link href="/dashboard" className="text-primary underline">
-              View progress
-            </Link>
-          </div>
-        </div>
-      )}
+    <div className="space-y-2 text-xs text-muted-foreground" data-registration-unconfirmed>
+      <p>{SUBMISSION_UNCONFIRMED_MESSAGE}</p>
+      <a
+        href="mailto:contact@agentdomain.app"
+        className="inline-block font-medium text-primary underline underline-offset-4"
+      >
+        Contact support
+      </a>
     </div>
+  );
+}
+
+export function RegistrationNotification() {
+  const { rows, connection } = useRegistrationRows();
+  const tracker = useRegistrationTracker();
+  const notices = rows.filter(
+    (row) => !row.dismissed && registrationNoticeEligible(row.progress, row.accepted),
+  );
+  const row = notices[0];
+  if (!row || connection === 'unauthorized') return null;
+  const settled = registrationPaymentStatus(row.progress, row.accepted) === 'settled';
+  const processing = settled && (!row.progress || row.progress.status === 'processing');
+  return (
+    <aside
+      aria-label="Registration notification"
+      className="fixed right-3 top-20 z-40 max-h-[calc(100dvh-6rem)] w-[calc(100%-1.5rem)] min-w-[min(18rem,calc(100%-1.5rem))] max-w-sm overflow-y-auto rounded-lg border border-border bg-card p-4 text-card-foreground shadow-lg sm:right-6 sm:top-24"
+      data-registration-notification
+    >
+      <div className="flex items-start gap-3">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted">
+          {processing ? (
+            <Loader2
+              className="h-4 w-4 animate-spin text-primary motion-reduce:animate-none"
+              aria-hidden
+            />
+          ) : (
+            <CircleAlert className="h-4 w-4 text-muted-foreground" aria-hidden />
+          )}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs text-muted-foreground">Registration update</p>
+          <p className="wrap-anywhere text-sm font-semibold">{row.domain}</p>
+        </div>
+        <button
+          type="button"
+          aria-label="Dismiss registration notification"
+          title="Dismiss registration notification"
+          className="-mr-2 -mt-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          onClick={() => tracker.dismissNotices(notices.map((notice) => notice.attempt))}
+        >
+          <X className="h-4 w-4" aria-hidden />
+        </button>
+      </div>
+      <div className="mt-3 space-y-2">
+        <p role="status" className="wrap-anywhere text-sm">
+          {registrationCopy(row.progress, row.accepted)}
+        </p>
+        <RegistrationStatusDetails progress={row.progress} accepted={row.accepted} />
+        {settled && <ProgressTime startedAt={row.startedAt} progress={row.progress} />}
+        <ConnectionNotice connection={connection} />
+        {row.unconfirmed && <UnconfirmedSubmissionNotice />}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+        <Link
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          href="/dashboard"
+        >
+          View progress <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+        </Link>
+        {notices.length > 1 && (
+          <span className="text-xs text-muted-foreground">+{notices.length - 1} more</span>
+        )}
+      </div>
+    </aside>
   );
 }
 
@@ -202,8 +221,9 @@ export function DashboardRegistrationUpdates() {
           data-registration-pending
         >
           <div className="flex items-start gap-3">
-            {row.progress &&
-            ['failed', 'refunded', 'action_required'].includes(row.progress.status) ? (
+            {registrationPaymentStatus(row.progress, row.accepted) !== 'settled' ||
+            (row.progress &&
+              ['failed', 'refunded', 'action_required'].includes(row.progress.status)) ? (
               <CircleAlert className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
             ) : (
               <Loader2 className="mt-1 h-4 w-4 shrink-0 animate-spin text-primary" aria-hidden />
@@ -214,7 +234,10 @@ export function DashboardRegistrationUpdates() {
                 {registrationCopy(row.progress, row.accepted)}
               </p>
               <RegistrationStatusDetails progress={row.progress} accepted={row.accepted} />
-              <ProgressTime startedAt={row.startedAt} progress={row.progress} />
+              {registrationPaymentStatus(row.progress, row.accepted) === 'settled' && (
+                <ProgressTime startedAt={row.startedAt} progress={row.progress} />
+              )}
+              {row.unconfirmed && <UnconfirmedSubmissionNotice />}
               {row.progress?.agentId && (
                 <Link
                   href={`/agents/${encodeURIComponent(row.progress.agentId)}`}

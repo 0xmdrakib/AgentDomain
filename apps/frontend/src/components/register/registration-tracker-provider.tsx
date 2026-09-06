@@ -17,12 +17,10 @@ import {
   REGISTRATION_CHANGED_EVENT,
   REGISTRATION_POLL_MS,
   REGISTRATION_BACKOFF_PREFIX,
+  REGISTRATION_NOTICE_PREFIX,
 } from '@/lib/registration-progress';
-import {
-  REGISTRATION_SUBMISSION_PREFIX,
-  SUBMISSION_UNCONFIRMED_MESSAGE,
-} from '@/lib/registration-submission';
-import { RegistrationBanner } from './registration-updates';
+import { REGISTRATION_SUBMISSION_PREFIX } from '@/lib/registration-submission';
+import { RegistrationNotification } from './registration-updates';
 
 const TrackerContext = createContext<RegistrationTracker | null>(null);
 const isApplicationHost = () =>
@@ -99,6 +97,10 @@ export function RegistrationTrackerProvider({ children }: { children: ReactNode 
       refresh();
     };
     const storageChanged = (event: StorageEvent) => {
+      if (event.key?.startsWith(REGISTRATION_NOTICE_PREFIX)) {
+        tracker.hydrate();
+        return;
+      }
       if (
         event.key?.startsWith(ATTEMPT_PREFIX) ||
         event.key?.startsWith(COMPLETION_PREFIX) ||
@@ -154,46 +156,10 @@ export function RegistrationTrackerProvider({ children }: { children: ReactNode 
 
   return (
     <TrackerContext.Provider value={tracker}>
-      <RegistrationBanner />
-      <UnconfirmedSubmissionNotice tracker={tracker} />
+      <RegistrationNotification />
       {children}
       <Toaster position="bottom-right" theme="light" richColors />
     </TrackerContext.Provider>
-  );
-}
-
-function UnconfirmedSubmissionNotice({ tracker }: { tracker: RegistrationTracker }) {
-  const snapshot = useSyncExternalStore(
-    tracker.subscribe,
-    tracker.getSnapshot,
-    () => EMPTY_REGISTRATION_SNAPSHOT,
-  );
-  const [now, setNow] = useState<number | null>(null);
-  useEffect(() => {
-    if (!snapshot.attempts.length) return;
-    setNow(Date.now());
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, [snapshot.attempts.length]);
-  if (
-    now === null ||
-    !snapshot.attempts.some((attempt) => tracker.isSubmissionUnconfirmed(attempt, now))
-  )
-    return null;
-  return (
-    <div className="border-b border-border bg-background" data-registration-unconfirmed>
-      <div className="container flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
-        <p role="status" className="min-w-0 flex-1">
-          {SUBMISSION_UNCONFIRMED_MESSAGE}
-        </p>
-        <a
-          href="mailto:contact@agentdomain.app"
-          className="shrink-0 font-medium text-primary underline underline-offset-4"
-        >
-          Contact support
-        </a>
-      </div>
-    </div>
   );
 }
 

@@ -1,6 +1,7 @@
 import {
   ATTEMPT_PREFIX,
   COMPLETION_PREFIX,
+  REGISTRATION_NOTICE_PREFIX,
   REGISTRATION_PAGE_SIZE,
   REGISTRATION_LIST_PAGES_PER_POLL,
   REGISTRATION_DETAILS_PER_POLL,
@@ -64,6 +65,7 @@ export class RegistrationTracker {
   private listeners = new Set<() => void>();
   private accepted = new Map<string, RegistrationAccepted>();
   private deliveredResolutions = new Map<string, RegistrationProgress['status']>();
+  private dismissedNotices = new Set<string>();
   private expectedWallet: string | null | undefined;
   private epoch = 0;
   private controller?: AbortController;
@@ -136,6 +138,34 @@ export class RegistrationTracker {
     return `${attempt.wallet}:${attempt.clientId}`;
   }
 
+  isNoticeDismissed(attempt: RegistrationAttempt) {
+    const key = this.attemptKey(attempt);
+    if (this.dismissedNotices.has(key)) return true;
+    try {
+      return this.options.storage.getItem(`${REGISTRATION_NOTICE_PREFIX}${key}`) === 'dismissed';
+    } catch {
+      return false;
+    }
+  }
+
+  dismissNotices(attempts: RegistrationAttempt[]) {
+    for (const attempt of attempts) {
+      if (
+        attempt.wallet !== this.state.wallet ||
+        !this.state.attempts.some((saved) => this.attemptKey(saved) === this.attemptKey(attempt))
+      )
+        continue;
+      const key = this.attemptKey(attempt);
+      this.dismissedNotices.add(key);
+      try {
+        this.options.storage.setItem(`${REGISTRATION_NOTICE_PREFIX}${key}`, 'dismissed');
+      } catch {
+        /* Dismiss for this tracker lifetime even when presentation storage is unavailable. */
+      }
+    }
+    this.update({});
+  }
+
   private async deferRead(error: unknown, wallet: string) {
     const failures = Math.min((this.failures.get(wallet) ?? 0) + 1, 7);
     this.failures.set(wallet, failures);
@@ -178,6 +208,9 @@ export class RegistrationTracker {
 
   hydrate() {
     const attempts = this.readAttempts();
+    const retained = new Set(attempts.map((attempt) => this.attemptKey(attempt)));
+    for (const key of this.dismissedNotices)
+      if (!retained.has(key)) this.dismissedNotices.delete(key);
     const wallet = this.expectedWallet !== undefined ? this.expectedWallet : this.state.wallet;
     this.update({
       wallet,
@@ -438,6 +471,8 @@ export class RegistrationTracker {
         if (epoch !== this.epoch) return false;
         if (!acknowledged) continue;
         this.options.storage.removeItem(`${ATTEMPT_PREFIX}${attempt.clientId}`);
+        this.options.storage.removeItem(`${REGISTRATION_NOTICE_PREFIX}${this.attemptKey(attempt)}`);
+        this.dismissedNotices.delete(this.attemptKey(attempt));
         this.accepted.delete(this.attemptKey(attempt));
       }
       this.hydrate();

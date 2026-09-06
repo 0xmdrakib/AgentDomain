@@ -14,6 +14,7 @@ export const REGISTRATION_MAX_DISCOVERY_OFFSET = 10_000;
 export const REGISTRATION_CHANGED_EVENT = 'agentdomain:registration-completed';
 export const ATTEMPT_PREFIX = 'agentdomain:registration-attempt:';
 export const COMPLETION_PREFIX = 'agentdomain:registration-completed:';
+export const REGISTRATION_NOTICE_PREFIX = 'agentdomain:registration-notice-dismissed:';
 
 const identifier = z.string().regex(/^[a-zA-Z0-9_-]+$/);
 const domain = z.string().regex(/^[a-z0-9.-]+$/);
@@ -159,6 +160,23 @@ export function canAdvanceRegistration(previous: RegistrationProgress, next: Reg
   return (
     next.revision > previous.revision ||
     after > before ||
+    // Legacy status projection can recover recorded settlement without changing stored timestamps.
+    (((previous.status === 'action_required' &&
+      previous.paymentStatus === 'unknown' &&
+      previous.stage === 'payment') ||
+      (previous.status === 'processing' &&
+        previous.paymentStatus === 'settled' &&
+        previous.stage === 'finalizing' &&
+        previous.messageCode === 'REGISTRATION_PROCESSING' &&
+        previous.agentId !== null &&
+        previous.revision === 0 &&
+        previous.completedAt === null &&
+        previous.completionEventId === null)) &&
+      next.status === 'completed' &&
+      next.paymentStatus === 'settled' &&
+      next.stage === 'complete' &&
+      next.agentId !== null &&
+      (previous.agentId === null || previous.agentId === next.agentId)) ||
     JSON.stringify(previous) === JSON.stringify(next)
   );
 }
@@ -189,6 +207,14 @@ export function registrationPaymentStatus(
     : (observed ?? 'unknown');
 }
 
+export function registrationNoticeEligible(
+  item?: RegistrationProgress,
+  accepted?: RegistrationAccepted,
+) {
+  // Unknown server history is not evidence of an active checkout. Keep it on the dashboard.
+  return !item || registrationPaymentStatus(item, accepted) !== 'unknown';
+}
+
 export function registrationCopy(item?: RegistrationProgress, accepted?: RegistrationAccepted) {
   if (!item)
     return accepted
@@ -196,6 +222,8 @@ export function registrationCopy(item?: RegistrationProgress, accepted?: Registr
       : 'Confirming payment and registration status. Do not pay again.';
   if (item.status === 'completed') return 'Registration complete';
   if (item.status === 'refunded') return 'Payment refunded';
+  if (registrationPaymentStatus(item, accepted) === 'unknown')
+    return 'Registration status needs verification. Do not pay again.';
   if (item.status === 'failed')
     return 'Registration could not be completed. Review payment status below.';
   const confirmed = registrationPaymentStatus(item, accepted) === 'settled';
