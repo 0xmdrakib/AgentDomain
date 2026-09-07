@@ -430,7 +430,8 @@ export async function createX402PaymentHeaders(
       } as Parameters<typeof walletClient.signTypedData>[0]),
   };
 
-  const client = new x402Client();
+  // Preserve the helper's existing policy without an implicit dollar cap or asset allowlist.
+  const client = new x402Client().setSpendControls(false);
   registerExactEvmScheme(client, { signer, networks: [X402_NETWORK] });
   const httpClient = new x402HTTPClient(client);
 

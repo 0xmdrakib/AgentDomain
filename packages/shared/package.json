@@ -68,7 +68,7 @@
     "lint": "echo ok"
   },
   "dependencies": {
-    "viem": "^2.55.2",
+    "viem": "^2.56.3",
     "zod": "^3.24.1"
   },
   "devDependencies": {

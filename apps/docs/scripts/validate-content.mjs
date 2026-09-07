@@ -161,9 +161,9 @@ async function assertAppContract() {
   if (pkg.homepage !== 'https://docs.agentdomain.app') {
     throw new Error('package.json: canonical homepage mismatch');
   }
-  if (pkg.dependencies?.astro !== '7.2.10') throw new Error('package.json: Astro must be 7.2.10');
-  if (pkg.dependencies?.['@astrojs/starlight'] !== '0.41.11') {
-    throw new Error('package.json: Starlight must be 0.41.11');
+  if (pkg.dependencies?.astro !== '7.3.1') throw new Error('package.json: Astro must be 7.3.1');
+  if (pkg.dependencies?.['@astrojs/starlight'] !== '0.42.0') {
+    throw new Error('package.json: Starlight must be 0.42.0');
   }
 
   const wranglerFile = join(DOCS_ROOT, 'wrangler.jsonc');
