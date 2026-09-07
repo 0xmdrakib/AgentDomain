@@ -6,6 +6,7 @@ import { config as loadEnvironment } from 'dotenv';
 loadEnvironment({
   path: fileURLToPath(new URL('../../frontend.env', import.meta.url)),
   override: false,
+  quiet: true,
 });
 
 const brandConfig = JSON.parse(

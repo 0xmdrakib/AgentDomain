@@ -71,6 +71,15 @@ opt-in in the MCP process environment, then inject only the narrowly scoped API
 or signing credential required by the selected operation through a trusted
 secret-aware launcher. Do not place either credential in MCP client JSON.
 
+## Input framing
+
+The stdio transport limits accumulated, unprocessed input to 10 MiB
+(10,485,760 bytes), including JSON framing. Oversized input clears the buffer
+and closes the transport without dispatching the incomplete request. The client
+must reconnect after an overflow and must not blindly replay a write whose
+outcome is unknown. This transport bound is separate from API payload limits;
+larger payloads are not automatically supported by splitting a single JSON line.
+
 ## Signing credentials
 
 Supply `AGENT_PRIVATE_KEY` only when an enabled operation requires a wallet
