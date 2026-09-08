@@ -1,18 +1,18 @@
 ---
 title: TypeScript SDK
-description: Use AgentDomain SDK 0.7.0 for registration, discovery, DNS, email, plans, and renewals.
+description: Use AgentDomain SDK 0.9.0 for resumable registration, discovery, DNS, email, plans, and renewals.
 ---
 
 ## Install
 
 ```bash
-npm install @agentdomain/sdk@0.7.0 viem
+npm install @agentdomain/sdk@0.9.0 viem@2.56.3
 ```
 
 The default API base is `https://api.agentdomain.app/api/v1` and the default network is Base
 mainnet.
 
-In the unreleased SDK source described below, relative `apiUrl` values are resolved against
+In SDK 0.9.0, relative `apiUrl` values are resolved against
 the browser location at construction, before signing or payment. Non-browser clients must
 provide an absolute URL. HTTPS is required except for explicitly configured HTTP loopback
 hosts (`localhost`, `127.0.0.1`, or `[::1]`). API bases cannot contain credentials, a query,
@@ -22,15 +22,14 @@ or a fragment.
 
 ```ts
 import { AgentDomain } from '@agentdomain/sdk';
-import { createPublicClient, createWalletClient, http } from 'viem';
+import { createWalletClient, http } from 'viem';
 import { base } from 'viem/chains';
 import type { PrivateKeyAccount } from 'viem/accounts';
 
 export function createAgentDomain(account: PrivateKeyAccount) {
   const walletClient = createWalletClient({ account, chain: base, transport: http() });
-  const publicClient = createPublicClient({ chain: base, transport: http() });
 
-  return new AgentDomain({ walletClient, publicClient });
+  return new AgentDomain({ walletClient });
 }
 ```
 
@@ -61,16 +60,18 @@ const identity = await agentDomain.register({
 console.log(quote.totalUsdc, identity.agentId, identity.provisioningStatus);
 ```
 
-`register()` requires a wallet address, either in the request or from the wallet client. When the
-API returns an x402 challenge, the SDK signs and retries it on Base mainnet.
+`register()` requires the payer's wallet address, either in the request or from the wallet client.
+The connected signer must match that payer; use `ownerAddress` for a different designated NFT
+owner. When the API returns an x402 challenge, the SDK signs and submits the exact challenged
+request once on Base mainnet. It does not automatically replay a paid request after an unknown
+outcome.
 
-## Asynchronous registration (unreleased source API)
+## Asynchronous registration
 
-The following methods are new repository-source additions, not a claim about the pinned npm
-release installed above. No package version has been changed. Older published clients may treat
-HTTP `202` as a complete `RegistrationResult`; do not infer readiness from their return types.
-Use the [HTTP status contract](/api-reference/register/) directly or upgrade to a release containing
-these methods when available.
+New in 0.9.0: submission, status, waiting, and recovery methods distinguish payment acceptance
+from completed registration. SDK 0.8.x and earlier may treat HTTP `202` as a complete
+`RegistrationResult`; do not infer readiness from their return types. Upgrade to 0.9.0 or use
+the [HTTP status contract](/api-reference/register/) directly.
 
 ```ts
 import { RegistrationPendingError } from '@agentdomain/sdk';
@@ -147,6 +148,25 @@ the returned domain must match the submitted request, and unknown fields are str
 including unknown nested snapshot fields. Public snapshot values and items are retained without
 repricing or truncation. Invalid responses retain a pending handle and never trigger another payment.
 
+## Upgrading from 0.8.x
+
+Existing `register(args)` calls remain valid, but HTTP `202` now starts authenticated waiting.
+Use `submitRegistration()` for acceptance without waiting for asynchronous provisioning, and
+handle the structured pending and failed errors above. Registration does not use an agent API key for authentication. Custom
+API adapters must implement the documented status contract and expose `X-Authenticated-Wallet`.
+Constructor URL validation also applies to clients used only for discovery.
+
+Align/deduplicate viem to the reviewed 2.56.3 version across your client code and SDK dependencies.
+An independently pinned 2.55.8 `PublicClient` lacks the required `watchBlockHeaders` member and
+can fail TypeScript assignment. Arbitrary mixed-version viem compatibility is not guaranteed;
+SDK import paths and ESM-only packaging are unchanged.
+
+The x402 packages are aligned at 2.25.0. The payment helper explicitly disables the new upstream
+default $1 cap and recognized-asset allowlist, preserving its earlier payment-selection policy.
+It does not impose a new spending budget or independently verify an earlier quote; callers must
+authorize the payment terms. Base-mainnet exact v2 signing and existing request-binding checks
+remain in place.
+
 ## Email and DNS
 
 ```ts
@@ -191,7 +211,7 @@ to 32 lowercase letters, numbers, or underscores and is public attribution, not 
 
 ## Registry and plans
 
-SDK 0.7.0 also includes registry search, agent lookup, API key management from owner sessions,
+The SDK also includes registry search, agent lookup, API key management from owner sessions,
 service-plan status and purchase, registry visibility, email usage and webhooks, DNS import/export,
 and owner-authorized vault withdrawal.
 

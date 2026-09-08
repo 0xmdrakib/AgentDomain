@@ -15,7 +15,7 @@ API bases must use HTTPS; explicitly configured HTTP `localhost`, `127.0.0.1`, a
 strings, and fragments are rejected before requests begin.
 
 ```bash
-npm install @agentdomain/sdk viem
+npm install @agentdomain/sdk@0.9.0 viem@2.56.3
 ```
 
 ## Quick start
@@ -72,13 +72,12 @@ not converted into an x402 paid resource. Email setup, SSL certification, DNS
 orchestration, and AgentID NFT mint/orchestration are included in the annual
 platform fee; Basename and ENS remain optional paid add-ons.
 
-## Asynchronous registration (unreleased source API)
+## Asynchronous registration
 
-The methods in this section are additions in the repository source, not a claim that
-an already published npm version contains them. Package versions have not changed.
-Older SDKs may treat HTTP `202` as a `RegistrationResult`; their return type is not
-evidence that registration finished. Upgrade to a release containing these methods
-when available, or integrate the documented HTTP status contract directly.
+New in 0.9.0: submission, status, waiting, and recovery methods distinguish payment
+acceptance from completed registration. SDK 0.8.x and earlier may treat HTTP `202`
+as a `RegistrationResult`; their return type is not evidence that registration
+finished. Upgrade to 0.9.0 or integrate the documented HTTP status contract directly.
 
 ```ts
 import { AgentDomain, RegistrationPendingError } from '@agentdomain/sdk';
@@ -153,6 +152,31 @@ contact support instead of starting another checkout.
 ready, not merely that payment succeeded or an agent ID exists. DNS, HTTPS, email, and
 selected names can take additional time. Estimates may be `null`; there is no instant
 completion guarantee.
+
+## Upgrading from 0.8.x
+
+Existing `register(args)` calls remain valid, but HTTP `202` now starts authenticated
+waiting instead of returning an acceptance body as a completed result. Use
+`submitRegistration()` for acceptance without waiting for asynchronous provisioning,
+and handle the structured errors described above. Legacy HTTP `200` results are validated and
+schema-projected, so callers must not rely on unknown response fields.
+
+The connected signer must match the registration payer (`args.wallet`); use
+`ownerAddress` for a different designated NFT owner. Registration does not authorize
+with an agent API key. Custom API adapters must support the documented payer-scoped
+status contract, including `X-Authenticated-Wallet`. API URL validation applies at
+construction, including to clients used only for discovery.
+
+Align/deduplicate viem to the reviewed 2.56.3 version across the SDK and your client
+code. An independently pinned 2.55.8 `PublicClient` lacks the required
+`watchBlockHeaders` member and can fail TypeScript assignment. This release does not
+promise arbitrary mixed-version viem compatibility. Package imports remain ESM-only.
+
+The x402 packages are aligned at 2.25.0. `createX402PaymentHeaders()` explicitly
+disables the upstream default $1 cap and recognized-asset allowlist to preserve its
+previous payment-selection policy. This does not introduce a spending budget or
+independently verify an earlier quote. Callers must authorize the payment terms;
+Base-mainnet exact v2 signing and the existing request-binding checks remain in place.
 
 ## Autonomous Premium Plan actions
 

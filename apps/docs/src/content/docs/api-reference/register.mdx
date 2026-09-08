@@ -52,8 +52,8 @@ payment outcome is not permission to submit another payment.
 | `ownerAddress`     | no       | Final owner; defaults to `wallet`                        |
 | `preferredName`    | yes      | Requested domain label                                   |
 | `tld`              | yes      | Supported top-level domain                               |
-| `registerBasename` | no       | Defaults to `true` in SDK 0.7.0                          |
-| `registerEns`      | no       | Defaults to `false` in SDK 0.7.0                         |
+| `registerBasename` | no       | Defaults to `true` in SDK 0.9.0                          |
+| `registerEns`      | no       | Defaults to `false` in SDK 0.9.0                         |
 | `emailUsername`    | no       | Primary address local-part; defaults to `agent`          |
 | `premiumPlan`      | no       | `included`, `starter`, `pro`, or `enterprise`            |
 | `years`            | no       | Initial term from 1 through 10 years                     |
@@ -168,8 +168,8 @@ Match the exact domain and submission time interval; do not guess if multiple at
 A missing match does not prove no charge occurred. Keep known registration/payment references
 for support, but never use them instead of wallet authentication.
 
-The asynchronous SDK methods documented in the [TypeScript guide](/sdk/typescript/) are currently
-unreleased source additions. An already published SDK can mistake `202` for a completed result;
-an old TypeScript return type does not make that safe. Integrate this HTTP contract directly or
-upgrade to a release containing the new waiter when available. No package version change is
-implied by this documentation.
+SDK 0.9.0 adds the asynchronous methods documented in the [TypeScript guide](/sdk/typescript/).
+SDK 0.8.x and earlier can mistake `202` for a completed result; an old TypeScript return type
+does not make that safe. Integrate this HTTP contract directly or upgrade to 0.9.0 for the
+payer-authenticated waiter and recovery methods. A client upgrade does not change service
+readiness or authorize another payment.

@@ -3,13 +3,13 @@ title: MCP server
 description: Install the public AgentDomain MCP server and expose identity tools to an MCP client.
 ---
 
-`@agentdomain/mcp-server` 0.7.0 runs over stdio and exposes the public AgentDomain lifecycle to
+`@agentdomain/mcp-server` 0.9.0 runs over stdio and exposes the public AgentDomain lifecycle to
 MCP-compatible clients.
 
 ## Install
 
 ```bash
-npm install --global @agentdomain/mcp-server@0.7.0
+npm install --global @agentdomain/mcp-server@0.9.0
 ```
 
 Or let an MCP client launch the pinned package directly:
@@ -19,7 +19,7 @@ Or let an MCP client launch the pinned package directly:
   "mcpServers": {
     "agentdomain": {
       "command": "npx",
-      "args": ["-y", "@agentdomain/mcp-server@0.7.0"]
+      "args": ["-y", "@agentdomain/mcp-server@0.9.0"]
     }
   }
 }

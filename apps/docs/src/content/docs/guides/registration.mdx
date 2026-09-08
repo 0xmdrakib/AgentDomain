@@ -43,10 +43,10 @@ can change, so do not cache a quote as a guaranteed reservation.
 Send `Prefer: respond-async` and handle the x402 challenge by submitting the exact signed request
 once. Keep the `registrationId` and `statusUrl` returned by HTTP `202`. Acceptance is not completion.
 
-The unreleased SDK source adds `submitRegistration()` for this acceptance response and updates
-`register()` to wait using authenticated status GETs. Already published SDKs do not necessarily
-implement this waiter and can mistake `202` for a final result. See the
-[upgrade notes](/sdk/typescript/#asynchronous-registration-unreleased-source-api).
+SDK 0.9.0 adds `submitRegistration()` for this acceptance response and updates `register()` to
+wait using authenticated status GETs. SDK 0.8.x and earlier can mistake `202` for a final result.
+See [asynchronous registration](/sdk/typescript/#asynchronous-registration) and the
+[upgrade notes](/sdk/typescript/#upgrading-from-08x).
 
 If the response is `processing`, poll or display the accepted state rather than starting another
 paid registration. A second checkout can represent a distinct payment intent.
