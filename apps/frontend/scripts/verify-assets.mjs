@@ -8,6 +8,8 @@ const manifestPath = resolve(frontendRoot, 'brand-assets.manifest.json');
 const brandRoot = resolve(frontendRoot, 'public/brand/agentdomain-brand');
 const supportFiles = [
   'public/7f7aee972754591b3e4695e2f955439abd945d242fe0acfe5dc705db272a674c.txt',
+  'public/favicon.ico',
+  'public/brand/web/logo-for-link-embed.jpg',
   'src/lib/brand-assets.json',
   'src/lib/brand-assets.ts',
 ];
@@ -28,7 +30,7 @@ function filesUnder(directory) {
 }
 
 export function hashInput(file, content) {
-  return file.endsWith('.png')
+  return /\.(?:png|jpe?g|ico)$/i.test(file)
     ? content
     : Buffer.from(content.toString('utf8').replaceAll('\r\n', '\n'));
 }

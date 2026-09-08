@@ -78,6 +78,7 @@ const nextConfig = {
   async headers() {
     return [
       { source: '/:path*', headers: securityHeaders },
+      { source: '/favicon.ico', headers: [{ key: 'Content-Type', value: 'image/x-icon' }] },
       {
         source: '/:path*',
         has: [

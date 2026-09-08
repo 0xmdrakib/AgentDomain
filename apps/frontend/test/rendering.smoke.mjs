@@ -127,12 +127,30 @@ test('all public page families publish the new share image and correctly typed i
       path,
     );
     assert.ok(head.includes(`href="${brand.assets.favicon}"`), path);
+    assert.ok(head.includes(`href="${brand.assets.faviconIco}"`), path);
+    assert.ok(head.includes('type="image/x-icon"'), path);
+    assert.ok(head.includes('property="og:image:type" content="image/jpeg"'), path);
     assert.ok(head.includes('sizes="96x96"'), path);
     assert.ok(head.includes(`href="${brand.assets.appleTouchIcon}"`), path);
     assert.doesNotMatch(
       head,
-      /image\/x-icon|\/brand\/(?:brand-mark|social-card|app-icon-256|apple-touch-icon)\.png/,
+      /\/brand\/(?:brand-mark|social-card|app-icon-256|apple-touch-icon)\.png/,
     );
+  }
+});
+
+test('favicon serves an actual ICO directly and the share image stays below its delivery budget', async () => {
+  for (const [path, type] of [
+    [brand.assets.faviconIco, 'image/x-icon'],
+    [brand.assets.socialCard, 'image/jpeg'],
+  ]) {
+    const response = await fetch(new URL(path, origin), { redirect: 'manual' });
+    assert.equal(response.status, 200, path);
+    assert.equal(response.headers.get('content-type')?.split(';')[0], type);
+    const bytes = Buffer.from(await response.arrayBuffer());
+    assert.deepEqual(bytes, readFileSync(resolve(frontendRoot, `public${path}`)));
+    if (type === 'image/jpeg') assert.ok(bytes.length < 600_000);
+    else assert.equal(bytes.subarray(0, 4).toString('hex'), '00000100');
   }
 });
 

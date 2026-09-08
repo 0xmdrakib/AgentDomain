@@ -12,29 +12,30 @@
     "favicon16": "/brand/agentdomain-brand/platform-size-based/agentdomain-logo-0016.png",
     "favicon32": "/brand/agentdomain-brand/platform-size-based/agentdomain-logo-0032.png",
     "favicon": "/brand/agentdomain-brand/platform-size-based/agentdomain-logo-0096.png",
+    "faviconIco": "/favicon.ico",
     "appleTouchIcon": "/brand/agentdomain-brand/platform-size-based/agentdomain-logo-0180.png",
     "appIcon192": "/brand/agentdomain-brand/platform-size-based/agentdomain-logo-0192.png",
     "appIcon": "/brand/agentdomain-brand/platform-size-based/agentdomain-logo-0256.png",
     "appIcon512": "/brand/agentdomain-brand/platform-size-based/agentdomain-logo-0512.png",
-    "socialCard": "/brand/agentdomain-brand/logo-for-link-embed.png",
+    "socialCard": "/brand/web/logo-for-link-embed.jpg",
+    "socialCardOriginal": "/brand/agentdomain-brand/logo-for-link-embed.png",
     "socialBanner": "/brand/agentdomain-brand/logo-for-x-bg.png"
   },
   "socialImage": {
     "width": 1731,
     "height": 908,
     "alt": "AgentDomain - Identity & Communications Infrastructure for Autonomous AI Agents.",
-    "type": "image/png"
+    "type": "image/jpeg"
   },
   "legacyAliases": {
     "/brand-mark.png": "markPng",
     "/agentdomain-social-card-v5.png": "socialCard",
     "/icon.png": "appIcon",
     "/apple-icon.png": "appleTouchIcon",
-    "/favicon.ico": "favicon",
     "/brand/brand-mark.png": "markPng",
     "/brand/social-card.png": "socialCard",
     "/brand/app-icon-256.png": "appIcon",
     "/brand/apple-touch-icon.png": "appleTouchIcon",
-    "/brand/favicon.ico": "favicon"
+    "/brand/favicon.ico": "faviconIco"
   }
 }

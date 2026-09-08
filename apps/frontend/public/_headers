@@ -11,5 +11,8 @@
 /brand/*
   Cache-Control: public, max-age=86400, stale-while-revalidate=604800
 
+/favicon.ico
+  Content-Type: image/x-icon
+
 https://:version.:subdomain.workers.dev/*
   X-Robots-Tag: noindex, nofollow
