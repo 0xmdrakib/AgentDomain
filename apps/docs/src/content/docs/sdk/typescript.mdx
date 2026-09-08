@@ -1,18 +1,18 @@
 ---
 title: TypeScript SDK
-description: Use AgentDomain SDK 0.9.0 for resumable registration, discovery, DNS, email, plans, and renewals.
+description: Use AgentDomain SDK 0.9.1 for request-bound payment signing, resumable registration, DNS, email, plans, and renewals.
 ---
 
 ## Install
 
 ```bash
-npm install @agentdomain/sdk@0.9.0 viem@2.56.3
+npm install @agentdomain/sdk@0.9.1 viem@2.56.3
 ```
 
 The default API base is `https://api.agentdomain.app/api/v1` and the default network is Base
 mainnet.
 
-In SDK 0.9.0, relative `apiUrl` values are resolved against
+Since SDK 0.9.0, relative `apiUrl` values are resolved against
 the browser location at construction, before signing or payment. Non-browser clients must
 provide an absolute URL. HTTPS is required except for explicitly configured HTTP loopback
 hosts (`localhost`, `127.0.0.1`, or `[::1]`). API bases cannot contain credentials, a query,
@@ -66,15 +66,57 @@ owner. When the API returns an x402 challenge, the SDK signs and submits the exa
 request once on Base mainnet. It does not automatically replay a paid request after an unknown
 outcome.
 
+## Request-bound payment signing
+
+SDK 0.9.1 fixes the duplicate payment-signature prompt for request-bound checkout. The SDK
+creates one EIP-3009 payment signature using the issued request binding, preserving the complete
+selected x402 requirement as `accepted`, including every `extra` field unchanged. This is one
+payment signature, not a promise that wallet authentication will never request a separate signature.
+
+Before signing, it validates the exact Base-mainnet scheme/network, Base USDC asset, nonzero
+recipient, USDC EIP-712 domain, positive uint256 amount, authorization timeout, and request binding.
+When `extra.quoteExpiresAt` is present, it must be an unexpired ISO timestamp and limits the
+authorization expiry. These checks do not independently compare an earlier display quote or
+impose an application spending budget.
+
+The registration API's initial `402` supplies `accepts[0].extra.registrationQuote` as an opaque
+string and `accepts[0].extra.quoteExpiresAt` as an ISO timestamp. Echo the accepted requirement
+unchanged: do not parse or reconstruct the sealed quote, discard metadata, or reprice the request.
+Once the signed request has been submitted, never automatically sign a replacement after an
+ambiguous outcome, even if a later response includes another challenge or the quote expires.
+
+### Payment rejection errors
+
+SDK 0.9.1 exports `RegistrationPaymentRejectedError` for an explicit HTTP `4xx` response other
+than `408` that satisfies `registrationPaymentRejectionSchema`, including
+`paymentSubmission: { status: 'rejected', settlementAttempted: false }`. The reusable public
+schema is exported by `@agentdomain/shared` 0.9.1. Both the HTTP status restriction and the valid
+payload are required; an HTTP error code, conflict, or message alone is not conclusive.
+
+| Error field           | Meaning                                                                     |
+| --------------------- | --------------------------------------------------------------------------- |
+| `code`                | `REGISTRATION_PAYMENT_REJECTED`.                                            |
+| `serverCode`          | Server diagnostic code, separate from the SDK error code.                   |
+| `message`             | Diagnostic message; do not parse it to classify payment outcomes.           |
+| `handle`              | Submission handle to retain for reference and payer-authenticated recovery. |
+| `settlementAttempted` | Always `false` for this error.                                              |
+
+This error confirms rejection before settlement was attempted for this submission. It does not
+assert payment success or decide an earlier attempt's outcome. HTTP `408`, `5xx`, timeouts,
+network failures, lost responses, and unconfirmed conflicts (such as a `409` without the valid
+rejection contract) remain `RegistrationPendingError` recovery cases. A rejection marker in a
+`408` or `5xx` body does not make it a safe rejection. Neither error authorizes automatic
+resending, repricing, or signing a replacement payment.
+
 ## Asynchronous registration
 
 New in 0.9.0: submission, status, waiting, and recovery methods distinguish payment acceptance
 from completed registration. SDK 0.8.x and earlier may treat HTTP `202` as a complete
-`RegistrationResult`; do not infer readiness from their return types. Upgrade to 0.9.0 or use
+`RegistrationResult`; do not infer readiness from their return types. Upgrade to 0.9.1 or use
 the [HTTP status contract](/api-reference/register/) directly.
 
 ```ts
-import { RegistrationPendingError } from '@agentdomain/sdk';
+import { RegistrationPaymentRejectedError, RegistrationPendingError } from '@agentdomain/sdk';
 
 const controller = new AbortController();
 try {
@@ -91,9 +133,15 @@ try {
       : submission;
   console.log(result.agentId);
 } catch (error) {
-  if (!(error instanceof RegistrationPendingError)) throw error;
-  console.log(error.reason, error.handle);
-  // Read status later with the payer wallet. Do not start another paid checkout.
+  if (error instanceof RegistrationPaymentRejectedError) {
+    console.log(error.code, error.serverCode, error.message, error.handle);
+    // Review this rejected submission. Do not automatically resend payment.
+  } else if (error instanceof RegistrationPendingError) {
+    console.log(error.reason, error.handle);
+    // Read status later with the payer wallet. Do not start another paid checkout.
+  } else {
+    throw error;
+  }
 }
 ```
 
@@ -161,11 +209,11 @@ An independently pinned 2.55.8 `PublicClient` lacks the required `watchBlockHead
 can fail TypeScript assignment. Arbitrary mixed-version viem compatibility is not guaranteed;
 SDK import paths and ESM-only packaging are unchanged.
 
-The x402 packages are aligned at 2.25.0. The payment helper explicitly disables the new upstream
-default $1 cap and recognized-asset allowlist, preserving its earlier payment-selection policy.
-It does not impose a new spending budget or independently verify an earlier quote; callers must
-authorize the payment terms. Base-mainnet exact v2 signing and existing request-binding checks
-remain in place.
+The x402 packages remain aligned at 2.25.0. The payment helper does not impose the upstream
+default $1 spending cap. Unbound payments retain the existing upstream asset-selection behavior;
+request-bound payments use the Base USDC validation above. Neither path independently compares
+an earlier display quote or imposes an application spending budget; callers must authorize the
+payment terms.
 
 ## Email and DNS
 

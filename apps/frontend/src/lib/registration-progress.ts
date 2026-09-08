@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { registrationPaymentRejectionSchema, registrationResultSchema } from '@agentdomain/shared';
 import { API_TIMEOUT_MS } from './transport-policy';
 
 export const REGISTRATION_POLL_MS = 5_000;
@@ -25,6 +26,10 @@ const wallet = z
 const date = z.string().datetime({ offset: true });
 const statusUrl = z.string().regex(/^\/api\/v1\/registrations\/[a-zA-Z0-9_-]+$/);
 const paymentStatus = z.enum(['unknown', 'pending', 'settled', 'not_charged', 'refunded']);
+export const registrationPaymentReferenceSchema = z
+  .string()
+  .regex(/^0x[0-9a-f]{64}$/i)
+  .transform((value) => value.toLowerCase());
 
 // Project only the public contract. Unknown provider fields never enter view state.
 export const registrationProgressSchema = z
@@ -42,6 +47,7 @@ export const registrationProgressSchema = z
     domain,
     agentId: identifier.nullable(),
     paymentStatus,
+    paymentReference: registrationPaymentReferenceSchema.optional(),
     stage: z.enum([
       'payment',
       'domain',
@@ -70,6 +76,13 @@ export const registrationProgressSchema = z
     completionEventId: z.string().min(1).nullable(),
   })
   .refine((value) => value.statusUrl === registrationPath(value.registrationId))
+  .refine(
+    (value) =>
+      value.paymentReference === undefined ||
+      (value.status === 'failed' &&
+        value.paymentStatus === 'not_charged' &&
+        value.messageCode === 'PAYMENT_NOT_SUBMITTED'),
+  )
   .refine((value) => Date.parse(value.updatedAt) >= Date.parse(value.startedAt))
   .refine(
     (value) =>
@@ -222,6 +235,10 @@ export function registrationCopy(item?: RegistrationProgress, accepted?: Registr
       : 'Confirming payment and registration status. Do not pay again.';
   if (item.status === 'completed') return 'Registration complete';
   if (item.status === 'refunded') return 'Payment refunded';
+  if (item.paymentStatus === 'not_charged')
+    return accepted
+      ? 'Payment was confirmed. Registration status needs verification. Do not pay again.'
+      : 'Payment was not submitted. This checkout was not charged.';
   if (registrationPaymentStatus(item, accepted) === 'unknown')
     return 'Registration status needs verification. Do not pay again.';
   if (item.status === 'failed')
@@ -354,32 +371,114 @@ export async function readRegistrationSession(fetcher = fetch, signal?: AbortSig
   return { wallet: session.address, now: Number.isFinite(serverTime) ? serverTime : Date.now() };
 }
 
+const completedSubmissionSchema = registrationResultSchema.extend({
+  registrationId: identifier.optional(),
+  agentId: identifier,
+  domain,
+  txHash: z.string().regex(/^0x[0-9a-f]{64}$/i),
+  sslStatus: z.enum(['active', 'external']),
+  provisioningStatus: z.literal('completed').optional(),
+  status: z.literal('completed').optional(),
+  paymentStatus: z.literal('settled').optional(),
+});
+
+export interface RegistrationPaymentRejection {
+  status: 'rejected';
+  settlementAttempted: false;
+  code: string;
+  message: string;
+}
+
+export interface RegistrationPaymentCompletion {
+  status: 'completed';
+  domain: string;
+  agentId: string;
+  registrationId?: string;
+}
+
+// Null means uncertainty, never evidence that the signed request was unpaid.
+export type PaidRegistrationResponse =
+  RegistrationAccepted | RegistrationPaymentRejection | RegistrationPaymentCompletion | null;
+
+export function parsePaidRegistrationResponse(
+  status: number,
+  value: unknown,
+): PaidRegistrationResponse {
+  if (status >= 400 && status < 500 && status !== 408) {
+    const rejected = registrationPaymentRejectionSchema.safeParse(value);
+    return rejected.success
+      ? {
+          status: 'rejected',
+          settlementAttempted: false,
+          code: rejected.data.code,
+          message: rejected.data.message,
+        }
+      : null;
+  }
+  if (value && typeof value === 'object' && 'paymentSubmission' in value) return null;
+  if (status === 202) {
+    const accepted = registrationAcceptedSchema.safeParse(value);
+    return accepted.success ? accepted.data : null;
+  }
+  if (status === 200) {
+    const progress = registrationProgressSchema.safeParse(value);
+    const completed = completedSubmissionSchema.safeParse(value);
+    const result =
+      progress.success && progress.data.status === 'completed'
+        ? progress.data
+        : completed.success
+          ? completed.data
+          : null;
+    if (result?.agentId) {
+      return {
+        status: 'completed',
+        domain: result.domain,
+        agentId: result.agentId,
+        ...(result.registrationId ? { registrationId: result.registrationId } : {}),
+      };
+    }
+  }
+  return null;
+}
+
 export async function submitPaidRegistration(
   body: object,
   paymentHeaders: Record<string, string>,
   turnstilePass: string | null,
   fetcher = fetch,
-): Promise<RegistrationAccepted | null> {
+): Promise<PaidRegistrationResponse> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const response = await fetcher('/api/v1/agents/register', {
-      method: 'POST',
-      credentials: 'include',
-      cache: 'no-store',
-      redirect: 'error',
-      signal: AbortSignal.timeout(API_TIMEOUT_MS),
-      headers: {
-        'Content-Type': 'application/json',
-        Prefer: 'respond-async',
-        ...paymentHeaders,
-        ...(turnstilePass ? { 'X-Turnstile-Pass': turnstilePass } : {}),
-      },
-      body: JSON.stringify(body),
-    });
-    if (response.status !== 202) return null;
-    const result = registrationAcceptedSchema.safeParse(await response.json());
-    return result.success ? result.data : null;
+    return await Promise.race([
+      (async () => {
+        const response = await fetcher('/api/v1/agents/register', {
+          method: 'POST',
+          credentials: 'include',
+          cache: 'no-store',
+          redirect: 'error',
+          signal: controller.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            Prefer: 'respond-async',
+            ...paymentHeaders,
+            ...(turnstilePass ? { 'X-Turnstile-Pass': turnstilePass } : {}),
+          },
+          body: JSON.stringify(body),
+        });
+        return parsePaidRegistrationResponse(response.status, await response.json());
+      })(),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => {
+          controller.abort();
+          resolve(null);
+        }, API_TIMEOUT_MS);
+      }),
+    ]);
   } catch {
     // A lost response says nothing about settlement. Only authenticated reads resolve it.
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }

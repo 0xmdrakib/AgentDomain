@@ -3,19 +3,23 @@ title: Quickstart
 description: Quote and register an AgentDomain identity with the TypeScript SDK and a connected wallet.
 ---
 
-This example uses `@agentdomain/sdk` 0.9.0 on Base mainnet. Supply a wallet account from your
+This example uses `@agentdomain/sdk` 0.9.1 on Base mainnet. Supply a wallet account from your
 application's secure wallet integration; never commit wallet material to source control.
 
 ## Install
 
 ```bash
-npm install @agentdomain/sdk@0.9.0 viem@2.56.3
+npm install @agentdomain/sdk@0.9.1 viem@2.56.3
 ```
 
 ## Quote and register
 
 ```ts
-import { AgentDomain, RegistrationPendingError } from '@agentdomain/sdk';
+import {
+  AgentDomain,
+  RegistrationPaymentRejectedError,
+  RegistrationPendingError,
+} from '@agentdomain/sdk';
 import { createWalletClient, http } from 'viem';
 import { base } from 'viem/chains';
 import type { PrivateKeyAccount } from 'viem/accounts';
@@ -59,7 +63,10 @@ export async function registerAgent(account: PrivateKeyAccount) {
 
     return identity;
   } catch (error) {
-    if (error instanceof RegistrationPendingError) {
+    if (error instanceof RegistrationPaymentRejectedError) {
+      // This submission was rejected before settlement. Do not automatically resend.
+      console.log(error.code, error.serverCode, error.message, error.handle);
+    } else if (error instanceof RegistrationPendingError) {
       // Retain this non-secret handle for payer-authenticated recovery, not another payment.
       console.log(error.reason, error.handle);
     }
@@ -68,10 +75,16 @@ export async function registerAgent(account: PrivateKeyAccount) {
 }
 ```
 
-The SDK handles the x402 challenge and submits the exact signed request once. It does not
-automatically replay a paid request after a lost response. The quote is not a payment: show it to
-the owner before calling `register()`. The helper does not independently verify an earlier quote;
-the caller remains responsible for authorizing the payment terms.
+SDK 0.9.1 creates one request-bound EIP-3009 payment signature and submits the exact challenged
+request once. It preserves the complete accepted requirement, including the opaque
+`extra.registrationQuote` and ISO `extra.quoteExpiresAt` from the initial `402`. It validates the
+bound Base USDC payment terms and optional quote expiry before signing. Wallet authentication is
+separate and may still prompt for a signature.
+
+The display quote is not a payment or a reservation: show it to the owner before calling
+`register()`. Challenge validation does not independently compare that earlier quote or set a
+spending budget. Do not reprice the challenged request or automatically sign a replacement after
+a submitted request has an uncertain outcome.
 
 ## Read the result
 
@@ -86,6 +99,15 @@ authentication. Otherwise use `recoverRegistration(handle)` for read-only discov
 resuming the waiter. No match is not proof that no payment occurred. Timeout or abort stops local
 waiting, not an accepted purchase; do not automatically start another checkout. A server-reported
 failed or refunded status raises `RegistrationFailedError`, which also does not authorize repayment.
+
+SDK 0.9.1 throws `RegistrationPaymentRejectedError` only for an explicit HTTP `4xx` response
+other than `408` satisfying the public rejection schema, including
+`paymentSubmission: { status: 'rejected', settlementAttempted: false }`. Its code is
+`REGISTRATION_PAYMENT_REJECTED`; it exposes `serverCode`, `message`, `handle`, and
+`settlementAttempted: false`. This confirms no settlement attempt for that submission, not payment
+success. HTTP `408`, `5xx`, timeouts, network failures, and unconfirmed conflicts remain
+`RegistrationPendingError` recovery cases. Neither error authorizes an automatic resend or
+replacement payment.
 
 See [asynchronous registration](/sdk/typescript/#asynchronous-registration) for the authentication,
 recovery, and completion contract. Service readiness is not guaranteed to be instant.

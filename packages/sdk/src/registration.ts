@@ -10,6 +10,7 @@ import { z } from 'zod';
 import {
   registrationAcceptedSchema,
   registrationListResultSchema,
+  registrationPaymentRejectionSchema,
   registrationProgressSchema,
   registrationResultSchema,
   type RegistrationAccepted,
@@ -91,6 +92,20 @@ export class RegistrationFailedError extends Error {
   constructor(readonly progress: RegistrationProgress) {
     super(`Registration ${progress.registrationId} is ${progress.status}: ${progress.messageCode}`);
     this.name = 'RegistrationFailedError';
+  }
+}
+
+export class RegistrationPaymentRejectedError extends Error {
+  readonly code = 'REGISTRATION_PAYMENT_REJECTED';
+  readonly settlementAttempted = false;
+
+  constructor(
+    readonly serverCode: string,
+    message: string,
+    readonly handle: RegistrationHandle,
+  ) {
+    super(message);
+    this.name = 'RegistrationPaymentRejectedError';
   }
 }
 
@@ -213,6 +228,22 @@ export class RegistrationClient {
       const data: unknown = await withinSignal(scope.signal, () => response.json());
       handle = this.handleFromResponse(data, handle);
       if (
+        paymentSubmitted &&
+        response.status >= 400 &&
+        response.status < 500 &&
+        response.status !== 408
+      ) {
+        const rejected = registrationPaymentRejectionSchema.safeParse(data);
+        if (rejected.success) {
+          unresolvedPost = false;
+          throw new RegistrationPaymentRejectedError(
+            rejected.data.code,
+            rejected.data.message,
+            handle,
+          );
+        }
+      }
+      if (
         response.status >= 500 ||
         response.status === 408 ||
         (!response.ok && (paymentSubmitted || handle.registrationId))
@@ -221,6 +252,9 @@ export class RegistrationClient {
       }
       unresolvedPost = false;
       if (!response.ok) throw new RegistrationHttpError(response.status);
+      if (paymentSubmitted && data && typeof data === 'object' && 'paymentSubmission' in data) {
+        throw new RegistrationPendingError('invalid_response', handle);
+      }
       if (response.status === 200) {
         const parsed = registrationResultSchema.safeParse(data);
         if (!parsed.success || parsed.data.domain.toLowerCase() !== handle.domain)

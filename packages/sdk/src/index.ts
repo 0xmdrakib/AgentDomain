@@ -9,12 +9,17 @@ import {
   keccak256,
   toHex,
   getAddress,
+  isAddress,
+  maxUint256,
+  zeroAddress,
   concatHex,
   encodeFunctionData,
 } from 'viem';
 import { base, baseSepolia } from 'viem/chains';
+import { z } from 'zod';
 import { x402Client, x402HTTPClient } from '@x402/core/client';
-import { registerExactEvmScheme } from '@x402/evm/exact/client';
+import type { PaymentPayloadResult, PaymentRequirements } from '@x402/core/types';
+import { ExactEvmScheme } from '@x402/evm/exact/client';
 import {
   BUILDER_CODE_PATTERN,
   encodeBuilderCodeSuffix,
@@ -35,7 +40,12 @@ import type {
   ServicePlanKey,
   ServicePlanSku,
 } from '@agentdomain/shared';
-import { AGENTDOMAIN_API_BASE_URL, X402_NETWORK } from '@agentdomain/shared/constants';
+import {
+  AGENTDOMAIN_API_BASE_URL,
+  BASE_CHAIN_ID,
+  USDC_BASE,
+  X402_NETWORK,
+} from '@agentdomain/shared/constants';
 import {
   RegistrationClient,
   normalizeApiBaseUrl,
@@ -52,6 +62,7 @@ import type {
 export {
   RegistrationPendingError,
   RegistrationFailedError,
+  RegistrationPaymentRejectedError,
   type RegistrationHandle,
   type RegistrationListOptions,
   type RegistrationRequestOptions,
@@ -408,6 +419,101 @@ interface Eip3009RequirementForClient {
   chainId?: number;
 }
 
+async function createRequestBoundPaymentPayload(
+  requirements: PaymentRequirements,
+  walletClient: WalletClient<Transport, Chain, Account>,
+): Promise<PaymentPayloadResult> {
+  const requestBinding = requirements.extra?.requestBinding;
+  if (typeof requestBinding !== 'string' || !/^0x[a-fA-F0-9]{64}$/.test(requestBinding)) {
+    throw new Error('Server returned an invalid x402 request binding.');
+  }
+  if (requirements.network !== X402_NETWORK || requirements.scheme !== 'exact') {
+    throw new Error('AgentDomain request binding requires exact Base mainnet payments.');
+  }
+  if (
+    typeof requirements.asset !== 'string' ||
+    !isAddress(requirements.asset) ||
+    getAddress(requirements.asset) !== USDC_BASE
+  ) {
+    throw new Error('AgentDomain request binding requires the Base USDC asset.');
+  }
+  if (
+    requirements.extra?.assetTransferMethod !== undefined &&
+    requirements.extra.assetTransferMethod !== 'eip3009'
+  ) {
+    throw new Error('AgentDomain request binding requires an EIP-3009 x402 authorization.');
+  }
+  if (requirements.extra?.name !== 'USD Coin' || requirements.extra.version !== '2') {
+    throw new Error('Server returned an invalid Base USDC EIP-712 domain.');
+  }
+  if (
+    typeof requirements.payTo !== 'string' ||
+    !isAddress(requirements.payTo) ||
+    getAddress(requirements.payTo) === zeroAddress
+  ) {
+    throw new Error('Server returned an invalid x402 payTo address.');
+  }
+  if (
+    typeof requirements.amount !== 'string' ||
+    !/^[0-9]+$/.test(requirements.amount) ||
+    BigInt(requirements.amount) <= 0n ||
+    BigInt(requirements.amount) > maxUint256
+  ) {
+    throw new Error(
+      'Server returned an invalid x402 amount; expected positive uint256 atomic units.',
+    );
+  }
+  const now = Math.floor(Date.now() / 1000);
+  if (
+    !Number.isSafeInteger(requirements.maxTimeoutSeconds) ||
+    requirements.maxTimeoutSeconds <= 0 ||
+    !Number.isSafeInteger(now + requirements.maxTimeoutSeconds)
+  ) {
+    throw new Error('Server returned an invalid x402 authorization timeout.');
+  }
+  let validBefore = now + requirements.maxTimeoutSeconds;
+  const quoteExpiresAt = requirements.extra?.quoteExpiresAt;
+  if (quoteExpiresAt !== undefined) {
+    const expiry = z.string().datetime({ offset: true }).safeParse(quoteExpiresAt);
+    const expirySeconds = expiry.success ? Math.floor(Date.parse(expiry.data) / 1000) : NaN;
+    if (!Number.isSafeInteger(expirySeconds)) {
+      throw new Error('Server returned an invalid x402 quote expiry; expected an ISO timestamp.');
+    }
+    if (expirySeconds <= now) {
+      throw new Error('The x402 checkout quote has expired.');
+    }
+    validBefore = Math.min(validBefore, expirySeconds);
+  }
+
+  // Bind the sole signature to the issued nonce without rewriting accepted requirements.
+  const authorization = {
+    from: getAddress(walletClient.account.address),
+    to: getAddress(requirements.payTo),
+    value: requirements.amount,
+    validAfter: '0',
+    validBefore: validBefore.toString(),
+    nonce: requestBinding as Hex,
+  };
+  const signature = await walletClient.signTypedData({
+    account: walletClient.account,
+    domain: {
+      name: 'USD Coin',
+      version: '2',
+      chainId: BASE_CHAIN_ID,
+      verifyingContract: USDC_BASE,
+    },
+    types: EIP3009_TYPES,
+    primaryType: 'TransferWithAuthorization',
+    message: {
+      ...authorization,
+      value: BigInt(authorization.value),
+      validAfter: BigInt(authorization.validAfter),
+      validBefore: BigInt(authorization.validBefore),
+    },
+  });
+  return { x402Version: 2, payload: { authorization, signature } };
+}
+
 export async function createX402PaymentHeaders(
   response: Response,
   walletClient: WalletClient<Transport, Chain, Account>,
@@ -430,9 +536,20 @@ export async function createX402PaymentHeaders(
       } as Parameters<typeof walletClient.signTypedData>[0]),
   };
 
-  // Preserve the helper's existing policy without an implicit dollar cap or asset allowlist.
+  // No implicit dollar cap; unbound payments retain the upstream asset policy.
   const client = new x402Client().setSpendControls(false);
-  registerExactEvmScheme(client, { signer, networks: [X402_NETWORK] });
+  const exactScheme = new ExactEvmScheme(signer);
+  client.register(X402_NETWORK, {
+    scheme: exactScheme.scheme,
+    findDefaultAsset: exactScheme.findDefaultAsset,
+    createPaymentPayload: (version, requirements, context) => {
+      // @x402/evm 2.25.0 has no nonce override. Use the public scheme interface
+      // for bound EIP-3009 payments; leave unbound flows entirely upstream.
+      return requirements.extra?.requestBinding === undefined
+        ? exactScheme.createPaymentPayload(version, requirements, context)
+        : createRequestBoundPaymentPayload(requirements, walletClient);
+    },
+  });
   const httpClient = new x402HTTPClient(client);
 
   let body: unknown;
@@ -452,64 +569,6 @@ export async function createX402PaymentHeaders(
   }
 
   const payload = await httpClient.createPaymentPayload(paymentRequired);
-  const requestBinding = payload.accepted.extra?.requestBinding;
-  if (requestBinding !== undefined) {
-    if (typeof requestBinding !== 'string' || !/^0x[a-fA-F0-9]{64}$/.test(requestBinding)) {
-      throw new Error('Server returned an invalid x402 request binding.');
-    }
-    const authorization = payload.payload.authorization as
-      | {
-          from?: string;
-          to?: string;
-          value?: string;
-          validAfter?: string;
-          validBefore?: string;
-          nonce?: string;
-        }
-      | undefined;
-    if (
-      !authorization?.from ||
-      !authorization.to ||
-      !authorization.value ||
-      !authorization.validAfter ||
-      !authorization.validBefore
-    ) {
-      throw new Error('AgentDomain request binding requires an EIP-3009 x402 authorization.');
-    }
-    const boundAuthorization = {
-      ...authorization,
-      from: getAddress(authorization.from),
-      to: getAddress(authorization.to),
-      value: authorization.value,
-      validAfter: authorization.validAfter,
-      validBefore: authorization.validBefore,
-      nonce: requestBinding as Hex,
-    };
-    const signature = await walletClient.signTypedData({
-      account: walletClient.account,
-      domain: {
-        name: String(payload.accepted.extra?.name ?? ''),
-        version: String(payload.accepted.extra?.version ?? ''),
-        chainId: Number(X402_NETWORK.split(':')[1]),
-        verifyingContract: getAddress(payload.accepted.asset),
-      },
-      types: EIP3009_TYPES,
-      primaryType: 'TransferWithAuthorization',
-      message: {
-        from: boundAuthorization.from,
-        to: boundAuthorization.to,
-        value: BigInt(authorization.value),
-        validAfter: BigInt(authorization.validAfter),
-        validBefore: BigInt(authorization.validBefore),
-        nonce: boundAuthorization.nonce,
-      },
-    });
-    payload.payload = {
-      ...payload.payload,
-      authorization: boundAuthorization,
-      signature,
-    };
-  }
   return httpClient.encodePaymentSignatureHeader(payload);
 }
 

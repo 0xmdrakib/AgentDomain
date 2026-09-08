@@ -29,6 +29,7 @@ import {
   type RegistrationProgress,
 } from '../src/lib/registration-progress';
 import { RegistrationTracker } from '../src/lib/registration-tracker';
+import { NOTICE_CHANNELS, type RegistrationNotice } from '../src/lib/registration-notices';
 import {
   REGISTRATION_SUBMISSION_PREFIX,
   SUBMISSION_REVIEW_AFTER_MS,
@@ -43,8 +44,8 @@ const attempt: RegistrationAttempt = {
   clientId: `${Date.parse(startedAt)}-synthetic`,
 };
 const progress = (overrides: Partial<RegistrationProgress> = {}): RegistrationProgress => ({
-  registrationId: 'registration-1',
-  statusUrl: '/api/v1/registrations/registration-1',
+  registrationId: '00000000-0000-4000-8000-000000000001',
+  statusUrl: '/api/v1/registrations/00000000-0000-4000-8000-000000000001',
   domain: attempt.domain,
   agentId: null,
   status: 'processing',
@@ -103,6 +104,24 @@ class MemoryStorage implements Storage {
   }
 }
 
+const noticeDatabases = new WeakMap<Storage, Map<string, RegistrationNotice[]>>();
+function databaseNotices(wallet: string): RegistrationNotice[] {
+  const item = progress();
+  return NOTICE_CHANNELS.map((channel) => ({
+    noticeId: `registration:${item.registrationId}`,
+    source: 'registration',
+    registrationId: item.registrationId,
+    domain: item.domain,
+    channel,
+    createdAt: startedAt,
+    expiresAt: new Date(
+      Date.parse(startedAt) + (channel === 'popup' ? 5 : 10) * 86400000,
+    ).toISOString(),
+    status: 'registration',
+    statusUrl: `${item.statusUrl}?expectedPayer=${wallet}`,
+  }));
+}
+
 function fixture(
   storage = new MemoryStorage(),
   options: Pick<
@@ -110,7 +129,15 @@ function fixture(
     'canNotify' | 'lock' | 'onResolved'
   > = {},
 ) {
+  const notices =
+    noticeDatabases.get(storage) ??
+    new Map([
+      [payer, databaseNotices(payer)],
+      [recipient, databaseNotices(recipient)],
+    ]);
+  noticeDatabases.set(storage, notices);
   const backend = {
+    notices,
     session: payer,
     items: [progress()],
     status: 200,
@@ -119,17 +146,44 @@ function fixture(
   };
   const completed: string[] = [];
   const resolved: string[][] = [];
-  const fetcher: typeof fetch = async (url, options) => {
-    const path = String(url);
+  const fetcher: typeof fetch = async (input, options) => {
+    const path = String(input);
     backend.calls.push(path);
     assert.equal(options?.credentials, 'include');
     assert.equal(options?.cache, 'no-store');
     assert.equal(options?.redirect, 'error');
-    assert.equal(options?.method, undefined);
     assert.deepEqual(options?.headers, { Accept: 'application/json' });
     if (path === '/api/v1/auth/session')
       return json({ authenticated: true, address: backend.session });
     if (backend.status !== 200) return json({ message: 'PRIVATE_PROVIDER_ERROR' }, backend.status);
+    const url = new URL(path, 'https://example.test');
+    if (url.pathname.startsWith('/api/v1/registration-notices')) {
+      assert.equal(url.searchParams.get('expectedPayer'), backend.session);
+      const items = notices.get(backend.session) ?? [];
+      if (options?.method === 'DELETE') {
+        const id = decodeURIComponent(url.pathname.split('/').pop()!);
+        notices.set(
+          backend.session,
+          items.filter(
+            (item) => item.noticeId !== id || item.channel !== url.searchParams.get('channel'),
+          ),
+        );
+        return new Response(null, {
+          status: 204,
+          headers: { 'X-Authenticated-Wallet': backend.session },
+        });
+      }
+      assert.equal(options?.method, undefined);
+      return json(
+        {
+          items: items.filter((item) => item.channel === url.searchParams.get('channel')),
+          nextCursor: null,
+        },
+        200,
+        { 'X-Authenticated-Wallet': backend.session },
+      );
+    }
+    assert.equal(options?.method, undefined);
     if (new URL(path, 'https://example.test').pathname === '/api/v1/registrations')
       return json({ items: backend.items, hasMore: false, total: backend.items.length });
     return json(
@@ -163,7 +217,7 @@ test('progress DTO projects public fields, supports operator polling, and reject
   assert.equal(item.pollAfterSeconds, 30);
   assert.doesNotMatch(JSON.stringify(item), /PRIVATE_PROVIDER_ERROR|secret/);
   for (const statusUrl of [
-    'https://other.test/api/v1/registrations/registration-1',
+    'https://other.test/api/v1/registrations/00000000-0000-4000-8000-000000000001',
     '//other.test',
     '/api/v1/registrations/other',
     '/api/v1/registrations/../admin',
@@ -199,7 +253,10 @@ test('lost-response matching requires domain and attempt time, and refuses ambig
   const old = progress({ startedAt: '2026-09-05T10:00:00.000Z' });
   assert.equal(matchAttempt(attempt, [old]), undefined);
   assert.equal(matchAttempt(attempt, [progress({ domain: 'another.test' })]), undefined);
-  assert.equal(matchAttempt(attempt, [old, progress()])?.registrationId, 'registration-1');
+  assert.equal(
+    matchAttempt(attempt, [old, progress()])?.registrationId,
+    '00000000-0000-4000-8000-000000000001',
+  );
   assert.equal(
     matchAttempt(attempt, [progress(), progress({ registrationId: 'registration-2' })]),
     undefined,
@@ -282,15 +339,15 @@ test('dismissal survives polling/remount and remains payer-scoped without touchi
   const attemptKey = `${ATTEMPT_PREFIX}${attempt.clientId}`;
   const originalAttempt = storage.getItem(attemptKey);
   const originalItems = tracker.getSnapshot().items;
-  tracker.dismissNotices([attempt]);
-  assert.equal(tracker.isNoticeDismissed(attempt), true);
+  await tracker.dismissNotices([attempt]);
+  assert.equal(tracker.getSnapshot().notices.popup.length, 0);
   assert.equal(tracker.hasPurchase(payer, attempt.domain), true);
   assert.deepEqual(tracker.getSnapshot().items, originalItems);
   await poll(tracker);
-  assert.equal(tracker.isNoticeDismissed(attempt), true);
+  assert.equal(tracker.getSnapshot().notices.popup.length, 0);
   const restored = fixture(storage);
   await connect(restored.tracker);
-  assert.equal(restored.tracker.isNoticeDismissed(attempt), true);
+  assert.equal(restored.tracker.getSnapshot().notices.popup.length, 0);
   assert.equal(restored.tracker.hasPurchase(payer, attempt.domain), true);
   assert.equal(storage.getItem(attemptKey), originalAttempt);
   assert.equal(storage.getItem(reservationKey), reservation);
@@ -299,37 +356,45 @@ test('dismissal survives polling/remount and remains payer-scoped without touchi
     wallet: recipient,
     clientId: `${Date.parse(startedAt)}-other`,
   };
-  restored.tracker.dismissNotices([otherAttempt]);
+  await restored.tracker.dismissNotices([otherAttempt]);
   assert.equal(restored.tracker.isNoticeDismissed(otherAttempt), false);
+  restored.backend.session = recipient;
   await connect(restored.tracker, recipient);
   restored.tracker.remember(otherAttempt);
   assert.equal(restored.tracker.isNoticeDismissed(otherAttempt), false);
-  restored.tracker.dismissNotices([otherAttempt]);
-  assert.equal(restored.tracker.isNoticeDismissed(otherAttempt), true);
+  await restored.tracker.dismissNotices([otherAttempt]);
+  assert.equal(restored.tracker.getSnapshot().notices.popup.length, 0);
+  restored.backend.session = payer;
   await connect(restored.tracker, payer);
-  assert.equal(restored.tracker.isNoticeDismissed(attempt), true);
+  assert.equal(restored.tracker.getSnapshot().notices.popup.length, 0);
   const newAttempt = { ...attempt, clientId: `${Date.parse(startedAt)}-new` };
   restored.tracker.remember(newAttempt);
   assert.equal(restored.tracker.isNoticeDismissed(newAttempt), false);
 });
 
-test('dismissal does not acknowledge completion; terminal reconciliation prunes only its presentation marker', async () => {
+test('DB dismissal never acknowledges completion or deletes the dashboard notice; terminal workflow still reconciles', async () => {
   const { tracker, backend, storage, completed } = fixture();
   tracker.remember(attempt);
   await connect(tracker);
-  tracker.dismissNotices([attempt]);
+  await tracker.dismissNotices([attempt]);
   const noticeKey = `${REGISTRATION_NOTICE_PREFIX}${payer}:${attempt.clientId}`;
-  assert.equal(storage.getItem(noticeKey), 'dismissed');
-  assert.equal(storage.getItem(`${COMPLETION_PREFIX}${payer}:registration-1`), null);
+  assert.equal(storage.getItem(noticeKey), null);
+  assert.equal(tracker.getSnapshot().notices.popup.length, 0);
+  assert.equal(
+    storage.getItem(`${COMPLETION_PREFIX}${payer}:00000000-0000-4000-8000-000000000001`),
+    null,
+  );
   backend.items = [progress({ status: 'completed', revision: 2 })];
   await poll(tracker);
-  assert.deepEqual(completed, ['registration-1']);
+  assert.deepEqual(completed, []);
+  assert.equal(tracker.getSnapshot().notices.dashboard.length, 1);
   assert.equal(storage.getItem(noticeKey), null);
   assert.equal(tracker.getSnapshot().attempts.length, 0);
 });
 
 test('settled legacy completion with no workflow timestamp or event creates no false pending attempt', async () => {
   const { tracker, backend, completed } = fixture();
+  backend.notices.set(payer, []);
   backend.items = [
     progress({
       status: 'completed',
@@ -349,6 +414,7 @@ test('settled legacy completion with no workflow timestamp or event creates no f
 
 test('authoritative legacy completion can replace unknown review at the same revision and timestamps only with coherent evidence', async () => {
   const { tracker, backend, completed, resolved } = fixture();
+  backend.notices.set(payer, []);
   const legacy = progress({
     status: 'action_required',
     paymentStatus: 'unknown',
@@ -365,7 +431,7 @@ test('authoritative legacy completion can replace unknown review at the same rev
     paymentStatus: 'settled' as const,
     stage: 'complete' as const,
     messageCode: 'REGISTRATION_COMPLETED',
-    completionEventId: 'registration-1:completed',
+    completionEventId: '00000000-0000-4000-8000-000000000001:completed',
   };
   assert.equal(registrationProgressSchema.safeParse(recovered).success, true);
   assert.equal(canAdvanceRegistration(legacy, recovered), true);
@@ -392,13 +458,13 @@ test('authoritative legacy completion can replace unknown review at the same rev
   );
   backend.items = [legacy];
   await connect(tracker);
-  assert.equal(tracker.getSnapshot().attempts.length, 1);
+  assert.equal(tracker.getSnapshot().attempts.length, 0);
   backend.items = [recovered];
   await poll(tracker);
   await poll(tracker);
   assert.equal(tracker.getSnapshot().attempts.length, 0);
-  assert.deepEqual(completed, ['registration-1']);
-  assert.deepEqual(resolved, [['registration-1']]);
+  assert.deepEqual(completed, []);
+  assert.deepEqual(resolved, [['00000000-0000-4000-8000-000000000001']]);
   backend.items = [legacy];
   await poll(tracker);
   assert.equal(tracker.getSnapshot().items[0].status, 'completed');
@@ -407,6 +473,7 @@ test('authoritative legacy completion can replace unknown review at the same rev
 
 test('settled legacy finalizing projection promotes at identical revision/time without admitting other prior states or rollback', async () => {
   const { tracker, backend, completed, resolved } = fixture();
+  backend.notices.set(payer, []);
   const legacy = progress({
     status: 'processing',
     paymentStatus: 'settled',
@@ -424,7 +491,7 @@ test('settled legacy finalizing projection promotes at identical revision/time w
     status: 'completed' as const,
     stage: 'complete' as const,
     messageCode: 'REGISTRATION_COMPLETED',
-    completionEventId: 'registration-1:completed',
+    completionEventId: '00000000-0000-4000-8000-000000000001:completed',
   };
   for (const completedAt of [null, legacy.updatedAt]) {
     const next = { ...recovered, completedAt };
@@ -451,7 +518,7 @@ test('settled legacy finalizing projection promotes at identical revision/time w
     { agentId: null },
     { messageCode: 'REGISTRATION_RETRY_SCHEDULED' },
     { completedAt: legacy.updatedAt },
-    { completionEventId: 'registration-1:completed' },
+    { completionEventId: '00000000-0000-4000-8000-000000000001:completed' },
   ])
     assert.equal(canAdvanceRegistration({ ...legacy, ...patch }, recovered), false);
   assert.equal(
@@ -490,20 +557,20 @@ test('settled legacy finalizing projection promotes at identical revision/time w
   );
   backend.items = [legacy];
   await connect(tracker);
-  assert.equal(tracker.getSnapshot().attempts.length, 1);
+  assert.equal(tracker.getSnapshot().attempts.length, 0);
   backend.items = [recovered];
   await poll(tracker);
   await poll(tracker);
   assert.equal(tracker.getSnapshot().attempts.length, 0);
-  assert.deepEqual(completed, ['registration-1']);
-  assert.deepEqual(resolved, [['registration-1']]);
+  assert.deepEqual(completed, []);
+  assert.deepEqual(resolved, [['00000000-0000-4000-8000-000000000001']]);
   backend.items = [legacy];
   await poll(tracker);
   assert.equal(tracker.getSnapshot().items[0].status, 'completed');
   assert.equal(tracker.getSnapshot().attempts.length, 0);
 });
 
-test('presentation storage failure dismisses in memory without weakening the saved purchase guard', async () => {
+test('presentation storage failure cannot prevent confirmed DB dismissal or weaken the saved purchase guard', async () => {
   const { tracker, storage } = fixture();
   tracker.remember(attempt);
   await connect(tracker);
@@ -512,9 +579,9 @@ test('presentation storage failure dismisses in memory without weakening the sav
     if (key.startsWith(REGISTRATION_NOTICE_PREFIX)) throw new Error('Storage denied');
     original(key, value);
   };
-  tracker.dismissNotices([attempt]);
+  await tracker.dismissNotices([attempt]);
   await poll(tracker);
-  assert.equal(tracker.isNoticeDismissed(attempt), true);
+  assert.equal(tracker.getSnapshot().notices.popup.length, 0);
   assert.equal(tracker.hasPurchase(payer, attempt.domain), true);
   assert.ok(storage.getItem(`${ATTEMPT_PREFIX}${attempt.clientId}`));
 });
@@ -525,7 +592,7 @@ test('confirmed acceptance notifies view subscribers immediately without inventi
   await connect(tracker);
   tracker.remember(attempt);
   const accepted = registrationAcceptedSchema.parse({
-    registrationId: 'registration-1',
+    registrationId: '00000000-0000-4000-8000-000000000001',
     status: 'processing',
     statusUrl: progress().statusUrl,
     domain: attempt.domain,
@@ -571,7 +638,7 @@ test('an unknown submission is never presented as confirmed payment', async () =
 
 test('a confirmed receipt supersedes pending observations without masking explicit payment resolution', () => {
   const accepted = registrationAcceptedSchema.parse({
-    registrationId: 'registration-1',
+    registrationId: '00000000-0000-4000-8000-000000000001',
     status: 'processing',
     statusUrl: progress().statusUrl,
     domain: attempt.domain,
@@ -607,7 +674,7 @@ test('persisted attempts contain wallet/domain/clientId only, and storage failur
 
 test('paid POST opts into async exactly once; transport, HTTP, and decode errors stay unknown', async () => {
   const accepted = {
-    registrationId: 'registration-1',
+    registrationId: '00000000-0000-4000-8000-000000000001',
     status: 'processing',
     statusUrl: progress().statusUrl,
     domain: attempt.domain,
@@ -655,6 +722,8 @@ test('processing survives a new tracker after refresh and reconciles using payer
     '/api/v1/auth/session',
     `/api/v1/registrations?limit=20&offset=0&${payerQuery}`,
     `${progress().statusUrl}?${payerQuery}`,
+    `/api/v1/registration-notices?channel=popup&limit=20&${payerQuery}`,
+    `/api/v1/registration-notices?channel=dashboard&limit=20&${payerQuery}`,
   ]);
   assert.equal(restored.tracker.hasPurchase(payer, attempt.domain), true);
   assert.deepEqual(restored.completed, []);
@@ -773,9 +842,12 @@ test('revisions cannot regress progress and only authoritative completed status 
   ];
   await poll(tracker);
   await poll(tracker);
-  assert.deepEqual(completed, ['registration-1']);
+  assert.deepEqual(completed, ['00000000-0000-4000-8000-000000000001']);
   assert.equal(tracker.getSnapshot().attempts.length, 0);
-  assert.equal(storage.getItem(`${COMPLETION_PREFIX}${payer}:registration-1`), 'completion-1');
+  assert.equal(
+    storage.getItem(`${COMPLETION_PREFIX}${payer}:00000000-0000-4000-8000-000000000001`),
+    'completion-1',
+  );
   const remounted = fixture(storage);
   remounted.backend.items = backend.items;
   await connect(remounted.tracker);
@@ -803,8 +875,8 @@ test('a saved purchase completed while the browser was closed is acknowledged on
     progress({ status: 'completed', completionEventId: 'completion-away', completedAt: startedAt }),
   ];
   await connect(returned.tracker);
-  assert.deepEqual(returned.completed, ['registration-1']);
-  assert.deepEqual(returned.resolved, [['registration-1']]);
+  assert.deepEqual(returned.completed, ['00000000-0000-4000-8000-000000000001']);
+  assert.deepEqual(returned.resolved, [['00000000-0000-4000-8000-000000000001']]);
   assert.equal(first.storage.getItem(`${ATTEMPT_PREFIX}${attempt.clientId}`), null);
   const refreshed = fixture(first.storage);
   refreshed.backend.items = returned.backend.items;
@@ -821,12 +893,15 @@ test('hidden completion keeps the attempt unacknowledged through polling and ref
   await connect(hidden.tracker);
   await poll(hidden.tracker);
   assert.deepEqual(hidden.completed, []);
-  assert.equal(hidden.storage.getItem(`${COMPLETION_PREFIX}${payer}:registration-1`), null);
+  assert.equal(
+    hidden.storage.getItem(`${COMPLETION_PREFIX}${payer}:00000000-0000-4000-8000-000000000001`),
+    null,
+  );
   assert.ok(hidden.storage.getItem(`${ATTEMPT_PREFIX}${attempt.clientId}`));
   const returned = fixture(hidden.storage, { canNotify: () => true });
   returned.backend.items = hidden.backend.items;
   await connect(returned.tracker);
-  assert.deepEqual(returned.completed, ['registration-1']);
+  assert.deepEqual(returned.completed, ['00000000-0000-4000-8000-000000000001']);
   await poll(hidden.tracker);
   assert.deepEqual(hidden.completed, []);
   assert.equal(hidden.tracker.getSnapshot().attempts.length, 0);
@@ -848,8 +923,11 @@ test('returning to a visible tab acknowledges completion once without another su
   visible = true;
   await poll(tracker);
   await poll(tracker);
-  assert.deepEqual(completed, ['registration-1']);
-  assert.equal(storage.getItem(`${COMPLETION_PREFIX}${payer}:registration-1`), 'completed');
+  assert.deepEqual(completed, ['00000000-0000-4000-8000-000000000001']);
+  assert.equal(
+    storage.getItem(`${COMPLETION_PREFIX}${payer}:00000000-0000-4000-8000-000000000001`),
+    'completed',
+  );
   assert.equal(
     backend.calls.some((path) => path.includes('/agents/register')),
     false,
@@ -866,15 +944,15 @@ test('processing to hidden completion to visible return delivers one resolution 
   assert.deepEqual(resolved, []);
   backend.items = [progress({ status: 'completed', revision: 2, completedAt: startedAt })];
   await poll(tracker);
-  assert.deepEqual(resolved, [['registration-1']]);
+  assert.deepEqual(resolved, [['00000000-0000-4000-8000-000000000001']]);
   assert.deepEqual(completed, []);
   await poll(tracker);
-  assert.deepEqual(resolved, [['registration-1']]);
+  assert.deepEqual(resolved, [['00000000-0000-4000-8000-000000000001']]);
   visible = true;
   await poll(tracker);
   await poll(tracker);
-  assert.deepEqual(resolved, [['registration-1']]);
-  assert.deepEqual(completed, ['registration-1']);
+  assert.deepEqual(resolved, [['00000000-0000-4000-8000-000000000001']]);
+  assert.deepEqual(completed, ['00000000-0000-4000-8000-000000000001']);
   assert.equal(tracker.getSnapshot().attempts.length, 0);
 });
 
@@ -890,12 +968,12 @@ test('notification lock failure does not replay already delivered resolution on 
   await connect(tracker);
   backend.items = [progress({ status: 'completed', revision: 2, completedAt: startedAt })];
   await poll(tracker);
-  assert.deepEqual(resolved, [['registration-1']]);
+  assert.deepEqual(resolved, [['00000000-0000-4000-8000-000000000001']]);
   assert.deepEqual(completed, []);
   failLock = false;
   await poll(tracker);
-  assert.deepEqual(resolved, [['registration-1']]);
-  assert.deepEqual(completed, ['registration-1']);
+  assert.deepEqual(resolved, [['00000000-0000-4000-8000-000000000001']]);
+  assert.deepEqual(completed, ['00000000-0000-4000-8000-000000000001']);
 });
 
 test('a later refund resolves independently of a hidden completion without a success toast', async () => {
@@ -911,7 +989,10 @@ test('a later refund resolves independently of a hidden completion without a suc
   ];
   await poll(tracker);
   await poll(tracker);
-  assert.deepEqual(resolved, [['registration-1'], ['registration-1']]);
+  assert.deepEqual(resolved, [
+    ['00000000-0000-4000-8000-000000000001'],
+    ['00000000-0000-4000-8000-000000000001'],
+  ]);
   assert.deepEqual(completed, []);
   assert.equal(tracker.getSnapshot().attempts.length, 0);
 });
@@ -929,7 +1010,10 @@ test('notification visibility is checked inside the cross-tab completion lock', 
   backend.items = [progress({ status: 'completed', completedAt: startedAt })];
   await connect(tracker);
   assert.deepEqual(completed, []);
-  assert.equal(storage.getItem(`${COMPLETION_PREFIX}${payer}:registration-1`), null);
+  assert.equal(
+    storage.getItem(`${COMPLETION_PREFIX}${payer}:00000000-0000-4000-8000-000000000001`),
+    null,
+  );
   assert.ok(storage.getItem(`${ATTEMPT_PREFIX}${attempt.clientId}`));
 });
 
@@ -950,7 +1034,10 @@ test('resolution is delivered for its current payer before a later switch blocks
   assert.deepEqual(current.completed, []);
   assert.deepEqual(current.resolved, []);
   assert.deepEqual(deliveryWallets, [payer]);
-  assert.equal(current.storage.getItem(`${COMPLETION_PREFIX}${payer}:registration-1`), null);
+  assert.equal(
+    current.storage.getItem(`${COMPLETION_PREFIX}${payer}:00000000-0000-4000-8000-000000000001`),
+    null,
+  );
   assert.ok(current.storage.getItem(`${ATTEMPT_PREFIX}${attempt.clientId}`));
 });
 
@@ -1038,7 +1125,7 @@ test('same workflow revision still updates payment observations and a later refu
   assert.equal(tracker.getSnapshot().items[0].status, 'refunded');
   assert.equal(tracker.getSnapshot().attempts.length, 0);
   assert.deepEqual(completed, []);
-  assert.deepEqual(resolved, [['registration-1']]);
+  assert.deepEqual(resolved, [['00000000-0000-4000-8000-000000000001']]);
 });
 
 test('401 preserves the original payer pending record; a wallet change clears the visible record', async () => {
@@ -1064,6 +1151,8 @@ test('discovery reads first page plus one rotating continuation and stays unfini
     storage: new MemoryStorage(),
     fetcher: async (url) => {
       if (String(url).includes('/auth/')) return json({ authenticated: true, address: payer });
+      if (String(url).includes('/registration-notices'))
+        return json({ items: [], nextCursor: null });
       const offset = Number(
         new URL(String(url), 'https://example.test').searchParams.get('offset'),
       );
@@ -1090,7 +1179,11 @@ test('discovery reads first page plus one rotating continuation and stays unfini
   await poll(tracker);
   assert.deepEqual(calls, [0, 20, 0, 40, 0, 60]);
   assert.equal(tracker.getSnapshot().discoveryComplete, true);
-  assert.equal(tracker.getSnapshot().attempts.length, 1);
+  assert.equal(tracker.getSnapshot().attempts.length, 0);
+  assert.equal(
+    tracker.getSnapshot().items.filter((item) => item.status === 'processing').length,
+    1,
+  );
 });
 
 test('known pending detail reads have a two-request rotating fanout and survive partial discovery', async () => {
@@ -1162,7 +1255,10 @@ test('completion refresh is one batch, independent of the once-only notification
   const { tracker, backend, storage, completed, resolved } = fixture();
   tracker.remember(attempt);
   await connect(tracker);
-  storage.setItem(`${COMPLETION_PREFIX}${payer}:registration-1`, 'claimed-by-another-tab');
+  storage.setItem(
+    `${COMPLETION_PREFIX}${payer}:00000000-0000-4000-8000-000000000001`,
+    'claimed-by-another-tab',
+  );
   backend.items = [
     progress({
       status: 'completed',
@@ -1173,7 +1269,7 @@ test('completion refresh is one batch, independent of the once-only notification
   await poll(tracker);
   await poll(tracker);
   assert.deepEqual(completed, []);
-  assert.deepEqual(resolved, [['registration-1']]);
+  assert.deepEqual(resolved, [['00000000-0000-4000-8000-000000000001']]);
 });
 
 test('every status request is payer-bound and rejects missing or mismatched success headers before parsing', async () => {
@@ -1348,6 +1444,8 @@ test('Retry-After supports seconds and HTTP dates with server clock skew, withou
 test('two busy tabs stay at or below96 status reads/minute despite repeated focus/storage-style refreshes', async () => {
   let now = Date.parse(startedAt);
   let reads = 0;
+  let noticeReads = 0;
+  let noticeWrites = 0;
   const items = [
     progress(),
     progress({
@@ -1361,11 +1459,19 @@ test('two busy tabs stay at or below96 status reads/minute despite repeated focu
       storage: new MemoryStorage(),
       now: () => now,
       random: () => 0,
-      fetcher: async (url) => {
+      fetcher: async (url, options) => {
         const parsed = new URL(String(url), 'https://example.test');
         if (parsed.pathname.includes('/auth/'))
           return json({ authenticated: true, address: payer });
         assert.equal(parsed.searchParams.get('expectedPayer'), payer);
+        if (parsed.pathname === '/api/v1/registration-notices') {
+          if (options?.method === 'POST') {
+            noticeWrites++;
+            return json({ items: [] });
+          }
+          noticeReads++;
+          return json({ items: [], nextCursor: null });
+        }
         reads++;
         return parsed.pathname === '/api/v1/registrations'
           ? json({ items, total: 10000, hasMore: true })
@@ -1379,6 +1485,13 @@ test('two busy tabs stay at or below96 status reads/minute despite repeated focu
     await Promise.all(trackers.map((tracker) => tracker.refresh()));
   }
   assert.ok(reads > 80 && reads <= 96, `unexpected busy-tab request count: ${reads}`);
+  assert.equal(noticeReads, 24);
+  assert.equal(
+    noticeWrites,
+    2,
+    'one best-effort canonical recovery per tab uses the separate mutation budget',
+  );
+  assert.ok(reads + noticeReads <= 120, 'notice reads also fit the shared payer read budget');
   for (const tracker of trackers) assert.equal(tracker.getSnapshot().connection, 'ready');
 });
 
@@ -1421,6 +1534,8 @@ test('429 stops fanout and shares only a payer-scoped cooldown; other wallets an
     now: () => now,
     fetcher: async (url) => {
       otherReads++;
+      if (String(url).includes('/registration-notices'))
+        return json({ items: [], nextCursor: null }, 200, { 'X-Authenticated-Wallet': recipient });
       return String(url).includes('/auth/')
         ? json({ authenticated: true, address: recipient })
         : json({ items: [], total: 0, hasMore: false }, 200, {
@@ -1429,7 +1544,7 @@ test('429 stops fanout and shares only a payer-scoped cooldown; other wallets an
     },
   });
   await connect(other, recipient);
-  assert.equal(otherReads, 2);
+  assert.equal(otherReads, 4);
   assert.deepEqual(other.getSnapshot().attempts, []);
   now += 60_000;
   assert.equal(second.getNextPollDelay(), REGISTRATION_POLL_MS);

@@ -40,8 +40,13 @@ can change, so do not cache a quote as a guaranteed reservation.
 
 ## 3. Register once
 
-Send `Prefer: respond-async` and handle the x402 challenge by submitting the exact signed request
-once. Keep the `registrationId` and `statusUrl` returned by HTTP `202`. Acceptance is not completion.
+Use SDK 0.9.1 for the single request-bound EIP-3009 payment-signature fix. Send
+`Prefer: respond-async` and submit the exact challenged request once. The initial `402` includes
+an opaque `accepts[0].extra.registrationQuote` string and an ISO `quoteExpiresAt` in the same
+`extra` object. Echo the full selected requirement as `accepted` unchanged, including all metadata;
+do not decode or rebuild the sealed quote or reprice the request. The SDK validates the bound Base
+USDC payment requirements and optional quote expiry before signing. Keep the `registrationId`
+and `statusUrl` returned by HTTP `202`. Acceptance is not completion.
 
 SDK 0.9.0 adds `submitRegistration()` for this acceptance response and updates `register()` to
 wait using authenticated status GETs. SDK 0.8.x and earlier can mistake `202` for a final result.
@@ -56,6 +61,17 @@ payment proof. The payer may differ from the designated NFT owner. Reuse a fresh
 between polls instead of prompting on every request. A timeout or abort stops local waiting, not
 the accepted purchase. Never automatically resubmit after a lost response.
 
+SDK 0.9.1 reports `RegistrationPaymentRejectedError` only for an explicit HTTP `4xx` response
+other than `408` satisfying the public rejection schema, including
+`paymentSubmission: { status: 'rejected', settlementAttempted: false }`. It exposes code
+`REGISTRATION_PAYMENT_REJECTED`, `serverCode`, `message`, `handle`, and
+`settlementAttempted: false`. This confirms no settlement attempt for that rejected submission,
+not payment success or the outcome of a previous ambiguous attempt. HTTP `408`, `5xx`, timeouts,
+network failures, and unconfirmed conflicts remain `RegistrationPendingError` recovery cases.
+Retain the handle and use payer-authenticated reads for uncertain outcomes. Neither error
+authorizes an automatic resend, repricing, or replacement signature, including after a later
+challenge or quote expiry.
+
 ## 4. Confirm readiness
 
 Before advertising the identity, wait for registration status `completed`, meaning the identity
@@ -68,7 +84,21 @@ diagnostic. Inspect the state rather than assuming a new payment is needed. A co
 lack `result` for older records; the SDK preserves the handle and reports
 `completion_result_unavailable` instead of inventing transaction or NFT fields.
 
-## 5. Prepare continuity
+## 5. Keep recovery notices separate from status
+
+The [registration notice endpoints](/api-reference/register/#registration-notices) support saved
+popup and dashboard reminders for the authenticated payer. All notice requests require
+`expectedPayer`; verify `X-Authenticated-Wallet` before using the response. Use a retained
+`clientId` for an uncertain submission, then associate a known `registrationId` when available.
+A `submission_unknown` notice is a recovery reminder, not proof that payment failed or succeeded.
+
+Closing a popup or dashboard notice dismisses only that channel. It does not cancel registration,
+stop or refund payment, or dismiss the other channel. Popup notices expire after 5 days and
+dashboard notices after 10 days from original creation. Physical cleanup follows on the next
+successful scheduled cleanup, not at an exact deletion instant; no backup deletion or secure
+erasure is promised. Retain recovery handles separately while an outcome remains uncertain.
+
+## 6. Prepare continuity
 
 After the AgentID NFT is available:
 

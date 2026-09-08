@@ -14,8 +14,9 @@ GET /api/v1/agents/quote
 ```
 
 The response itemizes the domain, optional onchain names, selected plan, included services, annual
-platform fee, and total USDC amount. Quotes can change until payment is accepted, so request a fresh
-quote immediately before checkout.
+platform fee, and total USDC amount. This display quote is not a reservation. Request a fresh quote
+before starting checkout; the registration `402` supplies the sealed terms for that request.
+Do not reprice a challenged request or start another payment to resolve an uncertain submission.
 
 ## Register
 
@@ -44,6 +45,57 @@ challenge. Submit the exact challenged request with the signed `PAYMENT-SIGNATUR
 Successful settlement details are returned in `PAYMENT-RESPONSE`. A lost response or uncertain
 payment outcome is not permission to submit another payment.
 
+### Sealed checkout challenge
+
+The initial HTTP `402` includes these fields in `accepts[0].extra`:
+
+| Field               | Contract                                                                                       |
+| ------------------- | ---------------------------------------------------------------------------------------------- |
+| `registrationQuote` | Opaque string. Preserve it exactly; do not decode it into a quote object or reconstruct it.    |
+| `quoteExpiresAt`    | ISO timestamp for the sealed quote's expiry.                                                   |
+| `requestBinding`    | Issued request binding used as the nonce for the request-bound EIP-3009 payment authorization. |
+
+The x402 payment payload must echo the entire selected requirement as `accepted` unchanged,
+including all `extra` fields, not only the three listed above. Submit the exact challenged request
+body. Do not recalculate its price, drop metadata, or replace the sealed quote with a display quote.
+
+SDK 0.9.1 creates one bound EIP-3009 payment signature after validating the exact Base-mainnet
+USDC asset, recipient, EIP-712 domain, amount, timeout, and request binding. It also validates
+`quoteExpiresAt` when present and limits the authorization expiry accordingly. Wallet authentication
+may still need a separate signature. A quote expiring after submission is not proof of nonpayment;
+recover that attempt instead of automatically signing a replacement.
+
+### Explicit rejection before settlement
+
+For a submitted paid request, only an explicit HTTP `4xx` response other than `408` satisfying
+the public rejection schema, including both of these fields, conclusively reports rejection
+before settlement was attempted for that submission:
+
+```json
+{
+  "paymentSubmission": {
+    "status": "rejected",
+    "settlementAttempted": false
+  }
+}
+```
+
+Use `registrationPaymentRejectionSchema` from `@agentdomain/shared` 0.9.1 to validate the public
+payload, including its supported error/diagnostic fields, together with the HTTP status restriction.
+Do not reject an otherwise valid contract merely because it includes a top-level `error` field.
+SDK 0.9.1 surfaces a confirmed rejection as `RegistrationPaymentRejectedError` with
+`code: 'REGISTRATION_PAYMENT_REJECTED'`, `serverCode`, `message`, `handle`, and
+`settlementAttempted: false`.
+
+Do not infer this outcome from an HTTP error code, message text, an expired quote, a missing
+registration, or either marker field alone. The marker is not payment success and does not
+resolve an earlier ambiguous attempt. HTTP `408`, `5xx`, timeouts, network failures, lost
+responses, and unconfirmed conflicts remain `RegistrationPendingError` recovery cases. A `408`
+or `5xx` response cannot become a conclusive rejection merely by including the marker. Neither
+error authorizes automatic resending, repricing, or a new signature. Even another `402` after
+the paid POST is not, by itself, permission to replace the payment; reconcile the submitted
+attempt first.
+
 ## Fields
 
 | Field              | Required | Notes                                                    |
@@ -52,8 +104,8 @@ payment outcome is not permission to submit another payment.
 | `ownerAddress`     | no       | Final owner; defaults to `wallet`                        |
 | `preferredName`    | yes      | Requested domain label                                   |
 | `tld`              | yes      | Supported top-level domain                               |
-| `registerBasename` | no       | Defaults to `true` in SDK 0.9.0                          |
-| `registerEns`      | no       | Defaults to `false` in SDK 0.9.0                         |
+| `registerBasename` | no       | Defaults to `true` in SDK 0.9.1                          |
+| `registerEns`      | no       | Defaults to `false` in SDK 0.9.1                         |
 | `emailUsername`    | no       | Primary address local-part; defaults to `agent`          |
 | `premiumPlan`      | no       | `included`, `starter`, `pro`, or `enterprise`            |
 | `years`            | no       | Initial term from 1 through 10 years                     |
@@ -137,6 +189,7 @@ non-cacheable reads; polling does not start or restart a purchase.
 | `status`                                | `processing`, `completed`, `action_required`, `failed`, `refunded`, `awaiting_payment`                          |
 | `agentId`                               | Linked agent ID, or `null`; its presence alone does not mean completion                                         |
 | `paymentStatus`                         | `unknown`, `pending`, `settled`, `not_charged`, `refunded`                                                      |
+| `paymentReference`                      | Optional non-secret bytes32 request binding on verified terminal payment rejection; not authentication          |
 | `stage`                                 | `payment`, `domain`, `dns`, `ssl`, `email`, `basename`, `ens`, `mint`, `finalizing`, `complete`                 |
 | `messageCode`                           | Public machine-readable message code, not a raw diagnostic                                                      |
 | `startedAt`, `updatedAt`                | ISO timestamps                                                                                                  |
@@ -158,8 +211,94 @@ of services already completed; only authoritative `completed` status establishes
 The historical duration estimate is indicative, not an exact finish time or countdown. When
 `estimatedDurationSeconds` is `null`, no estimate is available; do not substitute a fixed duration.
 Registration continues independently of the browser. After returning, authenticate as the payer
-and read status again. The web app acknowledges completion once per saved purchase in that browser,
-when the notification can be shown in a visible tab; clearing browser storage removes that local history.
+and read status again. Saved popup and dashboard notices use the separate contract below;
+a notice is not evidence of payment or service readiness.
+
+## Registration notices
+
+These public HTTP endpoints manage payer-scoped popup and dashboard notices. Authenticate every
+request with the payer's SIWE session or `X-Agent-Signature` as described above. Every notice
+request, including mutations, **requires** `expectedPayer` in the query. It is an identity check,
+not authentication. Verify the successful response's `X-Authenticated-Wallet` against that payer
+before using the response; reject a missing or mismatched header. An agent API key, payment
+signature, or knowledge of a notice/registration ID is not notice authorization.
+
+### List notices
+
+```http
+GET /api/v1/registration-notices?expectedPayer={payerAddress}&channel=popup&limit=20
+```
+
+Use `channel=popup` or `channel=dashboard`. To continue, pass the returned opaque cursor as the
+optional `cursor` query parameter using URL query encoding. The response is
+`{ items: RegistrationNotice[], nextCursor: string | null }`; `null` ends pagination.
+
+| Item field       | Contract                                                                                                      |
+| ---------------- | ------------------------------------------------------------------------------------------------------------- |
+| `noticeId`       | Notice identifier; preserve it and URL-encode it when dismissing.                                             |
+| `source`         | `client` or `registration`.                                                                                   |
+| `registrationId` | Registration ID, or `null` when not yet known.                                                                |
+| `domain`         | Domain, or `null` when unavailable.                                                                           |
+| `channel`        | `popup` or `dashboard`.                                                                                       |
+| `createdAt`      | Original creation time as an ISO timestamp.                                                                   |
+| `expiresAt`      | Channel expiry as an ISO timestamp.                                                                           |
+| `status`         | `registration` or `submission_unknown`; this is a notice state, not registration progress or payment success. |
+| `statusUrl`      | Payer-bound registration status URL, or `null` when the registration ID is unknown.                           |
+
+### Record an uncertain submission
+
+```http
+PUT /api/v1/registration-notices?expectedPayer={payerAddress}
+Content-Type: application/json
+```
+
+```json
+{
+  "clientId": "1788900000000-11111111-1111-4111-8111-111111111111",
+  "domain": "research-agent.com"
+}
+```
+
+Create a `clientId` with a 13-digit Unix-millisecond timestamp, a hyphen, and a UUIDv4, for example
+`` `${Date.now()}-${crypto.randomUUID()}` ``. Retain that ID for the same submission. A
+`submission_unknown` notice preserves a recovery reminder; it does not prove payment occurred,
+start registration, or authorize another checkout.
+
+### Associate a known registration
+
+```http
+POST /api/v1/registration-notices?expectedPayer={payerAddress}
+Content-Type: application/json
+```
+
+```json
+{
+  "registrationId": "11111111-1111-4111-8111-111111111111",
+  "clientId": "1788900000000-11111111-1111-4111-8111-111111111111"
+}
+```
+
+`clientId` is optional; provide the saved submission ID when associating its notice with a known
+registration. The PUT and POST responses contain `{ items: RegistrationNotice[] }`. Read the
+registration's authenticated status to establish payment and readiness; creating a notice does
+not establish either.
+
+### Dismissal and expiry
+
+```http
+DELETE /api/v1/registration-notices/{encodedNoticeId}?expectedPayer={payerAddress}&channel=popup
+```
+
+Set the path segment to `encodeURIComponent(noticeId)` and choose `popup` or `dashboard`.
+Dismissal closes only that channel's notice. It does not cancel registration work, stop or refund
+payment, dismiss the other channel, or authorize another payment.
+
+Popup notices expire after **5 days** and dashboard notices after **10 days**, measured from
+original creation, not the latest update or dismissal. Expiry removes them from active notice
+reads; physical cleanup occurs on the next successful scheduled cleanup. This is not an
+immediate physical-deletion deadline, backup-deletion guarantee, or secure-erasure promise.
+Retain separate recovery handles when an outcome is still uncertain: notice expiry is not a
+registration cancellation or proof that no payment occurred.
 
 ## Lost responses and upgrades
 
@@ -170,6 +309,6 @@ for support, but never use them instead of wallet authentication.
 
 SDK 0.9.0 adds the asynchronous methods documented in the [TypeScript guide](/sdk/typescript/).
 SDK 0.8.x and earlier can mistake `202` for a completed result; an old TypeScript return type
-does not make that safe. Integrate this HTTP contract directly or upgrade to 0.9.0 for the
-payer-authenticated waiter and recovery methods. A client upgrade does not change service
+does not make that safe. Integrate this HTTP contract directly or upgrade to 0.9.1 for the
+payer-authenticated waiter, recovery methods, and single bound payment-signature fix. A client upgrade does not change service
 readiness or authorize another payment.

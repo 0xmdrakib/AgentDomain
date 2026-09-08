@@ -15,7 +15,7 @@ API bases must use HTTPS; explicitly configured HTTP `localhost`, `127.0.0.1`, a
 strings, and fragments are rejected before requests begin.
 
 ```bash
-npm install @agentdomain/sdk@0.9.0 viem@2.56.3
+npm install @agentdomain/sdk@0.9.1 viem@2.56.3
 ```
 
 ## Quick start
@@ -72,15 +72,56 @@ not converted into an x402 paid resource. Email setup, SSL certification, DNS
 orchestration, and AgentID NFT mint/orchestration are included in the annual
 platform fee; Basename and ENS remain optional paid add-ons.
 
+## Request-bound payment signing
+
+SDK 0.9.1 fixes the duplicate payment-signature prompt for request-bound x402
+checkout. It creates one EIP-3009 payment signature using the issued request
+binding. Wallet authentication for status or other owner operations is separate
+and may still require a signature.
+
+Before signing, the helper validates exact Base-mainnet USDC requirements, a
+nonzero recipient, the USDC EIP-712 domain, a positive uint256 amount, a valid
+authorization timeout, and the request binding. When `extra.quoteExpiresAt` is
+present, it must be an unexpired ISO timestamp and bounds the authorization's
+expiry. These checks validate the challenge, not an earlier display quote or an
+application-specific spending budget.
+
+The initial registration `402` includes an opaque string at
+`accepts[0].extra.registrationQuote` and an ISO `quoteExpiresAt` in the same `extra`
+object. The payment payload echoes the full selected requirement as `accepted`,
+including all `extra` fields unchanged. Do not decode or reconstruct the sealed
+quote, drop metadata, or reprice the challenged request.
+
+After a paid request is submitted, SDK 0.9.1 throws the exported
+`RegistrationPaymentRejectedError` only for an HTTP `4xx` response other than
+`408` that satisfies the public `registrationPaymentRejectionSchema`, including
+`paymentSubmission: { status: 'rejected', settlementAttempted: false }`. The schema
+is reusable from `@agentdomain/shared` 0.9.1. An error status or message alone does
+not establish rejection before settlement.
+
+The error exposes `code: 'REGISTRATION_PAYMENT_REJECTED'`, `serverCode`, `message`,
+`handle`, and `settlementAttempted: false`. Inspect the diagnostics and retain the
+handle; this only confirms that settlement was not attempted for this rejected
+submission. It does not establish payment success or resolve an earlier ambiguous
+attempt. HTTP `408`, `5xx`, network failures, timeouts, lost responses, and
+unconfirmed conflicts remain `RegistrationPendingError` recovery cases, even if a
+`408` or `5xx` body includes a rejection marker. Neither error authorizes an
+automatic resend, repricing, or replacement payment signature. See the
+[registration API](https://docs.agentdomain.app/api-reference/register/).
+
 ## Asynchronous registration
 
 New in 0.9.0: submission, status, waiting, and recovery methods distinguish payment
 acceptance from completed registration. SDK 0.8.x and earlier may treat HTTP `202`
 as a `RegistrationResult`; their return type is not evidence that registration
-finished. Upgrade to 0.9.0 or integrate the documented HTTP status contract directly.
+finished. Upgrade to 0.9.1 or integrate the documented HTTP status contract directly.
 
 ```ts
-import { AgentDomain, RegistrationPendingError } from '@agentdomain/sdk';
+import {
+  AgentDomain,
+  RegistrationPaymentRejectedError,
+  RegistrationPendingError,
+} from '@agentdomain/sdk';
 
 const ad = new AgentDomain({ walletClient });
 const controller = new AbortController();
@@ -91,9 +132,15 @@ try {
   );
   console.log(identity.agentId);
 } catch (error) {
-  if (!(error instanceof RegistrationPendingError)) throw error;
-  // Keep this non-secret handle. Timeout or abort does not cancel the purchase.
-  console.log(error.reason, error.handle);
+  if (error instanceof RegistrationPaymentRejectedError) {
+    console.log(error.code, error.serverCode, error.message, error.handle);
+    // Settlement was not attempted for this submission. Do not automatically resend.
+  } else if (error instanceof RegistrationPendingError) {
+    // Keep this non-secret handle. Timeout or abort does not cancel the purchase.
+    console.log(error.reason, error.handle);
+  } else {
+    throw error;
+  }
 }
 ```
 
@@ -172,11 +219,11 @@ code. An independently pinned 2.55.8 `PublicClient` lacks the required
 `watchBlockHeaders` member and can fail TypeScript assignment. This release does not
 promise arbitrary mixed-version viem compatibility. Package imports remain ESM-only.
 
-The x402 packages are aligned at 2.25.0. `createX402PaymentHeaders()` explicitly
-disables the upstream default $1 cap and recognized-asset allowlist to preserve its
-previous payment-selection policy. This does not introduce a spending budget or
-independently verify an earlier quote. Callers must authorize the payment terms;
-Base-mainnet exact v2 signing and the existing request-binding checks remain in place.
+The x402 packages remain aligned at 2.25.0. `createX402PaymentHeaders()` does not
+impose the upstream default $1 spending cap. Unbound payments retain the existing
+upstream asset-selection behavior; request-bound payments use the Base USDC checks
+described above. Neither path independently verifies an earlier display quote or
+introduces an application spending budget. Callers must authorize the payment terms.
 
 ## Autonomous Premium Plan actions
 

@@ -3,6 +3,32 @@
 Notable changes to AgentDomain's public npm packages are recorded here. Package
 versions are immutable once published to npm.
 
+## SDK and shared 0.9.1 - Unreleased
+
+Patch for `@agentdomain/sdk` and `@agentdomain/shared`; prepared for npm, not yet
+published. MCP, AgentKit, and Eliza package versions remain 0.9.0. Existing
+dependency ranges of `^0.9.0` accept these patches. No new fee is introduced.
+
+- Fixes the duplicate payment-signature prompt for request-bound x402 checkout:
+  create one EIP-3009 payment authorization using the issued request binding,
+  preserving the full accepted requirement and its `extra` metadata unchanged.
+  Separate wallet authentication can still require a signature.
+- Validates bound Base USDC payment requirements, recipient, EIP-712 domain,
+  amount, timeout, request binding, and optional ISO `quoteExpiresAt` before
+  payment signing. Treats `registrationQuote` as an opaque string; it is echoed,
+  not decoded, reconstructed, or used to reprice the request.
+- Adds the reusable public `registrationPaymentRejectionSchema` in shared and
+  exports SDK `RegistrationPaymentRejectedError` with code
+  `REGISTRATION_PAYMENT_REJECTED`, `serverCode`, `message`, `handle`, and
+  `settlementAttempted: false`. Only an explicit HTTP `4xx` response other than
+  `408` satisfying the rejection contract qualifies; an error status alone does
+  not. HTTP `5xx`, timeouts, and unconfirmed conflicts retain
+  `RegistrationPendingError` and recovery information. Neither error authorizes
+  automatic replacement signatures or paid-request retries.
+- Updates registration documentation with payer-authenticated popup/dashboard
+  notices, channel-specific dismissal, and expiry semantics. These are public
+  HTTP endpoints, not new SDK notice methods.
+
 ## 0.9.0 - 2026-09-08
 
 Adds resumable registration APIs and reviewed dependency updates across the five
