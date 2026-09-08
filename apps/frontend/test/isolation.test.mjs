@@ -108,9 +108,14 @@ test('artifact boundary rejects API functions, backend traces and environment fi
 });
 
 test('approved brand kit and mappings are tracked, self-contained and hash verified', () => {
-  assert.deepEqual(verifyAssets(), { files: 44 });
+  assert.deepEqual(verifyAssets(), { files: 46 });
   assert.equal(hashInput('key.txt', Buffer.from('value\r\n')).toString(), 'value\n');
   assert.deepEqual(hashInput('mark.png', Buffer.from([0x0d, 0x0a])), Buffer.from([0x0d, 0x0a]));
+  for (const extension of ['jpg', 'ico'])
+    assert.deepEqual(
+      hashInput(`mark.${extension}`, Buffer.from([0x0d, 0x0a])),
+      Buffer.from([0x0d, 0x0a]),
+    );
   const manifest = JSON.parse(read('brand-assets.manifest.json'));
   assert.equal(
     Object.keys(manifest.files).filter((file) => file.startsWith('public/brand/agentdomain-brand/'))
@@ -146,7 +151,7 @@ test('Next config keeps only asset redirects while request routing owns host and
   assert.match(middleware, /'\/api\/:path\*'/);
   assert.match(middleware, /'\/docs\/:path\*'/);
   const headers = await config.headers();
-  assert.equal(headers.length, 2);
+  assert.equal(headers.length, 3);
   const values = Object.fromEntries(headers[0].headers.map(({ key, value }) => [key, value]));
   assert.equal(values['X-Frame-Options'], 'DENY');
   assert.equal(values['X-Content-Type-Options'], 'nosniff');
@@ -159,6 +164,10 @@ test('Next config keeps only asset redirects while request routing owns host and
   assert.doesNotMatch(values['Content-Security-Policy'], /connect-src[^;]*\shttps:\s/);
   assert.doesNotMatch(values['Content-Security-Policy'], /img-src[^;]*\shttps:\s/);
   assert.deepEqual(headers[1], {
+    source: '/favicon.ico',
+    headers: [{ key: 'Content-Type', value: 'image/x-icon' }],
+  });
+  assert.deepEqual(headers[2], {
     source: '/:path*',
     has: [
       {

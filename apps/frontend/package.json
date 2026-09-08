@@ -5,6 +5,7 @@
   "license": "Apache-2.0",
   "scripts": {
     "assets": "node scripts/verify-assets.mjs",
+    "assets:generate": "node scripts/generate-web-assets.mjs",
     "dev": "pnpm run assets && next dev",
     "build": "pnpm run assets && pnpm run test:isolation && next build && node scripts/check-build.mjs",
     "build:cloudflare": "pnpm --filter @agentdomain/shared build && pnpm --filter @agentdomain/sdk build && pnpm run assets && pnpm run test:isolation && opennextjs-cloudflare build && node scripts/check-build.mjs && node scripts/check-open-next.mjs",

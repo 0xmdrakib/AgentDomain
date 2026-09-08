@@ -43,7 +43,9 @@
     "public/brand/agentdomain-brand/platform-size-based/agentdomain-logo-1024.png": "defe1edfda5db80aa7ef0a059ef2478f1cacd00a9c9378bb2ee80e12b94fc349",
     "public/brand/agentdomain-brand/platform-size-based/agentdomain-logo-2048.png": "42c5790d14766a7654d51c7ee8e6c17974d6d537f5e183770993e9cbed176d6d",
     "public/brand/agentdomain-brand/platform-size-based/agentdomain-logo-4096.png": "377cfbf6de5a4fde41de37d846cdf843924abe0d663f55721ee35a62cf5be399",
-    "src/lib/brand-assets.json": "0eb2868e110c183f5ff66fe4d729ce38019eef75943d9d7617fbacd17b2411aa",
-    "src/lib/brand-assets.ts": "60e0aeefe2cb00aeb8c1f1cca5d357b15718160d09a04cfbf6beac8b47ae196a"
+    "public/brand/web/logo-for-link-embed.jpg": "dd7027d8d5d50a076562840d4143544b6896e3193703f2845bd4fba5474944d0",
+    "public/favicon.ico": "6663f43a77cfed8450b1240d9ca1bcb258fa356b860ec7af99a054b2480b740a",
+    "src/lib/brand-assets.json": "569de3932d80cc6ad1ba2fc483dd9ca7826dc43f20355dc9223b19e2afede87a",
+    "src/lib/brand-assets.ts": "25712696d1c4799b5c335141ccee403c8e8dcdc7654a67b20c9d0a19b7d3d38a"
   }
 }
