@@ -68,7 +68,12 @@ const entry = `
     const tracker = useRegistrationTracker();
     useEffect(() => {
       f.tracker = tracker;
-      f.poll = async () => { f.now += 12000; await tracker.refresh(); };
+      f.poll = async () => {
+        // Finish any older observation before advancing to the next policy-allowed read.
+        await tracker.refresh();
+        f.now += tracker.getNextPollDelay(12000);
+        await tracker.refresh();
+      };
       f.switchWallet = (wallet) => { f.wallet = wallet; tracker.setExpectedWallet(wallet); return tracker.refresh(); };
       tracker.setExpectedWallet(f.wallet);
     }, [tracker]);
@@ -136,6 +141,8 @@ let releaseLink;
 let linkStarted;
 const mutations = [];
 const external = [];
+const registrationRecords = new Map();
+const authenticatedStatusReplies = [];
 await context.route('**/*', async (route) => {
   const req = route.request();
   const url = new URL(req.url());
@@ -157,16 +164,30 @@ await context.route('**/*', async (route) => {
     'X-Authenticated-Wallet': authenticatedWallet ?? payer,
     'Cache-Control': 'no-store',
   };
-  if (url.pathname === '/api/v1/registrations')
-    return route.fulfill({
-      headers,
-      json: { items: records, total: records.length, hasMore: false },
+  if (
+    url.pathname === '/api/v1/registrations' ||
+    url.pathname.startsWith('/api/v1/registrations/')
+  ) {
+    // Changing the list/notice scenario does not delete financial records already being tracked.
+    for (const item of records)
+      registrationRecords.set(`${payer}:${item.registrationId}`, { ...item });
+    authenticatedStatusReplies.push({
+      path: url.pathname,
+      expectedPayer: url.searchParams.get('expectedPayer'),
+      authenticatedWallet: headers['X-Authenticated-Wallet'],
     });
-  if (url.pathname.startsWith('/api/v1/registrations/'))
+    if (url.pathname === '/api/v1/registrations')
+      return route.fulfill({
+        headers,
+        json: { items: records, total: records.length, hasMore: false },
+      });
+    const item = registrationRecords.get(`${payer}:${url.pathname.split('/').pop()}`);
     return route.fulfill({
+      status: item ? 200 : 404,
       headers,
-      json: records.find((r) => r.registrationId === url.pathname.split('/').pop()),
+      json: item ?? {},
     });
+  }
   assert.ok(url.pathname.startsWith('/api/v1/registration-notices'), 'no financial write endpoint');
   if (req.method() === 'GET') {
     noticeReads++;
@@ -344,6 +365,42 @@ try {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await screenshot('completed-reload-desktop');
 
+  notices = ['popup', 'dashboard'].map((channel) => notice(5, channel));
+  records = [
+    {
+      ...record(5),
+      status: 'awaiting_payment',
+      paymentStatus: 'unknown',
+      stage: 'payment',
+      messageCode: 'PAYMENT_AUTHORIZATION_CHECK_PENDING',
+    },
+  ];
+  await poll();
+  await popup.getByText('Authorization check pending', { exact: true }).waitFor();
+  assert.doesNotMatch(
+    await popup.innerText(),
+    /Payment confirmed|Not charged|Payment status unavailable/,
+  );
+  await page.setViewportSize({ width: 320, height: 568 });
+  await fits();
+  await screenshot('authorization-check-320');
+  records = [
+    {
+      ...records[0],
+      status: 'action_required',
+      messageCode: 'PAYMENT_AUTHORIZATION_REVIEW_REQUIRED',
+      revision: 2,
+    },
+  ];
+  await poll();
+  await popup.getByText('Authorization needs review', { exact: true }).waitFor();
+  assert.equal(
+    await popup.getByRole('link', { name: 'Contact support', exact: true }).getAttribute('href'),
+    'mailto:contact@agentdomain.app',
+  );
+  await fits();
+  await screenshot('authorization-review-320');
+
   notices = ['popup', 'dashboard'].map((channel) => ({
     ...notice(3, channel),
     noticeId: `client:${start}-${uuid(3)}`,
@@ -384,9 +441,38 @@ try {
   records = [record(1), record(2)];
   await poll();
   await popup.waitFor();
+  const beforeUnauthorized = await page.evaluate(() => ({
+    requests: window.fixture.requests.length,
+    connection: window.fixture.tracker.getSnapshot().connection,
+    nextPollDelay: window.fixture.tracker.getNextPollDelay(12000),
+  }));
+  const beforeStatusReplies = authenticatedStatusReplies.length;
+  assert.equal(
+    beforeUnauthorized.connection,
+    'ready',
+    'Retained financial records must remain readable after notice expiry',
+  );
   authenticatedWallet = other;
   await poll();
+  const unauthorizedReads = await page.evaluate(
+    (offset) => window.fixture.requests.slice(offset),
+    beforeUnauthorized.requests,
+  );
+  assert.ok(
+    unauthorizedReads.some((request) => request.url.startsWith('/api/v1/registrations')),
+    `Cross-wallet check needs a fresh authenticated status read: ${JSON.stringify(beforeUnauthorized)}`,
+  );
+  assert.ok(
+    authenticatedStatusReplies
+      .slice(beforeStatusReplies)
+      .some((reply) => reply.expectedPayer === wallet && reply.authenticatedWallet === other),
+    'The negative auth case must actually receive a cross-wallet response',
+  );
   await popup.waitFor({ state: 'hidden' });
+  assert.equal(
+    await page.evaluate(() => window.fixture.tracker.getSnapshot().connection),
+    'unauthorized',
+  );
   assert.equal(await dashboard.count(), 0);
   authenticatedWallet = null;
   payer = other;

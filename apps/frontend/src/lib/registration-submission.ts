@@ -48,6 +48,7 @@ export type SubmissionErrorCode =
   | 'TRACKING_UNAVAILABLE'
   | 'PREPARATION_FAILED'
   | 'PREPARATION_TIMEOUT'
+  | 'QUOTE_REFRESH_REQUIRED'
   | 'INVALID_PAYMENT_REQUIREMENT'
   | 'SIGNATURE_CANCELLED'
   | 'SIGNATURE_FAILED';
@@ -531,6 +532,14 @@ export async function runRegistrationSubmission(
       const current = readSubmissionReservation(dependencies.storage, wallet, domain);
       if (current?.clientId !== reservation.clientId || current.phase !== 'reserved') {
         throw new RegistrationSubmissionError('EXISTING_SUBMISSION');
+      }
+      // Match the SDK's whole-second expiry and retain one API deadline before transmission.
+      if (
+        typeof quoteExpiresAt === 'string' &&
+        Math.floor(Date.parse(quoteExpiresAt) / 1000) * 1000 - now() <=
+          SUBMISSION_REQUEST_TIMEOUT_MS
+      ) {
+        throw new RegistrationSubmissionError('QUOTE_REFRESH_REQUIRED');
       }
       markPossiblyPaid(reference.success ? reference.data : undefined);
       const { turnstileToken: _turnstileToken, ...paidBody } = body;

@@ -72,6 +72,47 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+test('never transmits a signed quote that expired or lacks one request deadline after wallet confirmation', async () => {
+  for (const afterSigning of [1_290_000, 1_300_000, 1_500_000]) {
+    const h = fixture();
+    let now = 1_000_000;
+    h.dependencies.now = () => now;
+    const fetcher = h.dependencies.fetcher!;
+    h.dependencies.fetcher = async (url, options) => {
+      if (
+        url === '/api/v1/agents/register' &&
+        !new Headers(options?.headers).has('PAYMENT-SIGNATURE')
+      )
+        return Response.json(
+          {
+            accepts: [
+              { amount: '1234567', extra: { quoteExpiresAt: new Date(1_300_000).toISOString() } },
+            ],
+          },
+          { status: 402 },
+        );
+      return fetcher(url, options);
+    };
+    const sign = h.dependencies.createPaymentHeaders;
+    h.dependencies.createPaymentHeaders = async (response) => {
+      const headers = await sign(response);
+      now = afterSigning;
+      return headers;
+    };
+    await assert.rejects(runRegistrationSubmission(input, h.dependencies), {
+      code: 'QUOTE_REFRESH_REQUIRED',
+    });
+    assert.equal(h.state.signatures, 1);
+    assert.equal(h.state.paid, 0);
+    assert.equal(
+      h.state.phases.some(({ phase }) => phase === 'processing'),
+      false,
+    );
+    assert.equal(h.state.remembered.length, 0);
+    assert.equal(readSubmissionReservation(h.storage, wallet, domain), null);
+  }
+});
+
 function fixture() {
   const storage = new MemoryStorage();
   const state = {

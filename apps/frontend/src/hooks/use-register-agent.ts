@@ -237,13 +237,15 @@ export function useRegisterAgent() {
       }
       const message = cancelled
         ? 'Payment signature cancelled. No payment request was submitted.'
-        : code === 'LOCKS_UNAVAILABLE'
-          ? 'This browser cannot safely coordinate checkout across tabs. Web Locks support is required; no payment was submitted.'
-          : code === 'CHECKOUT_BUSY'
-            ? 'Checkout is already open in another tab for this payer and domain. Continue there; no new payment was submitted.'
-            : code === 'PREPARATION_TIMEOUT'
-              ? 'Checkout preparation timed out before payment signing. No payment was submitted.'
-              : 'Checkout was not submitted. Confirm your payer sign-in and connection, then check registration updates before continuing.';
+        : code === 'QUOTE_REFRESH_REQUIRED'
+          ? 'The quote needs refreshing before submission. Check the price again; no payment request was sent.'
+          : code === 'LOCKS_UNAVAILABLE'
+            ? 'This browser cannot safely coordinate checkout across tabs. Web Locks support is required; no payment was submitted.'
+            : code === 'CHECKOUT_BUSY'
+              ? 'Checkout is already open in another tab for this payer and domain. Continue there; no new payment was submitted.'
+              : code === 'PREPARATION_TIMEOUT'
+                ? 'Checkout preparation timed out before payment signing. No payment was submitted.'
+                : 'Checkout was not submitted. Confirm your payer sign-in and connection, then check registration updates before continuing.';
       setState(cancelled ? { phase: 'idle', message } : { phase: 'error', error: message });
       if (cancelled) return;
       throw new Error(message);
