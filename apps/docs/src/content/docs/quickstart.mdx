@@ -3,20 +3,20 @@ title: Quickstart
 description: Quote and register an AgentDomain identity with the TypeScript SDK and a connected wallet.
 ---
 
-This example uses `@agentdomain/sdk` 0.7.0 on Base mainnet. Supply a wallet account from your
+This example uses `@agentdomain/sdk` 0.9.0 on Base mainnet. Supply a wallet account from your
 application's secure wallet integration; never commit wallet material to source control.
 
 ## Install
 
 ```bash
-npm install @agentdomain/sdk@0.7.0 viem
+npm install @agentdomain/sdk@0.9.0 viem@2.56.3
 ```
 
 ## Quote and register
 
 ```ts
-import { AgentDomain } from '@agentdomain/sdk';
-import { createPublicClient, createWalletClient, http } from 'viem';
+import { AgentDomain, RegistrationPendingError } from '@agentdomain/sdk';
+import { createWalletClient, http } from 'viem';
 import { base } from 'viem/chains';
 import type { PrivateKeyAccount } from 'viem/accounts';
 
@@ -26,8 +26,7 @@ export async function registerAgent(account: PrivateKeyAccount) {
     chain: base,
     transport: http(),
   });
-  const publicClient = createPublicClient({ chain: base, transport: http() });
-  const agentDomain = new AgentDomain({ walletClient, publicClient });
+  const agentDomain = new AgentDomain({ walletClient });
 
   const quote = await agentDomain.quote({
     preferredName: 'helpful-bot',
@@ -41,34 +40,54 @@ export async function registerAgent(account: PrivateKeyAccount) {
 
   console.log(`Registration total: ${quote.totalUsdc} USDC`);
 
-  const identity = await agentDomain.register({
-    wallet: account.address,
-    ownerAddress: account.address,
-    preferredName: 'helpful-bot',
-    tld: 'com',
-    registerBasename: true,
-    basenameLabel: 'helpful-bot-ai',
-    registerEns: false,
-    emailUsername: 'agent',
-    years: 1,
-  });
+  try {
+    const identity = await agentDomain.register({
+      wallet: account.address,
+      ownerAddress: account.address,
+      preferredName: 'helpful-bot',
+      tld: 'com',
+      registerBasename: true,
+      basenameLabel: 'helpful-bot-ai',
+      registerEns: false,
+      emailUsername: 'agent',
+      years: 1,
+    });
 
-  if (identity.provisioningStatus && identity.provisioningStatus !== 'completed') {
-    console.log(identity.registrationId, identity.provisioningStatus);
+    if (identity.provisioningStatus && identity.provisioningStatus !== 'completed') {
+      console.log(identity.registrationId, identity.provisioningStatus);
+    }
+
+    return identity;
+  } catch (error) {
+    if (error instanceof RegistrationPendingError) {
+      // Retain this non-secret handle for payer-authenticated recovery, not another payment.
+      console.log(error.reason, error.handle);
+    }
+    throw error;
   }
-
-  return identity;
 }
 ```
 
-The SDK handles the x402 challenge and signed payment retry. The quote is not a payment: show it to
-the owner before calling `register()`.
+The SDK handles the x402 challenge and submits the exact signed request once. It does not
+automatically replay a paid request after a lost response. The quote is not a payment: show it to
+the owner before calling `register()`. The helper does not independently verify an earlier quote;
+the caller remains responsible for authorizing the payment terms.
 
 ## Read the result
 
-The registration response identifies the agent, domain, optional onchain names, NFT token, HTTPS
-status, metadata URI, and provisioning state. A `processing` state means the request was accepted
-and can be followed using its registration identifier; it does not mean the request should be paid
-again.
+After HTTP `202`, `register()` waits using payer-authenticated status reads. On completion, the
+result identifies the agent, domain, optional onchain names, NFT token, HTTPS status, metadata
+URI, and provisioning state. A legacy HTTP `200` result can still report unfinished provisioning;
+it is not proof that all services are ready.
+
+Retain `RegistrationPendingError.handle`. When its registration ID is known, resume with
+`waitForRegistration(handle)` or inspect `getRegistration(handle.registrationId)` using the payer's
+authentication. Otherwise use `recoverRegistration(handle)` for read-only discovery before
+resuming the waiter. No match is not proof that no payment occurred. Timeout or abort stops local
+waiting, not an accepted purchase; do not automatically start another checkout. A server-reported
+failed or refunded status raises `RegistrationFailedError`, which also does not authorize repayment.
+
+See [asynchronous registration](/sdk/typescript/#asynchronous-registration) for the authentication,
+recovery, and completion contract. Service readiness is not guaranteed to be instant.
 
 Next, review [core concepts](/concepts/) and the complete [SDK guide](/sdk/typescript/).

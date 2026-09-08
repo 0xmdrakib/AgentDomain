@@ -118,6 +118,19 @@ function toolMap(tools) {
 }
 
 describe('MCP write-tool gate', () => {
+  it('advertises the installed package version during initialization', async () => {
+    const manifest = JSON.parse(
+      await readFile(new URL('../package.json', import.meta.url), 'utf8'),
+    );
+    const { apiUrl, requests } = await startApi();
+    const client = await startMcp(apiUrl);
+    assert.deepEqual(client.getServerVersion(), {
+      name: 'agentdomain-mcp',
+      version: manifest.version,
+    });
+    assert.deepEqual(requests, []);
+  });
+
   it('keeps default startup read-only even when an ambient API key exists', async () => {
     const { apiUrl, requests } = await startApi();
     const client = await startMcp(apiUrl, { AGENTDOMAIN_API_KEY: 'ambient-test-api-key' });

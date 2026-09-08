@@ -1,6 +1,6 @@
 {
   "name": "@agentdomain/shared",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Public TypeScript contracts, Zod schemas, constants, and utilities for AgentDomain",
   "keywords": [
     "agentdomain",

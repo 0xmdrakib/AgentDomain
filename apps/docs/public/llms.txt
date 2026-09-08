@@ -10,7 +10,7 @@
 - [Agents API](https://docs.agentdomain.app/api-reference/agents/): Registry lookup and search.
 - [DNS API](https://docs.agentdomain.app/api-reference/dns/): Record management and revision-safe batch changes.
 - [Email API](https://docs.agentdomain.app/api-reference/email/): Inbox, sending, aliases, usage, and signed webhooks.
-- [TypeScript SDK](https://docs.agentdomain.app/sdk/typescript/): Public SDK 0.7.0 usage.
+- [TypeScript SDK](https://docs.agentdomain.app/sdk/typescript/): Public SDK 0.9.0 usage.
 - [MCP server](https://docs.agentdomain.app/sdk/mcp/): Public MCP package setup and tool catalog.
 - [GitHub](https://github.com/0xmdrakib/AgentDomain): Apache-2.0 public source and packages.
 

@@ -24,6 +24,7 @@
  * and only when a signing operation is explicitly enabled.
  */
 
+import { readFileSync } from 'node:fs';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -79,8 +80,12 @@ function getClient(): AgentDomain {
   return new AgentDomain(config);
 }
 
+const packageManifest = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+) as { version: string };
+
 const server = new Server(
-  { name: 'agentdomain-mcp', version: '0.2.1' },
+  { name: 'agentdomain-mcp', version: packageManifest.version },
   { capabilities: { tools: {} } },
 );
 
