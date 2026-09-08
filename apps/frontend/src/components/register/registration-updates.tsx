@@ -110,6 +110,14 @@ function NoticeDetails({ row }: { row: Row }) {
   const { notice, progress, accepted } = row;
   const unknown = notice.status === 'submission_unknown' && !progress && !accepted;
   const payment = registrationPaymentStatus(progress, accepted);
+  const paymentLabel =
+    payment === 'unknown' && progress?.stage === 'payment'
+      ? progress.messageCode === 'PAYMENT_AUTHORIZATION_CHECK_PENDING'
+        ? 'Authorization check pending'
+        : progress.messageCode === 'PAYMENT_AUTHORIZATION_REVIEW_REQUIRED'
+          ? 'Authorization needs review'
+          : paymentLabels[payment]
+      : paymentLabels[payment];
   return (
     <div className="min-w-0 space-y-2 [overflow-wrap:anywhere]">
       <p role="status" className="text-sm">
@@ -120,7 +128,7 @@ function NoticeDetails({ row }: { row: Row }) {
             : 'Registration status is being checked. Do not pay again.'}
       </p>
       <p className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-        <span>{paymentLabels[payment]}</span>
+        <span>{paymentLabel}</span>
         {progress && payment !== 'unknown' && progress.status !== 'completed' && (
           <span>Current step: {registrationStageLabel(progress.stage)}</span>
         )}
@@ -128,7 +136,7 @@ function NoticeDetails({ row }: { row: Row }) {
       {progress?.status === 'processing' && payment === 'settled' && (
         <ProgressTime progress={progress} />
       )}
-      {unknown && (
+      {(unknown || progress?.status === 'action_required') && (
         <a
           href="mailto:contact@agentdomain.app"
           className="inline-block text-xs font-medium text-primary underline underline-offset-4"

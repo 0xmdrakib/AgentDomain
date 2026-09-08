@@ -81,7 +81,7 @@ before settlement was attempted for that submission:
 ```
 
 Use `registrationPaymentRejectionSchema` from `@agentdomain/shared` 0.9.1 to validate the public
-payload, including its supported error/diagnostic fields, together with the HTTP status restriction.
+payload and optional matching `error` alias, together with the HTTP status restriction.
 Do not reject an otherwise valid contract merely because it includes a top-level `error` field.
 SDK 0.9.1 surfaces a confirmed rejection as `RegistrationPaymentRejectedError` with
 `code: 'REGISTRATION_PAYMENT_REJECTED'`, `serverCode`, `message`, `handle`, and
@@ -95,6 +95,13 @@ or `5xx` response cannot become a conclusive rejection merely by including the m
 error authorizes automatic resending, repricing, or a new signature. Even another `402` after
 the paid POST is not, by itself, permission to replace the payment; reconcile the submitted
 attempt first.
+
+A declined request does not revoke its signed authorization. The API may keep an attempt
+pending while checking authorization expiry and finalized chain state. During these checks,
+status reports `PAYMENT_AUTHORIZATION_CHECK_PENDING`, not payment confirmation or permission
+to pay again. Verified non-payment is tied to the exact `paymentReference`; a later verified
+settlement takes precedence. Checks requiring operator review report
+`PAYMENT_AUTHORIZATION_REVIEW_REQUIRED` without discarding the original attempt.
 
 ## Fields
 

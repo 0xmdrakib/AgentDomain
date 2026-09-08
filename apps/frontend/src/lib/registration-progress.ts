@@ -235,6 +235,12 @@ export function registrationCopy(item?: RegistrationProgress, accepted?: Registr
       : 'Confirming payment and registration status. Do not pay again.';
   if (item.status === 'completed') return 'Registration complete';
   if (item.status === 'refunded') return 'Payment refunded';
+  if (registrationPaymentStatus(item, accepted) === 'unknown' && item.stage === 'payment') {
+    if (item.messageCode === 'PAYMENT_AUTHORIZATION_CHECK_PENDING')
+      return 'Payment request declined. Checking the signed authorization before you can retry.';
+    if (item.messageCode === 'PAYMENT_AUTHORIZATION_REVIEW_REQUIRED')
+      return 'Payment request declined. Authorization checks need support review. Do not pay again.';
+  }
   if (item.paymentStatus === 'not_charged')
     return accepted
       ? 'Payment was confirmed. Registration status needs verification. Do not pay again.'

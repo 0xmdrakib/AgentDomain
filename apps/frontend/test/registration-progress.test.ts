@@ -69,6 +69,27 @@ const json = (value: unknown, status = 200, headers: Record<string, string> = {}
     headers: { 'content-type': 'application/json', 'X-Authenticated-Wallet': payer, ...headers },
   });
 
+test('names rejected authorization checks without claiming payment or clearing a guard', () => {
+  const item = progress({
+    status: 'awaiting_payment',
+    paymentStatus: 'unknown',
+    stage: 'payment',
+    messageCode: 'PAYMENT_AUTHORIZATION_CHECK_PENDING',
+  });
+  assert.match(registrationCopy(item), /Payment request declined/);
+  assert.match(registrationCopy(item), /signed authorization/);
+  assert.doesNotMatch(registrationCopy(item), /not charged|confirmed/i);
+  assert.match(
+    registrationCopy({
+      ...item,
+      status: 'action_required',
+      messageCode: 'PAYMENT_AUTHORIZATION_REVIEW_REQUIRED',
+    }),
+    /support review/,
+  );
+  assert.doesNotMatch(registrationCopy({ ...item, paymentStatus: 'settled' }), /request declined/);
+});
+
 const clocks = new WeakMap<RegistrationTracker, { now: number }>();
 function createTracker(options: ConstructorParameters<typeof RegistrationTracker>[0]) {
   const clock = { now: Date.parse(startedAt) };
