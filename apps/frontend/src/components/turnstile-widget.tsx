@@ -1,23 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
+import { mountTurnstile, type TurnstileProvider } from './turnstile-lifecycle';
 
 declare global {
   interface Window {
-    turnstile?: {
-      render: (
-        container: HTMLElement,
-        options: {
-          sitekey: string;
-          theme?: 'light' | 'dark' | 'auto';
-          callback?: (token: string) => void;
-          'error-callback'?: () => void;
-          'expired-callback'?: () => void;
-        },
-      ) => string;
-      reset: (widgetId?: string) => void;
-      remove: (widgetId?: string) => void;
-    };
+    turnstile?: TurnstileProvider;
   }
 }
 
@@ -56,58 +44,47 @@ function loadTurnstileScript() {
 
 export function TurnstileWidget({
   siteKey,
-  disabled,
   onToken,
 }: {
   siteKey: string;
+  // Checkout activity must not reset a challenge or invalidate its accepted token.
   disabled?: boolean;
   onToken: (token: string | null) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const widgetIdRef = useRef<string | null>(null);
+  const onTokenRef = useRef(onToken);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  useLayoutEffect(() => {
+    onTokenRef.current = onToken;
+  }, [onToken]);
 
-    loadTurnstileScript()
-      .then(() => {
-        if (cancelled || !containerRef.current || !window.turnstile) return;
-        if (widgetIdRef.current) window.turnstile.remove(widgetIdRef.current);
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
 
-        widgetIdRef.current = window.turnstile.render(containerRef.current, {
-          sitekey: siteKey,
-          theme: 'dark',
-          callback: (token) => onToken(token),
-          'expired-callback': () => onToken(null),
-          'error-callback': () => {
-            onToken(null);
-            setLoadError('Spam check failed to load. Refresh and try again.');
-          },
-        });
-      })
-      .catch((e) => setLoadError(e instanceof Error ? e.message : 'Turnstile failed to load'));
-
-    return () => {
-      cancelled = true;
-      if (widgetIdRef.current && window.turnstile) {
-        window.turnstile.remove(widgetIdRef.current);
-        widgetIdRef.current = null;
-      }
-    };
-  }, [onToken, siteKey]);
-
-  useEffect(() => {
-    if (!disabled || !widgetIdRef.current || !window.turnstile) return;
-    window.turnstile.reset(widgetIdRef.current);
-    onToken(null);
-  }, [disabled, onToken]);
+    return mountTurnstile({
+      container,
+      siteKey,
+      loadProvider: async () => {
+        await loadTurnstileScript();
+        if (!window.turnstile) throw new Error('Turnstile failed to load');
+        return window.turnstile;
+      },
+      onToken: (token) => onTokenRef.current(token),
+      onError: setLoadError,
+    });
+  }, [siteKey]);
 
   return (
     <div className="rounded-lg border border-border/40 bg-card/40 p-4">
       <div className="mb-3 text-sm font-semibold">Spam protection</div>
       <div ref={containerRef} className="min-h-[65px]" />
-      {loadError && <div className="mt-2 text-xs text-destructive">{loadError}</div>}
+      {loadError && (
+        <div role="alert" className="mt-2 text-xs text-destructive">
+          {loadError}
+        </div>
+      )}
     </div>
   );
 }

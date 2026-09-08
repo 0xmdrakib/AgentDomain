@@ -51,15 +51,17 @@ export function RegistrationTrackerProvider({ children }: { children: ReactNode 
         canNotify: () => document.visibilityState === 'visible',
         lock: (key, callback) =>
           navigator.locks ? navigator.locks.request(key, callback) : Promise.resolve(callback()),
-        onCompleted: (item, wallet) => {
+        onCompleted: (item, wallet, isCurrent) => {
           const id = `registration:${wallet}:${item.registrationId}`;
           toast.success(`${item.domain} registration complete`, {
             id,
+            position: 'top-center',
             action: item.agentId
               ? {
                   label: 'View identity',
                   onClick: () => {
-                    if (!toast.getToasts().some((active) => active.id === id)) return;
+                    if (!toast.getToasts().some((active) => active.id === id) || !isCurrent())
+                      return;
                     router.push(`/agents/${encodeURIComponent(item.agentId!)}`);
                   },
                 }
@@ -80,11 +82,17 @@ export function RegistrationTrackerProvider({ children }: { children: ReactNode 
     // Customer identity hosts must not become purchase-management surfaces.
     if (!isApplicationHost()) return;
     let timer: number | undefined;
+    const expiryTimer = window.setInterval(() => tracker.expireNotices(), 1000);
     let stopped = false;
     const dismissRegistrationToasts = (wallet: string | null) => {
       for (const { id } of toast.getToasts()) {
         if (typeof id !== 'string' || !id.startsWith('registration:')) continue;
-        if (wallet && id.startsWith(`registration:${wallet}:`)) continue;
+        if (
+          wallet &&
+          id.startsWith(`registration:${wallet}:`) &&
+          tracker.isPopupEligible(id.slice(`registration:${wallet}:`.length))
+        )
+          continue;
         toast.dismiss(id);
       }
     };
@@ -115,12 +123,9 @@ export function RegistrationTrackerProvider({ children }: { children: ReactNode 
       const snapshot = tracker.getSnapshot();
       const wallet = snapshot.connection === 'unauthorized' ? null : snapshot.wallet;
       dismissRegistrationToasts(wallet);
-      if (
-        snapshot.connection === 'unauthorized' ||
-        (!snapshot.attempts.length && snapshot.discoveryComplete)
-      )
-        return;
+      if (snapshot.connection === 'unauthorized' || !snapshot.wallet) return;
       const delay = Math.min(
+        (2 * REGISTRATION_POLL_MS) / 1000,
         ...(!snapshot.discoveryComplete || !snapshot.attempts.length
           ? [REGISTRATION_POLL_MS / 1000]
           : []),
@@ -144,6 +149,7 @@ export function RegistrationTrackerProvider({ children }: { children: ReactNode 
       unsubscribe();
       dismissRegistrationToasts(null);
       window.clearTimeout(timer);
+      window.clearInterval(expiryTimer);
       tracker.invalidate();
       window.removeEventListener('agentdomain:session-changed', sessionChanged);
       window.removeEventListener('online', refresh);

@@ -13,6 +13,7 @@ import {
   type RegistrationAttempt,
   type RegistrationAccepted,
   type RegistrationProgress,
+  type RegistrationPaymentRejection,
   registrationAttemptSchema,
   registrationListSchema,
   registrationProgressSchema,
@@ -25,7 +26,21 @@ import {
   isRegistrationTerminal,
   canAdvanceRegistration,
 } from './registration-progress';
-import { submissionReviewRequired } from './registration-submission';
+import {
+  readSubmissionReservation,
+  releaseUnchargedSubmissionReservation,
+  submissionReviewRequired,
+  type SubmissionLock,
+} from './registration-submission';
+import {
+  NOTICE_CHANNELS,
+  RegistrationNoticesClient,
+  noticeClientIdSchema,
+  noticeIsCurrent,
+  isNoticeRegistrationId,
+  type NoticeChannel,
+  type RegistrationNotice,
+} from './registration-notices';
 
 export type TrackingConnection = 'loading' | 'ready' | 'offline' | 'unauthorized' | 'unavailable';
 export interface RegistrationSnapshot {
@@ -36,6 +51,12 @@ export interface RegistrationSnapshot {
   hasSavedAttempts: boolean;
   discoveryComplete: boolean;
   discoveryLimited: boolean;
+  notices: Record<NoticeChannel, RegistrationNotice[]>;
+  noticeConnection: TrackingConnection;
+  noticeCursors: Record<NoticeChannel, string | null>;
+  noticeNextCursors: Record<NoticeChannel, string | null>;
+  noticePending: string[];
+  noticeErrors: Partial<Record<NoticeChannel, string>>;
 }
 export const EMPTY_REGISTRATION_SNAPSHOT: RegistrationSnapshot = {
   wallet: null,
@@ -45,6 +66,12 @@ export const EMPTY_REGISTRATION_SNAPSHOT: RegistrationSnapshot = {
   hasSavedAttempts: false,
   discoveryComplete: false,
   discoveryLimited: false,
+  notices: { popup: [], dashboard: [] },
+  noticeConnection: 'loading',
+  noticeCursors: { popup: null, dashboard: null },
+  noticeNextCursors: { popup: null, dashboard: null },
+  noticePending: [],
+  noticeErrors: {},
 };
 
 interface TrackerOptions {
@@ -53,9 +80,10 @@ interface TrackerOptions {
   online?: () => boolean;
   enabled?: () => boolean;
   canNotify?: () => boolean;
-  onCompleted?: (item: RegistrationProgress, wallet: string) => void;
+  onCompleted?: (item: RegistrationProgress, wallet: string, isCurrent: () => boolean) => void;
   onResolved?: (items: RegistrationProgress[], wallet: string) => void;
   lock?: (key: string, callback: () => void) => Promise<void>;
+  submissionLock?: SubmissionLock;
   now?: () => number;
   random?: () => number;
 }
@@ -64,8 +92,17 @@ export class RegistrationTracker {
   private state = EMPTY_REGISTRATION_SNAPSHOT;
   private listeners = new Set<() => void>();
   private accepted = new Map<string, RegistrationAccepted>();
+  private releasedRejections = new Map<string, RegistrationProgress>();
   private deliveredResolutions = new Map<string, RegistrationProgress['status']>();
-  private dismissedNotices = new Set<string>();
+  private noticeClient: RegistrationNoticesClient;
+  private noticeVersion = 0;
+  private noticeSynced = new Set<string>();
+  private unknownSubmissions = new Set<string>();
+  private mutationRetryAt = new Map<string, number>();
+  private lifetimeController = new AbortController();
+  private listedNotices: RegistrationNotice[] = [];
+  private confirmedDismissals = new Set<string>();
+  private nextNoticeReadAt = new Map<string, number>();
   private expectedWallet: string | null | undefined;
   private epoch = 0;
   private controller?: AbortController;
@@ -79,6 +116,7 @@ export class RegistrationTracker {
 
   constructor(private options: TrackerOptions) {
     this.fetcher = options.fetcher ?? fetch;
+    this.noticeClient = new RegistrationNoticesClient(this.fetcher);
   }
   getSnapshot = () => this.state;
   private now = () => (this.options.now ?? Date.now)();
@@ -135,35 +173,373 @@ export class RegistrationTracker {
     submissionReviewRequired(attempt, this.options.storage, now);
 
   private attemptKey(attempt: RegistrationAttempt) {
-    return `${attempt.wallet}:${attempt.clientId}`;
+    const canonical = noticeClientIdSchema.safeParse(attempt.clientId);
+    return `${attempt.wallet}:${canonical.success ? canonical.data : attempt.clientId}`;
   }
 
   isNoticeDismissed(attempt: RegistrationAttempt) {
     const key = this.attemptKey(attempt);
-    if (this.dismissedNotices.has(key)) return true;
     try {
-      return this.options.storage.getItem(`${REGISTRATION_NOTICE_PREFIX}${key}`) === 'dismissed';
+      return [key, `${attempt.wallet}:${attempt.clientId}`, key.replace(/:(\d{13})-/, ':$1.')].some(
+        (alias) =>
+          this.options.storage.getItem(`${REGISTRATION_NOTICE_PREFIX}${alias}`) === 'dismissed',
+      );
     } catch {
       return false;
     }
   }
 
-  dismissNotices(attempts: RegistrationAttempt[]) {
+  // Compatibility for existing callers; dismissal never removes operational attempts/reservations.
+  async dismissNotices(attempts: RegistrationAttempt[]) {
     for (const attempt of attempts) {
+      if (attempt.wallet !== this.state.wallet) continue;
+      const id = this.matches(attempt)?.registrationId;
+      const notice = this.state.notices.popup.find(
+        (item) =>
+          item.noticeId === `client:${attempt.clientId}` || (id && item.registrationId === id),
+      );
+      if (notice) await this.dismissNotice(notice.noticeId, 'popup');
+    }
+  }
+
+  isPopupEligible = (registrationId: string) =>
+    this.state.connection !== 'unauthorized' &&
+    this.state.noticeConnection === 'ready' &&
+    !this.state.noticePending.length &&
+    this.state.notices.popup.some(
+      (notice) => notice.registrationId === registrationId && noticeIsCurrent(notice, this.now()),
+    );
+
+  expireNotices = () => {
+    const notices = { ...this.state.notices };
+    let changed = false;
+    for (const channel of NOTICE_CHANNELS) {
+      notices[channel] = notices[channel].filter((notice) => noticeIsCurrent(notice, this.now()));
+      changed ||= notices[channel].length !== this.state.notices[channel].length;
+    }
+    if (changed) this.update({ notices });
+  };
+
+  private async noticeFailure(error: unknown, wallet: string, epoch: number) {
+    if (epoch !== this.epoch) return;
+    const unauthorized = error instanceof RegistrationReadError && error.kind === 'unauthorized';
+    if (unauthorized) {
+      this.invalidate();
+      this.update({ connection: 'unauthorized', noticeConnection: 'unauthorized' });
+      return;
+    }
+    if (
+      error instanceof RegistrationReadError &&
+      (error.status === 429 || error.retryAfterMs !== undefined)
+    )
+      await this.deferRead(error, wallet);
+    if (epoch !== this.epoch) return;
+    this.update({
+      noticeConnection: unauthorized ? 'unauthorized' : 'unavailable',
+      notices: { popup: [], dashboard: [] },
+      ...(unauthorized ? { connection: 'unauthorized' as const } : {}),
+    });
+  }
+
+  async dismissNotice(id: string, channel: NoticeChannel) {
+    const wallet = this.expectedWallet;
+    const key = `${channel}:${id}`;
+    if (
+      !wallet ||
+      this.state.noticeConnection !== 'ready' ||
+      this.state.noticePending.length ||
+      !this.state.notices[channel].some((item) => item.noticeId === id)
+    )
+      return false;
+    const epoch = this.epoch;
+    this.noticeVersion++;
+    this.update({
+      noticePending: [key],
+      noticeErrors: { ...this.state.noticeErrors, [channel]: undefined },
+    });
+    try {
+      this.checkMutationCooldown(wallet);
+      await this.noticeClient.dismiss(wallet, id, channel, this.lifetimeController.signal);
+      if (epoch !== this.epoch) return false;
+      const notice = this.state.notices[channel].find((item) => item.noticeId === id);
+      if (notice)
+        this.confirmedDismissals.add(`${wallet}:${channel}:${this.noticePurchaseKey(notice)}`);
+      this.noticeVersion++;
+      this.update({
+        notices: {
+          ...this.state.notices,
+          [channel]: this.filterNotices(this.state.notices[channel]),
+        },
+      });
+      return true;
+    } catch (error) {
+      if (epoch !== this.epoch) return false;
+      if (error instanceof RegistrationReadError && error.kind === 'unauthorized')
+        await this.noticeFailure(error, wallet, epoch);
+      else {
+        this.deferMutation(error, wallet);
+        if (epoch === this.epoch)
+          this.update({
+            noticeErrors: {
+              ...this.state.noticeErrors,
+              [channel]: 'Dismissal was not confirmed. Try again later.',
+            },
+          });
+      }
+      return false;
+    } finally {
+      if (epoch === this.epoch) this.update({ noticePending: [] });
+    }
+  }
+
+  async pageNotices(channel: NoticeChannel, latest = false) {
+    const wallet = this.expectedWallet;
+    const cursor = latest ? null : this.state.noticeNextCursors[channel];
+    if (
+      !wallet ||
+      (!latest && !cursor) ||
+      this.state.noticePending.length ||
+      this.state.noticeConnection !== 'ready' ||
+      this.sharedRetryAt(wallet) ||
+      (this.failures.has(wallet) && (this.nextReadAt.get(wallet) ?? 0) > this.now())
+    )
+      return;
+    const epoch = this.epoch;
+    const version = ++this.noticeVersion;
+    this.update({ noticePending: [`page:${channel}`] });
+    try {
+      const page = await this.noticeClient.list(
+        wallet,
+        channel,
+        cursor,
+        this.lifetimeController.signal,
+      );
+      if (epoch !== this.epoch || version !== this.noticeVersion) return;
+      this.update({
+        notices: { ...this.state.notices, [channel]: this.filterNotices(page.items) },
+        noticeCursors: { ...this.state.noticeCursors, [channel]: cursor },
+        noticeNextCursors: { ...this.state.noticeNextCursors, [channel]: page.nextCursor },
+      });
+    } catch (error) {
+      await this.noticeFailure(error, wallet, epoch);
+    } finally {
+      if (epoch === this.epoch) this.update({ noticePending: [] });
+    }
+  }
+
+  private noticePurchaseKey(notice: RegistrationNotice) {
+    if (notice.registrationId) return `registration:${notice.registrationId}`;
+    const attempt = this.state.attempts.find(
+      (item) => notice.noticeId === `client:${item.clientId}`,
+    );
+    const id =
+      attempt &&
+      (this.matches(attempt)?.registrationId ?? this.getAcceptance(attempt)?.registrationId);
+    return id ? `registration:${id}` : notice.noticeId;
+  }
+
+  private filterNotices(items: RegistrationNotice[]) {
+    const grouped = new Map<string, RegistrationNotice>();
+    for (const notice of items) {
+      const key = this.noticePurchaseKey(notice);
+      const prefix = `${this.state.wallet}:${notice.channel}:`;
+      const dismissedAlias = this.state.attempts.some((attempt) => {
+        const id =
+          this.matches(attempt)?.registrationId ?? this.getAcceptance(attempt)?.registrationId;
+        return (
+          id &&
+          key === `registration:${id}` &&
+          this.confirmedDismissals.has(`${prefix}client:${attempt.clientId}`)
+        );
+      });
+      if (dismissedAlias) this.confirmedDismissals.add(`${prefix}${key}`);
       if (
-        attempt.wallet !== this.state.wallet ||
-        !this.state.attempts.some((saved) => this.attemptKey(saved) === this.attemptKey(attempt))
+        !noticeIsCurrent(notice, this.now()) ||
+        this.confirmedDismissals.has(`${this.state.wallet}:${notice.channel}:${key}`) ||
+        (notice.channel === 'popup' &&
+          this.state.attempts.some(
+            (attempt) =>
+              this.isNoticeDismissed(attempt) &&
+              (notice.noticeId === `client:${attempt.clientId}` ||
+                notice.registrationId === this.matches(attempt)?.registrationId),
+          ))
       )
         continue;
+      const previous = grouped.get(key);
+      // A canonical notice may arrive before its client alias link response. Group only proven identities.
+      if (!previous || (notice.source === 'registration' && previous.source !== 'registration'))
+        grouped.set(key, notice);
+    }
+    return [...grouped.values()];
+  }
+
+  private async readNotices(wallet: string, epoch: number, signal: AbortSignal, force = false) {
+    if (this.state.noticePending.length || this.sharedRetryAt(wallet)) return;
+    if (
+      !force &&
+      this.state.noticeConnection === 'ready' &&
+      (this.nextNoticeReadAt.get(wallet) ?? 0) > this.now()
+    )
+      return;
+    // Two notice pages per ten seconds leave room for the existing financial-status read budget.
+    this.nextNoticeReadAt.set(wallet, this.now() + 2 * REGISTRATION_POLL_MS);
+    const version = this.noticeVersion;
+    try {
+      const notices = { ...this.state.notices };
+      const next = { ...this.state.noticeNextCursors };
+      const listed: RegistrationNotice[] = [];
+      for (const channel of NOTICE_CHANNELS) {
+        const page = await this.noticeClient.list(
+          wallet,
+          channel,
+          this.state.noticeCursors[channel],
+          signal,
+        );
+        if (epoch !== this.epoch || version !== this.noticeVersion) return;
+        listed.push(...page.items);
+        notices[channel] = this.filterNotices(page.items);
+        next[channel] = page.nextCursor;
+      }
+      this.listedNotices = listed;
+      this.update({ notices, noticeNextCursors: next, noticeConnection: 'ready' });
+    } catch (error) {
+      if (
+        epoch === this.epoch &&
+        version === this.noticeVersion &&
+        error instanceof RegistrationReadError &&
+        error.status === 400
+      )
+        this.update({ noticeCursors: { popup: null, dashboard: null } });
+      if (version === this.noticeVersion) await this.noticeFailure(error, wallet, epoch);
+    }
+  }
+
+  private checkMutationCooldown(wallet: string) {
+    const retryAt = this.mutationRetryAt.get(wallet) ?? 0;
+    if (retryAt > this.now())
+      throw new RegistrationReadError('unavailable', 429, retryAt - this.now());
+  }
+
+  private deferMutation(error: unknown, wallet: string) {
+    if (error instanceof RegistrationReadError && error.kind === 'unauthorized') return;
+    const delay = error instanceof RegistrationReadError ? error.retryAfterMs : undefined;
+    this.mutationRetryAt.set(wallet, this.now() + Math.max(REGISTRATION_POLL_MS, delay ?? 0));
+  }
+
+  private async syncNoticeMutation<T>(epoch: number, operation: () => Promise<T>) {
+    this.noticeVersion++;
+    this.update({ noticePending: ['sync'] });
+    try {
+      return await operation();
+    } finally {
+      if (epoch === this.epoch) this.update({ noticePending: [] });
+    }
+  }
+
+  private async reconcileNotice(wallet: string, epoch: number, signal: AbortSignal) {
+    // One idempotent write per poll. Completed history must never create rollout notices.
+    if (
+      this.state.noticePending.length ||
+      this.state.noticeConnection !== 'ready' ||
+      (this.mutationRetryAt.get(wallet) ?? 0) > this.now()
+    )
+      return;
+    for (const attempt of this.state.attempts) {
+      if (!noticeClientIdSchema.safeParse(attempt.clientId).success) continue;
       const key = this.attemptKey(attempt);
-      this.dismissedNotices.add(key);
+      const item = this.matches(attempt);
+      const id = item?.registrationId ?? this.accepted.get(key)?.registrationId;
+      const syncKey = `${key}:${id ?? 'unknown'}`;
+      if (this.noticeSynced.has(syncKey)) continue;
+      const existing = this.listedNotices;
+      const linked = id && existing.some((notice) => notice.registrationId === id);
+      const unlinked = existing.some(
+        (notice) => notice.noticeId === `client:${attempt.clientId}` && !notice.registrationId,
+      );
+      if (!this.isNoticeDismissed(attempt) && ((linked && !unlinked) || (!id && unlinked))) {
+        this.noticeSynced.add(syncKey);
+        continue;
+      }
       try {
-        this.options.storage.setItem(`${REGISTRATION_NOTICE_PREFIX}${key}`, 'dismissed');
-      } catch {
-        /* Dismiss for this tracker lifetime even when presentation storage is unavailable. */
+        this.checkMutationCooldown(wallet);
+        if (this.isNoticeDismissed(attempt)) {
+          const targets = [`client:${attempt.clientId}`, ...(id ? [`registration:${id}`] : [])];
+          const target = targets.find(
+            (target) => !this.noticeSynced.has(`dismiss:${key}:${target}`),
+          );
+          if (target) {
+            await this.syncNoticeMutation(epoch, () =>
+              this.noticeClient.dismiss(wallet, target, 'popup', signal),
+            );
+            if (epoch !== this.epoch) return;
+            this.noticeSynced.add(`dismiss:${key}:${target}`);
+          }
+          if (targets.some((target) => !this.noticeSynced.has(`dismiss:${key}:${target}`))) return;
+        } else if (id && (!item || !isRegistrationTerminal(item))) {
+          await this.syncNoticeMutation(epoch, () =>
+            this.noticeClient.create(wallet, id, attempt.clientId, signal),
+          );
+        } else if (!id) {
+          let reservation;
+          try {
+            reservation = readSubmissionReservation(this.options.storage, wallet, attempt.domain);
+          } catch {
+            continue;
+          }
+          const possiblySent =
+            this.unknownSubmissions.has(key) ||
+            (reservation?.clientId === attempt.clientId &&
+              reservation.phase === 'possibly_paid' &&
+              submissionReviewRequired(attempt, this.options.storage, this.now()));
+          if (!possiblySent) continue;
+          await this.syncNoticeMutation(epoch, () =>
+            this.noticeClient.submission(wallet, attempt.clientId, attempt.domain, signal),
+          );
+        } else continue;
+        if (epoch !== this.epoch) return;
+        this.noticeSynced.add(syncKey);
+      } catch (error) {
+        if (epoch !== this.epoch) return;
+        if (error instanceof RegistrationReadError && error.kind === 'unauthorized')
+          await this.noticeFailure(error, wallet, epoch);
+        else {
+          this.deferMutation(error, wallet);
+          // Invalid/expired sources cannot be repaired by repeating the same write every poll.
+          if (
+            !this.isNoticeDismissed(attempt) &&
+            error instanceof RegistrationReadError &&
+            [400, 404, 409].includes(error.status ?? 0)
+          )
+            this.noticeSynced.add(syncKey);
+        }
+      }
+      return;
+    }
+    const recovery = this.state.items.find(
+      (item) =>
+        item.paymentStatus === 'settled' &&
+        !isRegistrationTerminal(item) &&
+        isNoticeRegistrationId(item.registrationId) &&
+        !this.noticeSynced.has(`${wallet}:canonical:${item.registrationId}`) &&
+        !this.listedNotices.some((notice) => notice.registrationId === item.registrationId),
+    );
+    if (!recovery) return;
+    const key = `${wallet}:canonical:${recovery.registrationId}`;
+    try {
+      await this.syncNoticeMutation(epoch, () =>
+        this.noticeClient.create(wallet, recovery.registrationId, undefined, signal),
+      );
+      if (epoch === this.epoch) this.noticeSynced.add(key);
+    } catch (error) {
+      if (epoch !== this.epoch) return;
+      if (error instanceof RegistrationReadError && error.kind === 'unauthorized')
+        await this.noticeFailure(error, wallet, epoch);
+      else {
+        this.deferMutation(error, wallet);
+        if (error instanceof RegistrationReadError && [400, 404, 409].includes(error.status ?? 0))
+          this.noticeSynced.add(key);
       }
     }
-    this.update({});
   }
 
   private async deferRead(error: unknown, wallet: string) {
@@ -208,9 +584,6 @@ export class RegistrationTracker {
 
   hydrate() {
     const attempts = this.readAttempts();
-    const retained = new Set(attempts.map((attempt) => this.attemptKey(attempt)));
-    for (const key of this.dismissedNotices)
-      if (!retained.has(key)) this.dismissedNotices.delete(key);
     const wallet = this.expectedWallet !== undefined ? this.expectedWallet : this.state.wallet;
     this.update({
       wallet,
@@ -226,10 +599,16 @@ export class RegistrationTracker {
         const key = this.options.storage.key(i);
         if (!key?.startsWith(ATTEMPT_PREFIX)) continue;
         try {
+          const raw = JSON.parse(this.options.storage.getItem(key) ?? 'null');
+          const canonical = noticeClientIdSchema.safeParse(raw?.clientId);
           const parsed = registrationAttemptSchema.safeParse(
-            JSON.parse(this.options.storage.getItem(key) ?? 'null'),
+            canonical.success ? { ...raw, clientId: canonical.data } : raw,
           );
-          if (parsed.success) attempts.push(parsed.data);
+          if (
+            parsed.success &&
+            !attempts.some((item) => this.attemptKey(item) === this.attemptKey(parsed.data))
+          )
+            attempts.push(parsed.data);
         } catch {
           /* Ignore corrupt storage, never interpret it as an operation result. */
         }
@@ -242,6 +621,7 @@ export class RegistrationTracker {
 
   remember(attempt: RegistrationAttempt) {
     const clean = registrationAttemptSchema.parse(attempt);
+    this.releasedRejections.delete(this.attemptKey(clean));
     const key = `${ATTEMPT_PREFIX}${clean.clientId}`;
     const value = JSON.stringify(clean);
     this.options.storage.setItem(key, value);
@@ -252,12 +632,240 @@ export class RegistrationTracker {
     this.hydrate();
   }
 
+  private removeTerminalAttempt(attempt: RegistrationAttempt) {
+    let confirmed = true;
+    const keys = Array.from({ length: this.options.storage.length }, (_, index) =>
+      this.options.storage.key(index),
+    );
+    for (const key of keys) {
+      if (!key?.startsWith(ATTEMPT_PREFIX)) continue;
+      try {
+        const raw = this.options.storage.getItem(key);
+        const value = JSON.parse(raw ?? 'null');
+        const canonical = noticeClientIdSchema.safeParse(value?.clientId);
+        const parsed = registrationAttemptSchema.safeParse(
+          canonical.success ? { ...value, clientId: canonical.data } : value,
+        );
+        if (
+          parsed.success &&
+          parsed.data.wallet === attempt.wallet &&
+          parsed.data.domain === attempt.domain &&
+          parsed.data.clientId === attempt.clientId &&
+          this.options.storage.getItem(key) === raw
+        )
+          this.options.storage.removeItem(key);
+      } catch {
+        /* Preserve malformed or concurrently replaced operational state. */
+        confirmed = false;
+      }
+    }
+    return confirmed;
+  }
+
+  private boundUnchargedRejection(attempt: RegistrationAttempt) {
+    if (attempt.wallet !== this.state.wallet || this.accepted.has(this.attemptKey(attempt)))
+      return undefined;
+    try {
+      const saved = readSubmissionReservation(this.options.storage, attempt.wallet, attempt.domain);
+      if (
+        !saved?.paymentReference ||
+        saved.phase !== 'possibly_paid' ||
+        saved.clientId !== attempt.clientId
+      )
+        return undefined;
+      const matches = this.state.items.filter(
+        (item) =>
+          item.domain === attempt.domain &&
+          item.status === 'failed' &&
+          item.paymentStatus === 'not_charged' &&
+          item.messageCode === 'PAYMENT_NOT_SUBMITTED' &&
+          item.paymentReference === saved.paymentReference,
+      );
+      return matches.length === 1 ? matches[0] : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  getReleasedRejection(attempt: RegistrationAttempt) {
+    if (
+      attempt.wallet !== this.state.wallet ||
+      attempt.wallet !== this.expectedWallet ||
+      this.accepted.has(this.attemptKey(attempt))
+    )
+      return undefined;
+    const receipt = this.releasedRejections.get(this.attemptKey(attempt));
+    if (!receipt) return undefined;
+    try {
+      if (
+        readSubmissionReservation(this.options.storage, attempt.wallet, attempt.domain) !== null ||
+        this.options.storage.getItem(`${ATTEMPT_PREFIX}${attempt.clientId}`) !== null
+      )
+        return undefined;
+      return this.state.items.find(
+        (item) =>
+          item.registrationId === receipt.registrationId &&
+          item.domain === attempt.domain &&
+          item.paymentReference === receipt.paymentReference &&
+          item.status === 'failed' &&
+          item.paymentStatus === 'not_charged' &&
+          item.messageCode === 'PAYMENT_NOT_SUBMITTED',
+      );
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async releaseUnchargedAttempts(
+    observed: RegistrationProgress[],
+    wallet: string,
+    epoch: number,
+  ) {
+    const candidates = new Map(
+      this.state.attempts.map((attempt) => [this.attemptKey(attempt), attempt]),
+    );
+    // Older trackers may have removed the attempt while leaving its possibly-paid reservation.
+    for (const item of observed) {
+      if (
+        item.status !== 'failed' ||
+        item.paymentStatus !== 'not_charged' ||
+        item.messageCode !== 'PAYMENT_NOT_SUBMITTED'
+      )
+        continue;
+      try {
+        const saved = readSubmissionReservation(this.options.storage, wallet, item.domain);
+        if (
+          saved?.phase !== 'possibly_paid' ||
+          !saved.paymentReference ||
+          saved.paymentReference !== item.paymentReference
+        )
+          continue;
+        if (
+          this.state.attempts.some(
+            (attempt) =>
+              attempt.wallet === saved.wallet &&
+              attempt.domain === saved.domain &&
+              attempt.clientId !== saved.clientId,
+          )
+        )
+          continue;
+        const attempt = registrationAttemptSchema.parse({
+          wallet: saved.wallet,
+          domain: saved.domain,
+          clientId: saved.clientId,
+        });
+        candidates.set(this.attemptKey(attempt), attempt);
+      } catch {
+        /* An unreadable reservation is not permission to remove it. */
+      }
+    }
+    for (const attempt of candidates.values()) {
+      const item = this.boundUnchargedRejection(attempt);
+      if (
+        !item ||
+        item.status !== 'failed' ||
+        item.paymentStatus !== 'not_charged' ||
+        item.messageCode !== 'PAYMENT_NOT_SUBMITTED' ||
+        this.accepted.has(this.attemptKey(attempt)) ||
+        !observed.some(
+          (read) =>
+            read.registrationId === item.registrationId &&
+            read.status === item.status &&
+            read.paymentStatus === item.paymentStatus &&
+            read.paymentReference === item.paymentReference &&
+            read.messageCode === item.messageCode &&
+            read.updatedAt === item.updatedAt &&
+            read.revision === item.revision,
+        )
+      )
+        continue;
+      const released = await releaseUnchargedSubmissionReservation(attempt, item, {
+        storage: this.options.storage,
+        lock: this.options.submissionLock,
+        currentWallet: () => this.expectedWallet,
+        isCurrent: () =>
+          epoch === this.epoch &&
+          this.state.wallet === wallet &&
+          this.lastAuthenticatedRead?.epoch === epoch &&
+          this.state.connection === 'ready' &&
+          this.state.items.includes(item) &&
+          !this.accepted.has(this.attemptKey(attempt)),
+      });
+      if (epoch !== this.epoch) return;
+      if (
+        !released ||
+        !this.state.items.includes(item) ||
+        this.accepted.has(this.attemptKey(attempt))
+      )
+        continue;
+      try {
+        if (readSubmissionReservation(this.options.storage, wallet, attempt.domain) !== null)
+          continue;
+        if (
+          !this.removeTerminalAttempt(attempt) ||
+          this.options.storage.getItem(`${ATTEMPT_PREFIX}${attempt.clientId}`) !== null
+        )
+          continue;
+        this.releasedRejections.set(this.attemptKey(attempt), item);
+        this.unknownSubmissions.delete(this.attemptKey(attempt));
+      } catch {
+        /* Keep the exact local attempt if cleanup cannot be confirmed. */
+      }
+    }
+    this.hydrate();
+  }
+
   accept(attempt: RegistrationAttempt, accepted: RegistrationAccepted | null) {
     if (accepted?.domain === attempt.domain) {
       this.accepted.set(this.attemptKey(attempt), accepted);
-      this.update({});
+      this.update(
+        attempt.wallet === this.state.wallet
+          ? {
+              items: this.state.items.filter(
+                (item) =>
+                  item.registrationId !== accepted.registrationId ||
+                  item.domain !== accepted.domain ||
+                  item.paymentStatus !== 'not_charged',
+              ),
+            }
+          : {},
+      );
     }
+    if (!accepted) this.unknownSubmissions.add(this.attemptKey(attempt));
     void this.refresh();
+  }
+
+  /** Only a conclusive signed-request rejection may release this exact local placeholder. */
+  reject(attempt: RegistrationAttempt, rejection: RegistrationPaymentRejection) {
+    if (
+      rejection.status !== 'rejected' ||
+      rejection.settlementAttempted !== false ||
+      !rejection.code ||
+      !rejection.message
+    )
+      return false;
+    const clean = registrationAttemptSchema.parse(attempt);
+    const storageKey = `${ATTEMPT_PREFIX}${clean.clientId}`;
+    try {
+      const raw = this.options.storage.getItem(storageKey);
+      if (raw !== null) {
+        const saved = registrationAttemptSchema.parse(JSON.parse(raw));
+        if (
+          saved.wallet !== clean.wallet ||
+          saved.domain !== clean.domain ||
+          saved.clientId !== clean.clientId
+        )
+          return false;
+        this.options.storage.removeItem(storageKey);
+        if (this.options.storage.getItem(storageKey) !== null) return false;
+      }
+    } catch {
+      return false;
+    }
+    this.accepted.delete(this.attemptKey(clean));
+    this.unknownSubmissions.delete(this.attemptKey(clean));
+    this.hydrate();
+    return true;
   }
 
   getAcceptance(attempt: RegistrationAttempt) {
@@ -270,7 +878,12 @@ export class RegistrationTracker {
     const accepted = this.accepted.get(this.attemptKey(attempt));
     return accepted
       ? this.state.items.find((item) => item.registrationId === accepted.registrationId)
-      : matchAttempt(attempt, this.state.items);
+      : (this.boundUnchargedRejection(attempt) ??
+          this.getReleasedRejection(attempt) ??
+          matchAttempt(
+            attempt,
+            this.state.items.filter((item) => item.paymentStatus !== 'not_charged'),
+          ));
   }
 
   hasPurchase(wallet: string, domain: string) {
@@ -305,10 +918,23 @@ export class RegistrationTracker {
 
   invalidate() {
     this.epoch++;
+    this.releasedRejections.clear();
     this.controller?.abort();
+    this.lifetimeController.abort();
+    this.lifetimeController = new AbortController();
     this.inFlight = undefined;
     this.lastAuthenticatedRead = undefined;
-    this.update({ connection: this.expectedWallet ? 'loading' : 'unauthorized' });
+    this.noticeVersion++;
+    this.listedNotices = [];
+    this.update({
+      connection: this.expectedWallet ? 'loading' : 'unauthorized',
+      notices: { popup: [], dashboard: [] },
+      noticeConnection: 'loading',
+      noticePending: [],
+      noticeErrors: {},
+      noticeCursors: { popup: null, dashboard: null },
+      noticeNextCursors: { popup: null, dashboard: null },
+    });
   }
 
   refresh = (): Promise<boolean> => {
@@ -329,7 +955,11 @@ export class RegistrationTracker {
       if (this.options.enabled && !this.options.enabled()) return false;
       this.hydrate();
       if (this.options.online && !this.options.online()) {
-        this.update({ connection: 'offline' });
+        this.update({
+          connection: 'offline',
+          noticeConnection: 'offline',
+          notices: { popup: [], dashboard: [] },
+        });
         return false;
       }
       if (!payer) throw new RegistrationReadError('unauthorized');
@@ -368,6 +998,11 @@ export class RegistrationTracker {
         if (offset !== 0) this.discoveryOffset = offset + REGISTRATION_PAGE_SIZE;
       }
       const ids = new Set<string>();
+      for (const item of this.state.items)
+        if (!isRegistrationTerminal(item)) ids.add(item.registrationId);
+      for (const channel of NOTICE_CHANNELS)
+        for (const notice of this.state.notices[channel])
+          if (notice.registrationId) ids.add(notice.registrationId);
       for (const attempt of this.state.attempts) {
         const id =
           this.accepted.get(this.attemptKey(attempt))?.registrationId ??
@@ -406,15 +1041,33 @@ export class RegistrationTracker {
       const resolved = new Map<string, RegistrationProgress>();
       for (const item of items) {
         const previous = merged.get(item.registrationId);
+        if (
+          item.paymentStatus === 'not_charged' &&
+          (previous?.paymentStatus === 'settled' ||
+            previous?.paymentStatus === 'refunded' ||
+            [...this.accepted.entries()].some(
+              ([key, receipt]) =>
+                key.startsWith(`${payer}:`) &&
+                receipt.registrationId === item.registrationId &&
+                receipt.domain === item.domain,
+            ))
+        )
+          continue;
         // Revision belongs to the workflow; payment/refund observations can change without incrementing it.
-        if (!previous || canAdvanceRegistration(previous, item)) {
+        if (
+          !previous ||
+          canAdvanceRegistration(previous, item) ||
+          (previous.paymentReference === undefined &&
+            item.paymentReference !== undefined &&
+            canAdvanceRegistration(previous, { ...item, paymentReference: undefined }))
+        ) {
           const next =
             previous?.completionEventId && !item.completionEventId
               ? { ...item, completionEventId: previous.completionEventId }
               : item;
           merged.set(item.registrationId, next);
           if (!isRegistrationTerminal(next)) this.deliveredResolutions.delete(item.registrationId);
-          if (previous && !isRegistrationTerminal(previous) && isRegistrationTerminal(item))
+          if (previous && previous.status !== item.status && isRegistrationTerminal(item))
             resolved.set(item.registrationId, item);
         }
       }
@@ -431,19 +1084,12 @@ export class RegistrationTracker {
         discoveryLimited,
       });
       if (epoch !== this.epoch) return false;
-      // Discover purchases from the payer's server list, including another browser's work.
-      for (const item of this.state.items) {
-        if (
-          isRegistrationTerminal(item) ||
-          this.state.attempts.some((attempt) => attempt.domain === item.domain)
-        )
-          continue;
-        this.remember({
-          wallet: session.wallet,
-          domain: item.domain,
-          clientId: `${Date.parse(item.startedAt)}-${item.registrationId}`,
-        });
-      }
+      if (!detailUnavailable) await this.releaseUnchargedAttempts(items, payer, epoch);
+      if (epoch !== this.epoch) return false;
+      await this.readNotices(payer, epoch, signal, resolved.size > 0);
+      if (epoch !== this.epoch) return false;
+      await this.reconcileNotice(payer, epoch, signal);
+      if (epoch !== this.epoch) return false;
       for (const attempt of [...this.state.attempts]) {
         const item = this.matches(attempt);
         if (!item || !isRegistrationTerminal(item)) continue;
@@ -463,17 +1109,26 @@ export class RegistrationTracker {
           this.deliveredResolutions.set(item.registrationId, item.status);
       }
       // Data refresh is delivered independently of whether a visible tab can show the toast.
+      for (const item of this.state.items) {
+        if (item.status === 'completed' && this.isPopupEligible(item.registrationId))
+          await this.complete(item, session.wallet, epoch);
+        if (epoch !== this.epoch) return false;
+      }
       for (const attempt of [...this.state.attempts]) {
         const item = this.matches(attempt);
         if (!item || !isRegistrationTerminal(item)) continue;
+        if (
+          this.isNoticeDismissed(attempt) &&
+          !this.noticeSynced.has(`${this.attemptKey(attempt)}:${item.registrationId}`)
+        )
+          continue;
         const acknowledged =
           item.status !== 'completed' || (await this.complete(item, session.wallet, epoch));
         if (epoch !== this.epoch) return false;
         if (!acknowledged) continue;
-        this.options.storage.removeItem(`${ATTEMPT_PREFIX}${attempt.clientId}`);
-        this.options.storage.removeItem(`${REGISTRATION_NOTICE_PREFIX}${this.attemptKey(attempt)}`);
-        this.dismissedNotices.delete(this.attemptKey(attempt));
+        this.removeTerminalAttempt(attempt);
         this.accepted.delete(this.attemptKey(attempt));
+        this.unknownSubmissions.delete(this.attemptKey(attempt));
       }
       this.hydrate();
       const retained = new Set(
@@ -489,6 +1144,8 @@ export class RegistrationTracker {
         if (epoch !== this.epoch) return false;
         this.update({
           connection: error instanceof RegistrationReadError ? error.kind : 'unavailable',
+          noticeConnection: error instanceof RegistrationReadError ? error.kind : 'unavailable',
+          notices: { popup: [], dashboard: [] },
         });
       }
       return false;
@@ -500,6 +1157,10 @@ export class RegistrationTracker {
     let acknowledged = false;
     const claim = () => {
       if (epoch !== this.epoch) return;
+      if (!this.isPopupEligible(item.registrationId)) {
+        acknowledged = true;
+        return;
+      }
       if (this.options.storage.getItem(key)) {
         acknowledged = true;
         return;
@@ -508,7 +1169,14 @@ export class RegistrationTracker {
       if (this.options.canNotify && !this.options.canNotify()) return;
       // A stable registration key also covers a temporarily missing completionEventId.
       this.options.storage.setItem(key, item.completionEventId ?? 'completed');
-      this.options.onCompleted?.(item, wallet);
+      this.options.onCompleted?.(
+        item,
+        wallet,
+        () =>
+          epoch === this.epoch &&
+          this.state.wallet === wallet &&
+          this.isPopupEligible(item.registrationId),
+      );
       acknowledged = true;
     };
     if (this.options.lock) await this.options.lock(key, claim);

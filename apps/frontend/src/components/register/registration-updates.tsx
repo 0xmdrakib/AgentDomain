@@ -2,80 +2,77 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Clock3, Loader2, CircleAlert, ArrowRight, X } from 'lucide-react';
+import {
+  ArrowRight,
+  Bell,
+  Check,
+  ChevronDown,
+  CircleAlert,
+  Clock3,
+  Loader2,
+  X,
+} from 'lucide-react';
 import { useRegistrationSnapshot, useRegistrationTracker } from './registration-tracker-provider';
 import {
-  attemptStartedAt,
   durationLabel,
   registrationCopy,
   registrationEstimateCopy,
   registrationPaymentStatus,
-  registrationNoticeEligible,
   registrationStageLabel,
   type RegistrationAccepted,
   type RegistrationProgress,
 } from '@/lib/registration-progress';
+import {
+  noticeIsCurrent,
+  type NoticeChannel,
+  type RegistrationNotice,
+} from '@/lib/registration-notices';
 import { SUBMISSION_UNCONFIRMED_MESSAGE } from '@/lib/registration-submission';
 
-function useRegistrationRows() {
+function useRegistrationRows(channel: NoticeChannel) {
   const snapshot = useRegistrationSnapshot();
   const tracker = useRegistrationTracker();
+  return snapshot.noticeConnection !== 'ready' || snapshot.connection === 'unauthorized'
+    ? []
+    : snapshot.notices[channel]
+        .filter((notice) => noticeIsCurrent(notice))
+        .map((notice) => {
+          const progress = snapshot.items.find(
+            (item) =>
+              item.registrationId === notice.registrationId &&
+              (notice.domain === null || item.domain === notice.domain),
+          );
+          const attempt = snapshot.attempts.find(
+            (item) =>
+              notice.noticeId === `client:${item.clientId}` ||
+              (notice.registrationId !== null &&
+                tracker.getAcceptance(item)?.registrationId === notice.registrationId),
+          );
+          return {
+            notice,
+            progress,
+            accepted: attempt ? tracker.getAcceptance(attempt) : undefined,
+          };
+        });
+}
+type Row = ReturnType<typeof useRegistrationRows>[number];
+
+function ProgressTime({ progress }: { progress: RegistrationProgress }) {
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
-    if (!snapshot.attempts.length) return;
     setNow(Date.now());
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
-  }, [snapshot.attempts.length]);
-  const seen = new Set<string>();
-  const rows = snapshot.attempts
-    .map((attempt) => ({
-      key: attempt.clientId,
-      attempt,
-      domain: attempt.domain,
-      startedAt: attemptStartedAt(attempt),
-      progress: tracker.matches(attempt),
-      accepted: tracker.getAcceptance(attempt),
-      dismissed: tracker.isNoticeDismissed(attempt),
-      unconfirmed: now !== null && tracker.isSubmissionUnconfirmed(attempt, now),
-    }))
-    .filter((row) => {
-      const key = row.progress?.registrationId ?? row.domain;
-      if (row.progress?.status === 'completed' || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  return {
-    rows,
-    connection: snapshot.connection,
-  };
-}
-
-function ProgressTime({
-  startedAt,
-  progress,
-}: {
-  startedAt: number;
-  progress?: RegistrationProgress;
-}) {
-  const [now, setNow] = useState<number | null>(null);
-  useEffect(() => {
-    const update = () => setNow(Date.now());
-    update();
-    const timer = window.setInterval(update, 1000);
-    return () => window.clearInterval(timer);
   }, []);
-  const start = progress ? Date.parse(progress.startedAt) : startedAt;
-  const elapsed = now === null ? null : Math.max(0, (now - start) / 1000);
-  const estimate = progress?.estimatedDurationSeconds;
+  const elapsed = now === null ? null : Math.max(0, (now - Date.parse(progress.startedAt)) / 1000);
   return (
-    <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+    <p className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
       <span className="inline-flex items-center gap-1 tabular-nums">
         <Clock3 className="h-3 w-3" aria-hidden />
         Elapsed {elapsed === null ? '...' : durationLabel(elapsed)}
       </span>
-      <span>{registrationEstimateCopy(estimate, elapsed)}</span>
-    </span>
+      <span>{registrationEstimateCopy(progress.estimatedDurationSeconds, elapsed)}</span>
+    </p>
   );
 }
 
@@ -87,169 +84,271 @@ const paymentLabels: Record<RegistrationProgress['paymentStatus'], string> = {
   refunded: 'Payment refunded',
 };
 
-function RegistrationStatusDetails({
+function StatusIcon({
   progress,
   accepted,
 }: {
   progress?: RegistrationProgress;
   accepted?: RegistrationAccepted;
 }) {
+  if (progress?.status === 'completed')
+    return <Check className="h-4 w-4 text-emerald-700" aria-hidden />;
+  if (
+    registrationPaymentStatus(progress, accepted) === 'settled' &&
+    (!progress || progress.status === 'processing')
+  )
+    return (
+      <Loader2
+        className="h-4 w-4 animate-spin text-primary motion-reduce:animate-none"
+        aria-hidden
+      />
+    );
+  return <CircleAlert className="h-4 w-4 text-muted-foreground" aria-hidden />;
+}
+
+function NoticeDetails({ row }: { row: Row }) {
+  const { notice, progress, accepted } = row;
+  const unknown = notice.status === 'submission_unknown' && !progress && !accepted;
+  const payment = registrationPaymentStatus(progress, accepted);
+  const paymentLabel =
+    payment === 'unknown' && progress?.stage === 'payment'
+      ? progress.messageCode === 'PAYMENT_AUTHORIZATION_CHECK_PENDING'
+        ? 'Authorization check pending'
+        : progress.messageCode === 'PAYMENT_AUTHORIZATION_REVIEW_REQUIRED'
+          ? 'Authorization needs review'
+          : paymentLabels[payment]
+      : paymentLabels[payment];
   return (
-    <p className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-      <span>{paymentLabels[registrationPaymentStatus(progress, accepted)]}</span>
-      {progress && registrationPaymentStatus(progress, accepted) !== 'unknown' && (
-        <span>Current step: {registrationStageLabel(progress.stage)}</span>
+    <div className="min-w-0 space-y-2 [overflow-wrap:anywhere]">
+      <p role="status" className="text-sm">
+        {unknown
+          ? SUBMISSION_UNCONFIRMED_MESSAGE
+          : progress || accepted
+            ? registrationCopy(progress, accepted)
+            : 'Registration status is being checked. Do not pay again.'}
+      </p>
+      <p className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <span>{paymentLabel}</span>
+        {progress && payment !== 'unknown' && progress.status !== 'completed' && (
+          <span>Current step: {registrationStageLabel(progress.stage)}</span>
+        )}
+      </p>
+      {progress?.status === 'processing' && payment === 'settled' && (
+        <ProgressTime progress={progress} />
       )}
-    </p>
-  );
-}
-
-function ConnectionNotice({
-  connection,
-}: {
-  connection: ReturnType<typeof useRegistrationRows>['connection'];
-}) {
-  if (connection === 'ready' || connection === 'loading') return null;
-  return (
-    <p className="text-xs text-muted-foreground">
-      {connection === 'unauthorized'
-        ? 'Updates paused. Sign in with the paying wallet to resume; do not pay again.'
-        : connection === 'offline'
-          ? 'Offline. Your registration is still being tracked; updates resume when connected.'
-          : 'Updates temporarily unavailable. Your last known status is preserved; do not pay again.'}
-    </p>
-  );
-}
-
-function UnconfirmedSubmissionNotice() {
-  return (
-    <div className="space-y-2 text-xs text-muted-foreground" data-registration-unconfirmed>
-      <p>{SUBMISSION_UNCONFIRMED_MESSAGE}</p>
-      <a
-        href="mailto:contact@agentdomain.app"
-        className="inline-block font-medium text-primary underline underline-offset-4"
-      >
-        Contact support
-      </a>
+      {(unknown || progress?.status === 'action_required') && (
+        <a
+          href="mailto:contact@agentdomain.app"
+          className="inline-block text-xs font-medium text-primary underline underline-offset-4"
+        >
+          Contact support
+        </a>
+      )}
+      {progress?.agentId && (
+        <Link
+          href={`/agents/${encodeURIComponent(progress.agentId)}`}
+          className="inline-block text-sm text-primary underline underline-offset-4"
+        >
+          View identity
+        </Link>
+      )}
     </div>
   );
 }
 
-export function RegistrationNotification() {
-  const { rows, connection } = useRegistrationRows();
+function DismissNotice({ notice }: { notice: RegistrationNotice }) {
   const tracker = useRegistrationTracker();
-  const notices = rows.filter(
-    (row) => !row.dismissed && registrationNoticeEligible(row.progress, row.accepted),
+  const { noticePending } = useRegistrationSnapshot();
+  const label =
+    notice.channel === 'popup'
+      ? 'Dismiss registration notification'
+      : `Dismiss update for ${notice.domain ?? 'registration'}`;
+  const pending = noticePending.includes(`${notice.channel}:${notice.noticeId}`);
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={noticePending.length > 0}
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+      onClick={() => void tracker.dismissNotice(notice.noticeId, notice.channel)}
+    >
+      {pending ? (
+        <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />
+      ) : (
+        <X className="h-4 w-4" aria-hidden />
+      )}
+    </button>
   );
-  const row = notices[0];
-  if (!row || connection === 'unauthorized') return null;
-  const settled = registrationPaymentStatus(row.progress, row.accepted) === 'settled';
-  const processing = settled && (!row.progress || row.progress.status === 'processing');
+}
+
+function NoticePagination({ channel }: { channel: NoticeChannel }) {
+  const tracker = useRegistrationTracker();
+  const snapshot = useRegistrationSnapshot();
+  const buttonClass =
+    'inline-flex min-h-9 items-center gap-1 text-xs font-medium text-primary hover:underline disabled:opacity-50';
+  return (
+    <>
+      {snapshot.noticeCursors[channel] && (
+        <button
+          type="button"
+          className={buttonClass}
+          disabled={snapshot.noticePending.length > 0}
+          onClick={() => void tracker.pageNotices(channel, true)}
+        >
+          Latest updates
+        </button>
+      )}
+      {snapshot.noticeNextCursors[channel] && (
+        <button
+          type="button"
+          className={buttonClass}
+          disabled={snapshot.noticePending.length > 0}
+          onClick={() => void tracker.pageNotices(channel)}
+        >
+          Older updates <ArrowRight className="h-3 w-3" aria-hidden />
+        </button>
+      )}
+    </>
+  );
+}
+
+export function RegistrationNotification() {
+  const rows = useRegistrationRows('popup');
+  const { noticeErrors, noticeNextCursors, noticeCursors, noticeConnection } =
+    useRegistrationSnapshot();
+  const [selected, setSelected] = useState('');
+  const row = rows.find((item) => item.notice.noticeId === selected) ?? rows[0];
+  if (!row)
+    return noticeConnection === 'ready' && noticeCursors.popup ? (
+      <aside
+        aria-label="Registration notification"
+        className="fixed bottom-3 right-3 z-40 rounded-lg border border-border bg-card p-3"
+      >
+        <NoticePagination channel="popup" />
+      </aside>
+    ) : null;
   return (
     <aside
       aria-label="Registration notification"
-      className="fixed right-3 top-20 z-40 max-h-[calc(100dvh-6rem)] w-[calc(100%-1.5rem)] min-w-[min(18rem,calc(100%-1.5rem))] max-w-sm overflow-y-auto rounded-lg border border-border bg-card p-4 text-card-foreground shadow-lg sm:right-6 sm:top-24"
       data-registration-notification
+      className="fixed bottom-3 right-3 z-40 max-h-[calc(100dvh-6rem)] w-[calc(100%-1.5rem)] max-w-sm overflow-y-auto rounded-lg border border-border bg-card p-3 text-card-foreground shadow-lg md:bottom-auto md:right-6 md:top-24"
     >
-      <div className="flex items-start gap-3">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted">
-          {processing ? (
-            <Loader2
-              className="h-4 w-4 animate-spin text-primary motion-reduce:animate-none"
-              aria-hidden
-            />
-          ) : (
-            <CircleAlert className="h-4 w-4 text-muted-foreground" aria-hidden />
-          )}
+      <div className="flex items-center gap-2">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center">
+          <StatusIcon {...row} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-xs text-muted-foreground">Registration update</p>
-          <p className="wrap-anywhere text-sm font-semibold">{row.domain}</p>
+          <p className="text-xs text-muted-foreground">
+            Registration update
+            {rows.length > 1 ? `s (${rows.length}${noticeNextCursors.popup ? '+' : ''})` : ''}
+          </p>
+          <p className="text-sm font-semibold [overflow-wrap:anywhere]">
+            {row.notice.domain ?? 'Registration'}
+          </p>
         </div>
-        <button
-          type="button"
-          aria-label="Dismiss registration notification"
-          title="Dismiss registration notification"
-          className="-mr-2 -mt-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          onClick={() => tracker.dismissNotices(notices.map((notice) => notice.attempt))}
+        <DismissNotice notice={row.notice} />
+      </div>
+      {rows.length > 1 && (
+        <select
+          aria-label="Select registration update"
+          value={row.notice.noticeId}
+          onChange={(event) => setSelected(event.target.value)}
+          className="mt-2 h-9 w-full min-w-0 rounded-md border border-border bg-background px-2 text-sm"
         >
-          <X className="h-4 w-4" aria-hidden />
-        </button>
+          {rows.map(({ notice }) => (
+            <option key={notice.noticeId} value={notice.noticeId}>
+              {notice.domain ?? 'Registration'}
+            </option>
+          ))}
+        </select>
+      )}
+      <div className="mt-2">
+        <NoticeDetails row={row} />
       </div>
-      <div className="mt-3 space-y-2">
-        <p role="status" className="wrap-anywhere text-sm">
-          {registrationCopy(row.progress, row.accepted)}
+      {noticeErrors.popup && (
+        <p role="alert" className="mt-2 text-xs text-destructive">
+          {noticeErrors.popup}
         </p>
-        <RegistrationStatusDetails progress={row.progress} accepted={row.accepted} />
-        {settled && <ProgressTime startedAt={row.startedAt} progress={row.progress} />}
-        <ConnectionNotice connection={connection} />
-        {row.unconfirmed && <UnconfirmedSubmissionNotice />}
-      </div>
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+      )}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2">
         <Link
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           href="/dashboard"
+          className="inline-flex min-h-9 items-center gap-1.5 text-sm font-medium text-primary hover:underline"
         >
           View progress <ArrowRight className="h-3.5 w-3.5" aria-hidden />
         </Link>
-        {notices.length > 1 && (
-          <span className="text-xs text-muted-foreground">+{notices.length - 1} more</span>
-        )}
+        <NoticePagination channel="popup" />
       </div>
     </aside>
   );
 }
 
 export function DashboardRegistrationUpdates() {
-  const { rows, connection } = useRegistrationRows();
-  const { discoveryLimited } = useRegistrationSnapshot();
-  if (!rows.length && !discoveryLimited) return null;
+  const rows = useRegistrationRows('dashboard');
+  const snapshot = useRegistrationSnapshot();
+  const [open, setOpen] = useState(false);
+  if (
+    snapshot.noticeConnection === 'unauthorized' ||
+    snapshot.connection === 'unauthorized' ||
+    !snapshot.wallet
+  )
+    return null;
+  if (snapshot.noticeConnection !== 'ready')
+    return snapshot.noticeConnection === 'unavailable' ||
+      snapshot.noticeConnection === 'offline' ? (
+      <p className="mb-4 text-xs text-muted-foreground" role="status">
+        Registration updates are unavailable. Do not pay again.
+      </p>
+    ) : null;
+  if (!rows.length && !snapshot.noticeCursors.dashboard) return null;
   return (
-    <section className="mb-8 space-y-3" aria-label="Registration updates">
-      <h2 className="text-lg font-semibold">Registration updates</h2>
-      <ConnectionNotice connection={connection} />
-      {discoveryLimited && (
-        <p className="text-sm text-muted-foreground">
-          Some older purchases could not be checked. Contact support if an expected registration is
-          missing; do not pay again.
-        </p>
-      )}
-      {rows.map((row) => (
-        <article
-          key={row.key}
-          className="rounded-lg border border-border bg-card p-4"
-          data-registration-pending
-        >
-          <div className="flex items-start gap-3">
-            {registrationPaymentStatus(row.progress, row.accepted) !== 'settled' ||
-            (row.progress &&
-              ['failed', 'refunded', 'action_required'].includes(row.progress.status)) ? (
-              <CircleAlert className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-            ) : (
-              <Loader2 className="mt-1 h-4 w-4 shrink-0 animate-spin text-primary" aria-hidden />
-            )}
-            <div className="min-w-0 space-y-2">
-              <h3 className="wrap-anywhere font-semibold">{row.domain}</h3>
-              <p role="status" className="text-sm">
-                {registrationCopy(row.progress, row.accepted)}
-              </p>
-              <RegistrationStatusDetails progress={row.progress} accepted={row.accepted} />
-              {registrationPaymentStatus(row.progress, row.accepted) === 'settled' && (
-                <ProgressTime startedAt={row.startedAt} progress={row.progress} />
-              )}
-              {row.unconfirmed && <UnconfirmedSubmissionNotice />}
-              {row.progress?.agentId && (
-                <Link
-                  href={`/agents/${encodeURIComponent(row.progress.agentId)}`}
-                  className="inline-block text-sm text-primary underline underline-offset-4"
-                >
-                  View identity
-                </Link>
-              )}
-            </div>
+    <section
+      aria-label="Registration updates"
+      className={`mb-6 border-y border-border ${snapshot.notices.popup.length ? 'md:mr-[26rem]' : ''}`}
+    >
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls="dashboard-registration-notices"
+        onClick={() => setOpen(!open)}
+        className="flex min-h-12 w-full items-center gap-2 py-2 text-left text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <Bell className="h-4 w-4 shrink-0" aria-hidden />
+        <span className="min-w-0 flex-1">Registration updates</span>
+        <span className="text-xs tabular-nums text-muted-foreground">
+          {rows.length}
+          {snapshot.noticeNextCursors.dashboard ? '+' : ''}
+        </span>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
+          aria-hidden
+        />
+      </button>
+      {open && (
+        <div id="dashboard-registration-notices" className="divide-y divide-border">
+          {rows.map((row) => (
+            <article key={row.notice.noticeId} data-registration-pending className="py-3">
+              <div className="flex items-center gap-2">
+                <StatusIcon {...row} />
+                <h3 className="min-w-0 flex-1 text-sm font-semibold [overflow-wrap:anywhere]">
+                  {row.notice.domain ?? 'Registration'}
+                </h3>
+                <DismissNotice notice={row.notice} />
+              </div>
+              <NoticeDetails row={row} />
+            </article>
+          ))}
+          {snapshot.noticeErrors.dashboard && (
+            <p role="alert" className="py-2 text-xs text-destructive">
+              {snapshot.noticeErrors.dashboard}
+            </p>
+          )}
+          <div className="flex flex-wrap justify-between gap-2">
+            <NoticePagination channel="dashboard" />
           </div>
-        </article>
-      ))}
+        </div>
+      )}
     </section>
   );
 }

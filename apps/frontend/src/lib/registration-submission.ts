@@ -1,13 +1,20 @@
 import { z } from 'zod';
+import { formatUnits } from 'viem';
+import { USDC_DECIMALS } from '@agentdomain/shared';
 import {
   ATTEMPT_PREFIX,
   attemptStartedAt,
   readRegistrationSession,
-  registrationAcceptedSchema,
+  parsePaidRegistrationResponse,
   registrationAttemptSchema,
+  registrationProgressSchema,
+  registrationPaymentReferenceSchema,
   submitPaidRegistration,
   type RegistrationAccepted,
   type RegistrationAttempt,
+  type RegistrationPaymentCompletion,
+  type RegistrationPaymentRejection,
+  type RegistrationProgress,
 } from './registration-progress';
 import { API_TIMEOUT_MS } from './transport-policy';
 
@@ -26,6 +33,7 @@ const reservationSchema = z
     phase: z.enum(['reserved', 'possibly_paid']),
     createdAt: z.number().int().nonnegative().safe(),
     submittedAt: z.number().int().nonnegative().safe().optional(),
+    paymentReference: registrationPaymentReferenceSchema.optional(),
     reviewAfter: z.number().int().nonnegative().safe(),
   })
   .strict();
@@ -40,6 +48,7 @@ export type SubmissionErrorCode =
   | 'TRACKING_UNAVAILABLE'
   | 'PREPARATION_FAILED'
   | 'PREPARATION_TIMEOUT'
+  | 'QUOTE_REFRESH_REQUIRED'
   | 'INVALID_PAYMENT_REQUIREMENT'
   | 'SIGNATURE_CANCELLED'
   | 'SIGNATURE_FAILED';
@@ -65,15 +74,33 @@ export interface RegistrationSubmissionDependencies {
   isSignatureCancellation(error: unknown): boolean;
   remember(attempt: RegistrationAttempt): void;
   accept(attempt: RegistrationAttempt, accepted: RegistrationAccepted | null): void;
-  onPhase?(phase: 'preparing' | 'awaiting-signature' | 'processing', amount?: string): void;
+  onPhase?(
+    phase: 'preparing' | 'awaiting-signature' | 'processing',
+    amount?: string,
+    quoteExpiresAt?: string | number,
+  ): void;
   onAttempt?(attempt: RegistrationAttempt): void;
 }
 
-export interface RegistrationSubmissionOutcome {
+export interface RegistrationTrackingOutcome {
   kind: 'tracking';
   attempt: RegistrationAttempt;
   accepted: RegistrationAccepted | null;
   reviewAfter: number;
+}
+
+export type RegistrationSubmissionOutcome =
+  | RegistrationTrackingOutcome
+  | {
+      kind: 'rejected';
+      attempt: RegistrationAttempt;
+      rejection: RegistrationPaymentRejection;
+      reservationReleased: boolean;
+    }
+  | { kind: 'completed'; attempt: RegistrationAttempt; completed: RegistrationPaymentCompletion };
+
+export function formatRegistrationPaymentAmount(amount: string): string {
+  return formatUnits(BigInt(amount), USDC_DECIMALS);
 }
 
 export function browserSubmissionLock(
@@ -130,6 +157,104 @@ export function readSubmissionReservation(
     return result;
   } catch {
     throw new RegistrationSubmissionError('STORAGE_UNAVAILABLE');
+  }
+}
+
+/** Fresh payer-authenticated rejection evidence must name this reservation's signed nonce. */
+export async function releaseUnchargedSubmissionReservation(
+  attempt: RegistrationAttempt,
+  progress: RegistrationProgress,
+  dependencies: {
+    storage: Storage;
+    lock?: SubmissionLock;
+    currentWallet(): string | null | undefined;
+    isCurrent(): boolean;
+  },
+): Promise<boolean> {
+  try {
+    const clean = registrationAttemptSchema.parse(attempt);
+    const evidence = registrationProgressSchema.parse(progress);
+    if (
+      evidence.status !== 'failed' ||
+      evidence.paymentStatus !== 'not_charged' ||
+      evidence.messageCode !== 'PAYMENT_NOT_SUBMITTED' ||
+      evidence.agentId !== null ||
+      evidence.completedAt !== null ||
+      evidence.completionEventId !== null ||
+      evidence.domain !== clean.domain ||
+      evidence.paymentReference === undefined
+    )
+      return false;
+    const lock =
+      dependencies.lock ??
+      browserSubmissionLock(
+        typeof window === 'undefined' || typeof navigator === 'undefined'
+          ? undefined
+          : navigator.locks,
+      );
+    if (!lock) return false;
+    const { storage } = dependencies;
+    const key = submissionReservationKey(clean.wallet, clean.domain);
+    const attemptKey = `${ATTEMPT_PREFIX}${clean.clientId}`;
+    const originalAttempt = storage.getItem(attemptKey);
+    if (originalAttempt !== null) {
+      const saved = registrationAttemptSchema.parse(JSON.parse(originalAttempt));
+      if (
+        saved.wallet !== clean.wallet ||
+        saved.domain !== clean.domain ||
+        saved.clientId !== clean.clientId
+      )
+        return false;
+    }
+    const original = storage.getItem(key);
+    const reservation = readSubmissionReservation(storage, clean.wallet, clean.domain);
+    if (
+      !reservation ||
+      reservation.clientId !== clean.clientId ||
+      reservation.phase !== 'possibly_paid' ||
+      reservation.paymentReference !== evidence.paymentReference
+    )
+      return false;
+    const current = () =>
+      dependencies.currentWallet()?.toLowerCase() === clean.wallet && dependencies.isCurrent();
+    if (!current()) return false;
+    return await lock(key, async () => {
+      // Re-read after acquiring checkout's non-waiting lock: same-ID rewrites are successors too.
+      if (
+        !current() ||
+        storage.getItem(attemptKey) !== originalAttempt ||
+        storage.getItem(key) !== original
+      )
+        return false;
+      const latest = readSubmissionReservation(storage, clean.wallet, clean.domain);
+      if (
+        !latest ||
+        latest.paymentReference !== evidence.paymentReference ||
+        latest.paymentReference !== reservation.paymentReference ||
+        latest.clientId !== clean.clientId ||
+        latest.phase !== 'possibly_paid' ||
+        latest.createdAt !== reservation?.createdAt ||
+        latest.submittedAt !== reservation?.submittedAt
+      )
+        return false;
+      if (!current() || storage.getItem(key) !== original) return false;
+      // Keep an operational guard if confirming deletion fails for an orphaned reservation.
+      if (latest && originalAttempt === null) {
+        const fallback = JSON.stringify(clean);
+        storage.setItem(attemptKey, fallback);
+        if (
+          storage.getItem(attemptKey) !== fallback ||
+          !current() ||
+          storage.getItem(key) !== original
+        )
+          return false;
+      }
+      if (latest) storage.removeItem(key);
+      return storage.getItem(key) === null;
+    });
+  } catch {
+    // Missing/busy locks, replaced ownership and storage failures retain the purchase guard.
+    return false;
   }
 }
 
@@ -194,6 +319,23 @@ function clearUnsubmittedReservation(
   if (current?.clientId === reservation.clientId && current.phase === 'reserved') {
     storage.removeItem(submissionReservationKey(reservation.wallet, reservation.domain));
   }
+}
+
+function clearRejectedReservation(
+  storage: Storage,
+  reservation: RegistrationSubmissionReservation,
+): boolean {
+  const key = submissionReservationKey(reservation.wallet, reservation.domain);
+  const current = readSubmissionReservation(storage, reservation.wallet, reservation.domain);
+  if (
+    current?.clientId !== reservation.clientId ||
+    current.phase !== 'possibly_paid' ||
+    current.createdAt !== reservation.createdAt ||
+    current.submittedAt !== reservation.submittedAt
+  )
+    return false;
+  storage.removeItem(key);
+  return storage.getItem(key) === null;
 }
 
 async function prepareRegistration(body: object, fetcher: typeof fetch): Promise<Response> {
@@ -288,22 +430,29 @@ export async function runRegistrationSubmission(
     };
     persistReservation(dependencies.storage, reservation);
     let possiblyPaid = false;
+    let paidReservation: RegistrationSubmissionReservation | null = null;
     let reviewAfter = reservation.reviewAfter;
-    const markPossiblyPaid = () => {
+    const markPossiblyPaid = (paymentReference?: string) => {
       possiblyPaid = true;
       const submittedAt = now();
       reviewAfter = submittedAt + SUBMISSION_REVIEW_AFTER_MS;
-      persistReservation(dependencies.storage, {
+      paidReservation = {
         ...reservation,
         phase: 'possibly_paid',
         submittedAt,
         reviewAfter,
-      });
-      dependencies.remember(attempt);
+        ...(paymentReference ? { paymentReference } : {}),
+      };
+      persistReservation(dependencies.storage, paidReservation);
       dependencies.onAttempt?.(attempt);
       dependencies.onPhase?.('processing');
     };
     const outcome = (accepted: RegistrationAccepted | null): RegistrationSubmissionOutcome => {
+      try {
+        dependencies.remember(attempt);
+      } catch {
+        /* The durable possibly-paid reservation still prevents a duplicate after reload. */
+      }
       try {
         dependencies.onAttempt?.(attempt);
       } catch {
@@ -321,18 +470,49 @@ export async function runRegistrationSubmission(
       const initial = await prepareRegistration(body, fetcher);
       if (initial.status !== 402) {
         if (!initial.ok) throw new RegistrationSubmissionError('PREPARATION_FAILED');
-        const parsed = registrationAcceptedSchema.safeParse(await initial.json().catch(() => null));
+        const parsed = parsePaidRegistrationResponse(
+          initial.status,
+          await initial.json().catch(() => null),
+        );
+        if (
+          !parsed ||
+          !('domain' in parsed) ||
+          parsed.domain !== domain ||
+          (parsed.status !== 'completed' && parsed.status !== 'processing')
+        )
+          throw new RegistrationSubmissionError('PREPARATION_FAILED');
         markPossiblyPaid();
-        return outcome(parsed.success && parsed.data.domain === domain ? parsed.data : null);
+        if (parsed.status === 'completed') return { kind: 'completed', attempt, completed: parsed };
+        return outcome(parsed);
       }
-      const requirement = (await initial.clone().json()) as {
-        accepts?: Array<{ amount?: unknown }>;
+      const encodedRequirement = initial.headers.get('PAYMENT-REQUIRED');
+      const requirement = (
+        encodedRequirement ? JSON.parse(atob(encodedRequirement)) : await initial.clone().json()
+      ) as {
+        accepts?: Array<{
+          amount?: unknown;
+          extra?: { quoteExpiresAt?: unknown; requestBinding?: unknown };
+        }>;
       };
       const amount = requirement.accepts?.[0]?.amount;
-      if (typeof amount !== 'string' || !/^\d{1,78}$/.test(amount))
+      if (
+        requirement.accepts?.length !== 1 ||
+        typeof amount !== 'string' ||
+        !/^\d{1,78}$/.test(amount)
+      )
         throw new RegistrationSubmissionError('INVALID_PAYMENT_REQUIREMENT');
+      const expiresAt = requirement.accepts[0].extra?.quoteExpiresAt;
+      const binding = requirement.accepts[0].extra?.requestBinding;
+      const reference = registrationPaymentReferenceSchema.safeParse(binding);
+      if (binding !== undefined && !reference.success)
+        throw new RegistrationSubmissionError('INVALID_PAYMENT_REQUIREMENT');
+      const quoteExpiresAt =
+        typeof expiresAt === 'string' ||
+        (typeof expiresAt === 'number' && Number.isFinite(expiresAt))
+          ? expiresAt
+          : undefined;
       await checkPayer();
-      dependencies.onPhase?.('awaiting-signature', amount);
+      dependencies.onPhase?.('awaiting-signature', amount, quoteExpiresAt);
       let paymentHeaders: Record<string, string>;
       try {
         paymentHeaders = await dependencies.createPaymentHeaders(initial);
@@ -353,16 +533,40 @@ export async function runRegistrationSubmission(
       if (current?.clientId !== reservation.clientId || current.phase !== 'reserved') {
         throw new RegistrationSubmissionError('EXISTING_SUBMISSION');
       }
-      markPossiblyPaid();
+      // Match the SDK's whole-second expiry and retain one API deadline before transmission.
+      if (
+        typeof quoteExpiresAt === 'string' &&
+        Math.floor(Date.parse(quoteExpiresAt) / 1000) * 1000 - now() <=
+          SUBMISSION_REQUEST_TIMEOUT_MS
+      ) {
+        throw new RegistrationSubmissionError('QUOTE_REFRESH_REQUIRED');
+      }
+      markPossiblyPaid(reference.success ? reference.data : undefined);
       const { turnstileToken: _turnstileToken, ...paidBody } = body;
       void _turnstileToken;
-      const accepted = await submitPaidRegistration(
+      const response = await submitPaidRegistration(
         paidBody,
         paymentHeaders,
         initial.headers.get('X-Turnstile-Pass'),
         fetcher,
       );
-      return outcome(accepted?.domain === domain ? accepted : null);
+      if (response?.status === 'rejected') {
+        let reservationReleased = false;
+        try {
+          reservationReleased = Boolean(
+            paidReservation && clearRejectedReservation(dependencies.storage, paidReservation),
+          );
+        } catch {
+          /* Preserve unreadable/local successor state without inventing payment uncertainty for this rejection. */
+        }
+        possiblyPaid = false;
+        return { kind: 'rejected', attempt, rejection: response, reservationReleased };
+      }
+      if (response?.status === 'completed' && response.domain === domain)
+        return { kind: 'completed', attempt, completed: response };
+      return outcome(
+        response?.status === 'processing' && response.domain === domain ? response : null,
+      );
     } catch (error) {
       if (possiblyPaid) return outcome(null);
       try {

@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-html-link-for-pages -- Public pages use full navigation to avoid shipping router JavaScript. */
 
-import { Menu, X } from 'lucide-react';
+import { Mail, Menu, X } from 'lucide-react';
 import { BrandMark } from '@/components/brand/brand-mark';
 import { Button } from '@/components/ui/button';
 
@@ -10,6 +10,7 @@ const links = [
   { href: '/#pricing', label: 'Pricing' },
   { href: '/registry', label: 'Registry' },
   { href: 'https://docs.agentdomain.app', label: 'Docs' },
+  { href: 'mailto:contact@agentdomain.app', label: 'Support' },
 ] as const;
 
 export function PublicNav() {
@@ -26,19 +27,20 @@ export function PublicNav() {
           </span>
         </a>
 
-        <nav className="hidden items-center gap-7 text-sm md:flex" aria-label="Primary navigation">
+        <nav className="hidden items-center gap-7 text-sm xl:flex" aria-label="Primary navigation">
           {links.map((link) => (
             <a
               key={link.href}
               href={link.href}
-              className="text-muted-foreground transition-colors hover:text-foreground"
+              className="inline-flex items-center gap-2 whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground"
             >
+              {link.label === 'Support' && <Mail className="h-4 w-4 shrink-0" aria-hidden />}
               {link.label}
             </a>
           ))}
         </nav>
 
-        <div className="hidden items-center gap-2 md:flex">
+        <div className="hidden items-center gap-2 xl:flex">
           <Button asChild variant="ghost" size="sm">
             <a href="/dashboard">Dashboard</a>
           </Button>
@@ -47,7 +49,7 @@ export function PublicNav() {
           </Button>
         </div>
 
-        <details className="group static md:hidden">
+        <details className="group static xl:hidden">
           <summary className="touch-target flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-md border border-border/80 bg-card/70 text-muted-foreground shadow-sm transition hover:border-primary/45 hover:bg-accent hover:text-foreground marker:content-none">
             <Menu className="h-5 w-5 group-open:hidden" aria-hidden />
             <X className="hidden h-5 w-5 group-open:block" aria-hidden />
@@ -60,8 +62,9 @@ export function PublicNav() {
                 <a
                   key={link.href}
                   href={link.href}
-                  className="touch-target flex items-center rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent/80 hover:text-foreground"
+                  className="touch-target flex items-center gap-2 rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent/80 hover:text-foreground"
                 >
+                  {link.label === 'Support' && <Mail className="h-4 w-4 shrink-0" aria-hidden />}
                   {link.label}
                 </a>
               ))}

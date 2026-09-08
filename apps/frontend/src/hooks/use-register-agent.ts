@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAccount, useWalletClient, useConfig } from 'wagmi';
 import { getAccount, getWalletClient } from 'wagmi/actions';
 import { type Address } from 'viem';
-import { USDC_DECIMALS, type RegistrationParams } from '@agentdomain/shared';
+import { type RegistrationParams } from '@agentdomain/shared';
 import { createX402PaymentHeaders } from '@agentdomain/sdk';
 import {
   BASE_MAINNET_CHAIN_ID,
@@ -21,6 +21,7 @@ import {
 import { type RegistrationAttempt, type RegistrationProgress } from '@/lib/registration-progress';
 import {
   browserSubmissionLock,
+  formatRegistrationPaymentAmount,
   RegistrationSubmissionError,
   runRegistrationSubmission,
   SUBMISSION_UNCONFIRMED_MESSAGE,
@@ -31,14 +32,33 @@ export interface RegistrationState {
     | 'idle'
     | 'preparing'
     | 'awaiting-signature'
+    | 'submitting'
     | 'processing'
     | 'action-required'
     | 'success'
     | 'error';
   message?: string;
   error?: string;
-  result?: RegistrationProgress;
+  result?: Pick<RegistrationProgress, 'domain' | 'agentId'>;
+  payment?: { amountAtomic: string; amountUsdc: string; quoteExpiresAt?: string | number };
+  paymentStatus?: RegistrationProgress['paymentStatus'];
+  rejectionCode?: string;
   messageCode?: 'SUBMISSION_UNCONFIRMED';
+}
+
+function retryableUnchargedState(previous: RegistrationState): RegistrationState {
+  return {
+    ...previous,
+    phase: 'error',
+    paymentStatus: 'not_charged',
+    rejectionCode: 'PAYMENT_NOT_SUBMITTED',
+    error:
+      'Payment was not submitted. This checkout was not charged. Check the price before trying again.',
+    message: undefined,
+    messageCode: undefined,
+    payment: undefined,
+    result: undefined,
+  };
 }
 
 export function useRegisterAgent() {
@@ -59,6 +79,10 @@ export function useRegisterAgent() {
     attempt && attempt.wallet === address?.toLowerCase()
       ? tracker.getAcceptance(attempt)
       : undefined;
+  const releasedRejection =
+    attempt && attempt.wallet === address?.toLowerCase()
+      ? tracker.getReleasedRejection?.(attempt)
+      : undefined;
   const walletReady = Boolean(
     address &&
     walletClient?.account?.address?.toLowerCase() === address.toLowerCase() &&
@@ -67,25 +91,34 @@ export function useRegisterAgent() {
   );
 
   useEffect(() => {
+    if (!releasedRejection) return;
+    setAttempt(null);
+    setReviewAfter(null);
+    setState(retryableUnchargedState);
+  }, [releasedRejection]);
+
+  useEffect(() => {
     if (
       !attempt ||
       progress ||
       accepted ||
+      releasedRejection ||
       reviewAfter === null ||
       attempt.wallet !== address?.toLowerCase()
     )
       return;
     const timer = window.setTimeout(
       () =>
-        setState({
+        setState((previous) => ({
+          ...previous,
           phase: 'action-required',
           messageCode: 'SUBMISSION_UNCONFIRMED',
           message: SUBMISSION_UNCONFIRMED_MESSAGE,
-        }),
+        })),
       Math.max(0, reviewAfter - Date.now()),
     );
     return () => window.clearTimeout(timer);
-  }, [attempt, progress, accepted, reviewAfter, address]);
+  }, [attempt, progress, accepted, releasedRejection, reviewAfter, address]);
 
   async function register(
     params: Omit<RegistrationParams, 'wallet'> & { turnstileToken?: string },
@@ -94,6 +127,8 @@ export function useRegisterAgent() {
     busy.current = true;
     try {
       if (!address) throw new Error('Wallet required');
+      setAttempt(null);
+      setReviewAfter(null);
       setOperationWallet(address.toLowerCase());
       setState({ phase: 'preparing', message: 'Checking wallet and sign-in...' });
       if (!(await ensureBaseChain())) throw new BaseChainRequiredError();
@@ -130,18 +165,61 @@ export function useRegisterAgent() {
           remember: (pending) => tracker.remember(pending),
           accept: (pending, accepted) => tracker.accept(pending, accepted),
           onAttempt: setAttempt,
-          onPhase: (phase, amount) =>
-            setState({
-              phase,
+          onPhase: (phase, amount, quoteExpiresAt) =>
+            setState((previous) => ({
+              phase: phase === 'processing' ? 'submitting' : phase,
+              payment:
+                amount === undefined
+                  ? previous.payment
+                  : {
+                      amountAtomic: amount,
+                      amountUsdc: formatRegistrationPaymentAmount(amount),
+                      quoteExpiresAt,
+                    },
+              paymentStatus: 'pending',
               message:
                 phase === 'awaiting-signature'
-                  ? `Sign payment of $${(Number(amount) / 10 ** USDC_DECIMALS).toFixed(2)} USDC`
-                  : undefined,
-            }),
+                  ? `Sign payment of ${formatRegistrationPaymentAmount(amount!)} USDC`
+                  : phase === 'processing'
+                    ? 'Submitting signed payment. Settlement is not yet confirmed.'
+                    : undefined,
+            })),
         },
       );
+      if (result.kind === 'rejected') {
+        setAttempt(null);
+        setReviewAfter(null);
+        setState((previous) => ({
+          ...previous,
+          phase: result.reservationReleased ? 'error' : 'action-required',
+          paymentStatus: 'not_charged',
+          rejectionCode: result.rejection.code,
+          error: `${result.rejection.message} No settlement was attempted. Review the quote before starting a new checkout.`,
+          message: result.reservationReleased
+            ? undefined
+            : 'This payment submission was rejected without settlement. A checkout reservation remains on this device and needs review before another payment.',
+        }));
+        return;
+      }
+      if (result.kind === 'completed') {
+        setReviewAfter(null);
+        setState((previous) => ({
+          ...previous,
+          phase: 'success',
+          result: result.completed,
+          paymentStatus: 'settled',
+        }));
+        void tracker.refresh().catch(() => {
+          /* A failed background read cannot undo a validated completed response. */
+        });
+        return;
+      }
       setReviewAfter(result.reviewAfter);
-      setState({ phase: 'processing' });
+      setState((previous) => ({
+        ...previous,
+        phase: 'processing',
+        paymentStatus: result.accepted ? 'settled' : 'pending',
+      }));
     } catch (error) {
       if (isBaseChainRequiredError(error) || isBaseChainMismatchError(error)) {
         setState({ phase: 'idle' });
@@ -159,13 +237,15 @@ export function useRegisterAgent() {
       }
       const message = cancelled
         ? 'Payment signature cancelled. No payment request was submitted.'
-        : code === 'LOCKS_UNAVAILABLE'
-          ? 'This browser cannot safely coordinate checkout across tabs. Web Locks support is required; no payment was submitted.'
-          : code === 'CHECKOUT_BUSY'
-            ? 'Checkout is already open in another tab for this payer and domain. Continue there; no new payment was submitted.'
-            : code === 'PREPARATION_TIMEOUT'
-              ? 'Checkout preparation timed out before payment signing. No payment was submitted.'
-              : 'Checkout was not submitted. Confirm your payer sign-in and connection, then check registration updates before continuing.';
+        : code === 'QUOTE_REFRESH_REQUIRED'
+          ? 'The quote needs refreshing before submission. Check the price again; no payment request was sent.'
+          : code === 'LOCKS_UNAVAILABLE'
+            ? 'This browser cannot safely coordinate checkout across tabs. Web Locks support is required; no payment was submitted.'
+            : code === 'CHECKOUT_BUSY'
+              ? 'Checkout is already open in another tab for this payer and domain. Continue there; no new payment was submitted.'
+              : code === 'PREPARATION_TIMEOUT'
+                ? 'Checkout preparation timed out before payment signing. No payment was submitted.'
+                : 'Checkout was not submitted. Confirm your payer sign-in and connection, then check registration updates before continuing.';
       setState(cancelled ? { phase: 'idle', message } : { phase: 'error', error: message });
       if (cancelled) return;
       throw new Error(message);
@@ -174,13 +254,33 @@ export function useRegisterAgent() {
     }
   }
 
+  const visibleState: RegistrationState =
+    operationWallet && operationWallet !== address?.toLowerCase()
+      ? { phase: 'idle' as const }
+      : releasedRejection
+        ? retryableUnchargedState(state)
+        : progress?.status === 'completed'
+          ? {
+              ...state,
+              phase: 'success' as const,
+              result: progress,
+              paymentStatus: 'settled' as const,
+            }
+          : {
+              ...state,
+              paymentStatus:
+                progress &&
+                progress.paymentStatus !== 'unknown' &&
+                progress.paymentStatus !== 'pending'
+                  ? progress.paymentStatus
+                  : accepted
+                    ? 'settled'
+                    : state.paymentStatus,
+            };
+
   return {
     state: {
-      ...(operationWallet && operationWallet !== address?.toLowerCase()
-        ? { phase: 'idle' as const }
-        : progress?.status === 'completed'
-          ? { phase: 'success' as const, result: progress }
-          : state),
+      ...visibleState,
       walletReady,
     },
     register,

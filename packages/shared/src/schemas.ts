@@ -78,6 +78,10 @@ const registrationProgressObjectSchema = z.object({
   domain: z.string().min(1),
   agentId: z.string().nullable(),
   paymentStatus: z.enum(['unknown', 'pending', 'settled', 'not_charged', 'refunded']),
+  paymentReference: z
+    .string()
+    .regex(/^0x[0-9a-f]{64}$/i)
+    .optional(),
   stage: z.enum([
     'payment',
     'domain',
@@ -130,6 +134,24 @@ export const registrationListResultSchema = z.object({
   hasMore: z.boolean(),
   total: z.number().int().nonnegative(),
 });
+
+/** Only authoritative on a paid-request 4xx response other than HTTP 408. */
+export const registrationPaymentRejectionSchema = z
+  .object({
+    code: z.string().refine((value) => value.trim().length > 0, 'A rejection code is required'),
+    message: z
+      .string()
+      .refine((value) => value.trim().length > 0, 'A rejection message is required'),
+    error: z.string().optional(),
+    paymentSubmission: z
+      .object({ status: z.literal('rejected'), settlementAttempted: z.literal(false) })
+      .strict(),
+  })
+  .strict()
+  .refine((value) => value.error === undefined || value.error === value.code, {
+    message: 'The error alias must exactly match the rejection code',
+    path: ['error'],
+  });
 
 export const domainLabelSchema = z
   .string()

@@ -1,0 +1,9 @@
+{
+  "error": "PAYMENT_QUOTE_EXPIRED",
+  "code": "PAYMENT_QUOTE_EXPIRED",
+  "message": "The payment quote expired.",
+  "paymentSubmission": {
+    "status": "rejected",
+    "settlementAttempted": false
+  }
+}

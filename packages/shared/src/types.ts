@@ -73,6 +73,8 @@ export interface RegistrationProgress {
   domain: string;
   agentId: string | null;
   paymentStatus: 'unknown' | 'pending' | 'settled' | 'not_charged' | 'refunded';
+  /** Non-secret exact payment binding for authenticated terminal non-submission evidence. */
+  paymentReference?: string;
   stage:
     | 'payment'
     | 'domain'
@@ -110,6 +112,18 @@ export interface RegistrationListResult {
   items: RegistrationProgress[];
   hasMore: boolean;
   total: number;
+}
+
+/** Conclusive paid-request rejection; HTTP 408 and 5xx responses remain uncertain. */
+export interface RegistrationPaymentRejection {
+  code: string;
+  message: string;
+  /** When present, this alias must exactly equal code. */
+  error?: string;
+  paymentSubmission: {
+    status: 'rejected';
+    settlementAttempted: false;
+  };
 }
 
 export interface AgentMetadata {

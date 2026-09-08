@@ -99,6 +99,7 @@ export function RegisterFlow() {
     ensureBaseChain,
   } = useBaseChainGuard();
   const {
+    balanceAtomic,
     balanceNumber,
     balanceFormatted,
     isLoading: balanceLoading,
@@ -322,11 +323,14 @@ export function RegisterFlow() {
   const quoteHasDomainPrice = quote ? Number(quote.domainCostUsdc) > 0 : false;
   const quoteReady =
     quoteStatus === 'ready' && Boolean(quote) && isCurrentSearch && quoteHasDomainPrice;
+  const paymentQuote =
+    regState.phase !== 'idle' && regState.phase !== 'error' ? regState.payment : undefined;
   const showQuoteCard =
-    isCurrentSearch &&
-    validName &&
-    searchedName.length >= 3 &&
-    (quoteStatus !== 'idle' || Boolean(quote));
+    Boolean(paymentQuote) ||
+    (isCurrentSearch &&
+      validName &&
+      searchedName.length >= 3 &&
+      (quoteStatus !== 'idle' || Boolean(quote)));
   const quoteRefreshMessage =
     quoteStatus === 'expired' ? 'Quote timed out. Search again to check price again.' : quoteError;
   const totalCost = quoteReady && quote ? Number(quote.totalUsdc) : 0;
@@ -339,7 +343,11 @@ export function RegisterFlow() {
     registerBasename && (!validBasenameLabel || availability?.basenameAvailable === false);
   const ensBlocked = registerEns && (!validEnsLabel || availability?.ensAvailable === false);
   const insufficientBalance =
-    isConnected && isMainnet && totalCost > 0 && balanceNumber < totalCost;
+    isConnected &&
+    isMainnet &&
+    (paymentQuote
+      ? balanceAtomic < BigInt(paymentQuote.amountAtomic)
+      : totalCost > 0 && balanceNumber < totalCost);
   const wrongChain = isConnected && !isMainnet;
   const existingPurchase = Boolean(address && tracker.hasPurchase(address, `${name}.${tld}`));
 
@@ -865,7 +873,26 @@ export function RegisterFlow() {
         <Card className="premium-surface premium-elevated border-primary/40">
           <CardContent className="p-4 sm:p-6">
             <label className="block text-sm font-semibold mb-4">3. Pricing</label>
-            {quoteStatus === 'loading' ? (
+            {paymentQuote ? (
+              <div className="space-y-2 text-sm">
+                <Line
+                  label="Payment total (USDC on Base)"
+                  value={`${paymentQuote.amountUsdc} USDC`}
+                  bold
+                />
+                <p className="text-muted-foreground">
+                  {regState.paymentStatus === 'settled'
+                    ? 'Payment settled. Registration updates are being checked.'
+                    : regState.paymentStatus === 'refunded'
+                      ? 'Payment refunded. Review registration updates.'
+                      : regState.paymentStatus === 'not_charged'
+                        ? 'Payment was not charged. Review registration updates.'
+                        : regState.phase === 'awaiting-signature'
+                          ? 'Awaiting your payment signature.'
+                          : 'This is the signed amount. Settlement is not yet confirmed.'}
+                </p>
+              </div>
+            ) : quoteStatus === 'loading' ? (
               <QuoteNotice
                 tone="loading"
                 title="Checking latest price..."
@@ -916,8 +943,9 @@ export function RegisterFlow() {
           <CardContent className="flex items-start gap-3 px-4 pb-4 pt-4 text-sm sm:px-5 sm:pb-5 sm:pt-5">
             <X className="mt-0.5 h-4 w-4 flex-shrink-0 text-destructive" />
             <div className="min-w-0 flex-1 space-y-2.5">
-              <div className="font-medium leading-5">
-                You need ${totalCost.toFixed(2)} USDC but only have ${balanceNumber.toFixed(2)}.
+              <div className="font-medium leading-5 [overflow-wrap:anywhere]">
+                You need {paymentQuote?.amountUsdc ?? quote?.totalUsdc} USDC but only have{' '}
+                {balanceFormatted} USDC.
               </div>
               <div className="leading-5 text-muted-foreground">
                 Add USDC to this wallet on Base mainnet, then refresh your balance.
@@ -936,12 +964,26 @@ export function RegisterFlow() {
       )}
 
       {/* Status indicator during registration */}
-      {(regState.phase === 'preparing' || regState.phase === 'awaiting-signature') && (
+      {(regState.phase === 'preparing' ||
+        regState.phase === 'awaiting-signature' ||
+        regState.phase === 'submitting' ||
+        regState.phase === 'processing') && (
         <Card className="premium-surface border-primary/50">
-          <CardContent className="flex min-h-12 items-center gap-3 px-4 py-3">
+          <CardContent
+            role="status"
+            className="flex min-h-12 items-center gap-3 px-4 py-3 sm:px-4 sm:py-3"
+          >
             <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
-            <div className="flex min-h-6 items-center text-sm font-medium leading-6">
-              {regState.message ?? 'Working...'}
+            <div className="min-h-6 min-w-0 break-words text-sm font-medium leading-6">
+              {regState.phase === 'processing'
+                ? regState.paymentStatus === 'settled'
+                  ? 'Payment settled. Registration is processing.'
+                  : regState.paymentStatus === 'refunded'
+                    ? 'Payment refunded. Review registration updates.'
+                    : regState.paymentStatus === 'not_charged'
+                      ? 'Payment was not charged. Review registration updates.'
+                      : 'Submission outcome is unconfirmed. Checking registration updates; do not pay again.'
+                : (regState.message ?? 'Preparing checkout...')}
             </div>
           </CardContent>
         </Card>
@@ -950,7 +992,9 @@ export function RegisterFlow() {
       {regState.phase === 'error' && regState.error && (
         <Card className="border-destructive/60 bg-destructive/10">
           <CardContent className="p-4 text-sm text-destructive">
-            <div className="font-semibold mb-1">Checkout not submitted</div>
+            <div className="font-semibold mb-1">
+              {regState.rejectionCode ? 'Payment submission rejected' : 'Checkout not submitted'}
+            </div>
             <div>{regState.error}</div>
           </CardContent>
         </Card>
@@ -1017,7 +1061,15 @@ export function RegisterFlow() {
             ) : regState.phase !== 'idle' && regState.phase !== 'error' ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Registering...
+                {regState.phase === 'awaiting-signature'
+                  ? 'Awaiting signature...'
+                  : regState.phase === 'submitting'
+                    ? 'Submitting payment...'
+                    : regState.phase === 'processing'
+                      ? regState.paymentStatus === 'settled'
+                        ? 'Processing registration...'
+                        : 'Checking payment...'
+                      : 'Preparing checkout...'}
               </>
             ) : !payerAuthenticated ? (
               'Sign in before paying'
@@ -1574,7 +1626,14 @@ function Line({ label, value, bold }: { label: string; value: string; bold?: boo
       <span className={cn('text-muted-foreground', bold && 'text-foreground font-semibold')}>
         {label}
       </span>
-      <span className={cn('font-mono sm:shrink-0', bold && 'text-lg font-semibold')}>{value}</span>
+      <span
+        className={cn(
+          'min-w-0 font-mono [overflow-wrap:anywhere] sm:max-w-[65%] sm:text-right',
+          bold && 'text-lg font-semibold',
+        )}
+      >
+        {value}
+      </span>
     </div>
   );
 }
