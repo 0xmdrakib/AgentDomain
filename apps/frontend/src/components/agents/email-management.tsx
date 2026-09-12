@@ -487,7 +487,7 @@ export function EmailManagement({
               className="w-full sm:w-auto"
             >
               <Send className="h-4 w-4" />
-              Compose
+              Send Email
             </Button>
           </div>
         </div>
