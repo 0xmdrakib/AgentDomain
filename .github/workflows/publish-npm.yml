@@ -18,6 +18,7 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+      actions: read
     outputs:
       release-manifest-sha256: ${{ steps.pack-release.outputs.release-manifest-sha256 }}
     steps:
@@ -25,6 +26,18 @@ jobs:
 
       - name: Verify public boundary before dependency installation
         run: node scripts/check-public-boundary.mjs
+
+      - name: Require successful Public CI for this exact main commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --method GET \
+            "repos/0xmdrakib/AgentDomain/actions/workflows/public-ci.yml/runs" \
+            -f branch=main -f event=push -f status=success \
+            -f head_sha="$GITHUB_SHA" -f per_page=10 \
+            | node scripts/verify-release-ci.mjs
 
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
@@ -45,6 +58,7 @@ jobs:
       - run: pnpm --filter @agentdomain/mcp-server build
       - run: pnpm --filter @agentdomain/agentkit-plugin build
       - run: pnpm --filter @agentdomain/eliza-plugin build
+      - run: pnpm --filter @agentdomain/langchain-plugin build
 
       - name: Pack reviewed packages and the OIDC-capable npm CLI
         id: pack-release
@@ -83,6 +97,7 @@ jobs:
           pack_release packages/mcp-server
           pack_release packages/agentkit-plugin
           pack_release packages/eliza-plugin
+          pack_release packages/langchain-plugin
 
           npm pack 'npm@11.5.1' --pack-destination "$tooling_dir" >/dev/null
           npm_archive="$tooling_dir/npm-11.5.1.tgz"
@@ -90,8 +105,8 @@ jobs:
           printf '%s  tooling/%s\n' "$(sha256sum "$npm_archive" | cut -d ' ' -f 1)" "$(basename "$npm_archive")" >> "$checksums"
           printf '%s  publish-order.tsv\n' "$(sha256sum "$publish_order" | cut -d ' ' -f 1)" >> "$checksums"
 
-          test "$(wc -l < "$publish_order")" -eq 5
-          test "$(wc -l < "$checksums")" -eq 7
+          test "$(wc -l < "$publish_order")" -eq 6
+          test "$(wc -l < "$checksums")" -eq 8
           (cd "$release_dir" && sha256sum --check --strict release.sha256)
           manifest_sha256="$(sha256sum "$checksums" | cut -d ' ' -f 1)"
           test "${#manifest_sha256}" -eq 64
@@ -140,8 +155,8 @@ jobs:
           release_dir="$RUNNER_TEMP/agentdomain-release"
           test -f "$release_dir/publish-order.tsv"
           test -f "$release_dir/release.sha256"
-          test "$(wc -l < "$release_dir/publish-order.tsv")" -eq 5
-          test "$(wc -l < "$release_dir/release.sha256")" -eq 7
+          test "$(wc -l < "$release_dir/publish-order.tsv")" -eq 6
+          test "$(wc -l < "$release_dir/release.sha256")" -eq 8
           [[ "$EXPECTED_RELEASE_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]]
           printf '%s  %s\n' "$EXPECTED_RELEASE_MANIFEST_SHA256" "$release_dir/release.sha256" | sha256sum --check --status
           (cd "$release_dir" && sha256sum --check --strict release.sha256)
