@@ -4,8 +4,7 @@ Coinbase AgentKit action provider for AgentDomain identity infrastructure.
 
 ## Install
 
-Version 0.11.0 is a release candidate. Build the reviewed workspace source until
-npm publication is verified; the following install is for that verified release.
+Install the version used by these examples:
 
 ```bash
 npm install @agentdomain/agentkit-plugin@0.11.0 @coinbase/agentkit

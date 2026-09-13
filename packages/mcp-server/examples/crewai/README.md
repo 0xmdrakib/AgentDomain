@@ -39,7 +39,7 @@ py -3.12 -m venv .venv-native
 .venv-native/Scripts/python.exe -m pip install --require-hashes -r requirements.lock
 ```
 
-After the Python 0.11.0 release is published, install `agentdomain-crewai==0.11.0`
+Install `agentdomain-crewai==0.11.0`
 in that environment as well. To retain the exact hash-locked runtime graph:
 
 ```sh
@@ -47,15 +47,14 @@ in that environment as well. To retain the exact hash-locked runtime graph:
 .venv-native/bin/python -m pip check
 ```
 
-Before publication, build `packages/crewai-plugin` with `python -m build` from
+For source development, build `packages/crewai-plugin` with `python -m build` from
 the repository root, then replace the distribution name above with the absolute
 path to `agentdomain_crewai-0.11.0-py3-none-any.whl`. Use the corresponding Windows
 Python path on Windows. The built wheel is required; the example does not
 silently import an uninstalled source tree.
 
-The target SDK, MCP and Python package versions are **0.11.0**. At authoring time this is an
-unpublished release candidate. Do not assume the older npm release contains the
-new inspection/planning tools. For source validation, build the reviewed public
+The SDK, MCP and Python package versions used here are **0.11.0**.
+For source validation, build the reviewed public
 checkout from its root:
 
 ```sh
@@ -65,7 +64,7 @@ pnpm --filter @agentdomain/sdk build
 pnpm --filter @agentdomain/mcp-server build
 ```
 
-After 0.11.0 is published, consumers can instead install the updated npm server
+Consumers can instead install the pinned npm server
 in their own project:
 
 ```sh

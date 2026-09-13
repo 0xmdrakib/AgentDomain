@@ -5,14 +5,14 @@ AgentDomain's Node.js MCP server. It returns official CrewAI `MCPNativeTool`
 objects with strict typed inputs. It uses CrewAI's native `MCPClient` and
 `StdioTransport`, not `crewai-tools` or `mcpadapt`.
 
-Version **0.11.0** is a release candidate until it is published. Python **3.12**
-and Node.js **20 or later** are required. The Python package does not bundle or
+Version **0.11.0** requires Python **3.12**
+and Node.js **20 or later**. The Python package does not bundle or
 automatically download Node.js, the MCP server, a model, or wallet credentials.
 
 ## Installation
 
 Use a fresh isolated virtual environment, never a shared backend/VPS environment.
-After the matching releases are published:
+Install the matching Python integration and Node MCP server:
 
 ```sh
 python3.12 -m venv .venv

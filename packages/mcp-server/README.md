@@ -11,11 +11,9 @@ and output. It does not open a public listener.
 
 ## Versions
 
-These examples target the MCP and SDK **0.11.0 release candidates**. The npm
-commands require registry verification first. Inspection and unsigned planning
-were already available in 0.10.0; the coordinated candidate also packages the
-standalone Python integrations. Use this public-source build before publication,
-running from the reviewed checkout's root:
+These examples use MCP and SDK **0.11.0**. Inspection and unsigned planning
+were introduced in 0.10.0; version 0.11.0 also coordinates the standalone Python
+integrations. For local development, build from the reviewed checkout's root:
 
 ```bash
 pnpm --filter @agentdomain/shared build
@@ -26,7 +24,7 @@ node packages/mcp-server/dist/index.js
 
 ## Run
 
-Once version 0.11.0 is available on npm:
+Run the pinned MCP server:
 
 ```bash
 npx -y @agentdomain/mcp-server@0.11.0
@@ -104,7 +102,7 @@ change is not a completed domain renewal. See the
   inspection/planning with separate owner review.
 - [LangChain TypeScript tools](https://docs.agentdomain.app/frameworks/langchain/):
   separate `@agentdomain/langchain-plugin`; its examples target 0.11.0. Use its
-  reviewed source build until that version is available.
+  matching reviewed source build for local development.
 
 Python dependencies are installed separately; npm supplies the Node MCP server,
 not the frameworks. The deterministic flows need no paid model and send no live

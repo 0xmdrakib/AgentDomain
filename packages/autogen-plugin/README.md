@@ -5,13 +5,13 @@ It connects to the separately installed AgentDomain Node.js MCP server over
 stdio. The package owns the guarded implementation; the older MCP example files
 are compatibility imports and launchers, not a second implementation.
 
-## Release Status
+## Installation
 
-Version **0.11.0** is a release candidate until its PyPI publication is verified.
-The separately released MCP bridge target is `@agentdomain/mcp-server@0.11.0`.
+Version **0.11.0** uses the separately installed
+`@agentdomain/mcp-server@0.11.0` bridge.
 The runtime never installs npm packages or silently falls back to another version.
 
-After both releases are verified:
+Install both packages:
 
 ```bash
 python -m pip install agentdomain-autogen==0.11.0

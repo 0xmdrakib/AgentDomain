@@ -5,13 +5,12 @@ Base, with optional unsigned auto-renew planning. Uses the real
 `@langchain/core/tools` API and the public AgentDomain SDK. No model API key or
 paid LLM is needed to invoke these tools.
 
-Release target: `0.11.0`, with SDK `0.11.0`. These are release candidates, not a claim
-that either version is already published. Before publication, use this public
-workspace checkout and build the SDK followed by this package.
+These examples use version `0.11.0` with SDK `0.11.0`. For local development,
+build the SDK followed by this package from the public workspace checkout.
 
 ## Install
 
-After those versions are published:
+Install the matching package and framework peer:
 
 ```bash
 npm install @agentdomain/langchain-plugin@0.11.0 @langchain/core@^1.2.11
