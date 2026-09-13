@@ -8,15 +8,30 @@ unrelated similarly named package. The official `McpWorkbench` wraps an MCP
 server and manages its session through an asynchronous context manager. See
 [Microsoft's MCP reference](https://microsoft.github.io/autogen/stable/reference/python/autogen_ext.tools.mcp.html).
 
-## Prepare the runtime
+## Install the Python package
 
-The workflow is included in the published
-[MCP server 0.10.0](https://www.npmjs.com/package/@agentdomain/mcp-server/v/0.10.0),
-which uses SDK 0.10.0. Install the pinned Node package in a local project:
+`agentdomain-autogen` is a standalone Python distribution providing a guarded
+native AutoGen workbench. It and the Node MCP server target **0.11.0 release
+candidates**, not verified PyPI or npm releases. Use an isolated Python
+environment; the native qualification uses Python 3.12. Before publication,
+install from the reviewed repository root:
 
 ```bash
-npm install --save-exact @agentdomain/mcp-server@0.10.0
+python -m pip install ./packages/autogen-plugin
 ```
+
+After both registry releases are verified, install the pinned packages:
+
+```bash
+python -m pip install agentdomain-autogen==0.11.0
+npm install --save-exact @agentdomain/mcp-server@0.11.0
+```
+
+The Python package does not install Node.js or the MCP server. See the
+[Python package](https://github.com/0xmdrakib/AgentDomain/tree/main/packages/autogen-plugin)
+for wheel and dependency instructions.
+
+## Prepare the runtime
 
 Use that project's `node_modules/@agentdomain/mcp-server/dist/index.js` as the
 server entry. To develop from the reviewed source checkout instead:
@@ -33,12 +48,44 @@ in a separate Python environment; npm installs only the Node.js MCP server.
 Use the example's qualified Python dependency versions rather than silently
 upgrading the MCP Python major version.
 
-The native AutoGen example passed scoped Windows and Linux qualification with
+The underlying native AutoGen flow passed scoped Windows and Linux qualification with
 the real Node MCP server and SDK. Its deterministic replay and synthetic RPC
 fixtures require no paid model or live transaction; this is not qualification
-of arbitrary model providers or execution tools.
+of arbitrary model providers or execution tools. The new package's wheel must
+also pass its release qualification before publication.
 
-## Read through the official workbench
+## Use the standalone workbench
+
+This source-build example uses the guarded package without a model key:
+
+```python
+from pathlib import Path
+from agentdomain_autogen import (
+    AgentDomainWorkbench,
+    inspect_and_prepare,
+    server_parameters,
+)
+
+
+async def inspect_plan(node: Path, checkout: Path, owner: str):
+    params = server_parameters(node, source_checkout=checkout)
+    async with AgentDomainWorkbench(params) as workbench:
+        return await inspect_and_prepare(
+            workbench,
+            {"domain": "example.xyz", "expectedOwner": owner},
+            enabled=True,
+            builder_code="my_agent_app",
+        )
+```
+
+The host selects absolute Node and built-checkout paths. After the npm release
+is verified, `installed_package=Path("/trusted/node_modules/@agentdomain/mcp-server")`
+can replace `source_checkout`. `enabled=True` requests an unsigned plan, not
+permission to execute. The `agentdomain-autogen` CLI and `python -m
+agentdomain_autogen` use the same package; existing example entrypoints remain
+thin bridges, not independently maintained implementations.
+
+## Retained native MCP option
 
 This direct invocation does not create an LLM client or need a model key:
 

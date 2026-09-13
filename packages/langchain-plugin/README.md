@@ -5,7 +5,7 @@ Base, with optional unsigned auto-renew planning. Uses the real
 `@langchain/core/tools` API and the public AgentDomain SDK. No model API key or
 paid LLM is needed to invoke these tools.
 
-Release target: `0.1.0`, with SDK `0.10.0`. These are release targets, not a claim
+Release target: `0.11.0`, with SDK `0.11.0`. These are release candidates, not a claim
 that either version is already published. Before publication, use this public
 workspace checkout and build the SDK followed by this package.
 
@@ -14,7 +14,7 @@ workspace checkout and build the SDK followed by this package.
 After those versions are published:
 
 ```bash
-npm install @agentdomain/langchain-plugin@0.1.0 @langchain/core@^1.2.11
+npm install @agentdomain/langchain-plugin@0.11.0 @langchain/core@^1.2.11
 ```
 
 Requires Node.js 20 or newer and ESM. Tested against `@langchain/core` 1.2.11 and
@@ -103,7 +103,7 @@ disabled and pass it as `publicClient`. Do not place RPC URLs, contract addresse
 chains, API keys, or private keys in tool arguments. Unknown fields are rejected.
 The adapter never fetches metadata, linked names, or CCIP callback URLs.
 
-To use API lookup, also install `@agentdomain/sdk@^0.10.0` in your application:
+To use API lookup, also install `@agentdomain/sdk@^0.11.0` in your application:
 
 ```js
 import { AgentDomain } from '@agentdomain/sdk';

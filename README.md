@@ -12,6 +12,10 @@ management.
 
 ## Public packages
 
+All eight packages below target **0.11.0 release candidates**. Publication of
+this version has not yet been verified on npm or PyPI. Use reviewed source
+builds or local wheels until the matching registry release is confirmed.
+
 | Package                                                                                      | Purpose                                               |
 | -------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
 | [`@agentdomain/sdk`](https://www.npmjs.com/package/@agentdomain/sdk)                         | TypeScript SDK for AgentDomain API and x402 workflows |
@@ -19,15 +23,17 @@ management.
 | [`@agentdomain/mcp-server`](https://www.npmjs.com/package/@agentdomain/mcp-server)           | MCP tools for agent runtimes                          |
 | [`@agentdomain/agentkit-plugin`](https://www.npmjs.com/package/@agentdomain/agentkit-plugin) | Coinbase AgentKit integration                         |
 | [`@agentdomain/eliza-plugin`](https://www.npmjs.com/package/@agentdomain/eliza-plugin)       | ElizaOS integration                                   |
+| [`@agentdomain/langchain-plugin`](packages/langchain-plugin)                                 | Native LangChain JavaScript tools                     |
+| [`agentdomain-crewai`](packages/crewai-plugin)                                               | Standalone native CrewAI Python integration           |
+| [`agentdomain-autogen`](packages/autogen-plugin)                                             | Standalone native AutoGen Python integration          |
 
-The new [`@agentdomain/langchain-plugin`](packages/langchain-plugin) is a separate
-release candidate for typed LangChain tools. CrewAI and Microsoft AutoGen use
-native Python MCP integrations, not additional npm framework plugins.
+CrewAI and Microsoft AutoGen have their own Python distributions. Both retain the native stdio MCP
+interface and require a separately installed Node MCP server.
 
-Install the published SDK:
+After registry verification, install the pinned SDK:
 
 ```bash
-npm install @agentdomain/sdk
+npm install @agentdomain/sdk@0.11.0
 ```
 
 See the [changelog](CHANGELOG.md) for public package release notes and
@@ -35,10 +41,11 @@ compatibility details.
 
 ## Lifecycle workflow
 
-SDK and MCP **0.10.0** were published on September 13, 2026 through GitHub
-Actions with npm provenance. The [Identity Check](https://agentdomain.app/verify)
-and updated documentation are deployed. LangChain plugin **0.1.0** is available
-as reviewed source; its first npm publication is still pending. See the
+The coordinated **0.11.0** candidate contains the six npm packages and two
+standalone Python integrations. Their current source versions do not establish
+registry publication or deployment. The earlier SDK/MCP 0.10.0 release and
+[Identity Check](https://agentdomain.app/verify) deployment are separate historical
+evidence, not proof that this candidate is live. See the
 [release evidence](BUILT_DURING_ETHONLINE.md#release-and-demo-evidence).
 
 - `inspectAgentIdentity` observes the AgentDomain registry on Base without
@@ -59,11 +66,11 @@ changing auto-renew does not itself renew a domain. Enabling permits authorized
 renewal operators to use funded vault balances without a new signature for each
 renewal; disabling does not cancel an existing reservation.
 
-| New integration                                           | Implementation                                                                                   |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| [LangChain](packages/langchain-plugin)                    | TypeScript tools using `@langchain/core`; unsigned planning is a host opt-in.                    |
-| [CrewAI](packages/mcp-server/examples/crewai)             | Python stdio MCP using official core-native APIs; native Windows and Linux fixture tests passed. |
-| [Microsoft AutoGen](packages/mcp-server/examples/autogen) | Python `McpWorkbench` with an allowlist for identity, renewal and unsigned planning.             |
+| New integration                              | Implementation                                                                        |
+| -------------------------------------------- | ------------------------------------------------------------------------------------- |
+| [LangChain](packages/langchain-plugin)       | TypeScript tools using `@langchain/core`; unsigned planning is a host opt-in.         |
+| [CrewAI](packages/crewai-plugin)             | Standalone Python tools using official core-native MCP APIs.                          |
+| [Microsoft AutoGen](packages/autogen-plugin) | Standalone guarded Python `McpWorkbench` for identity, renewal and unsigned planning. |
 
 The deterministic framework tests need no paid model and submit no live wallet
 transactions. The optional CrewAI recipe retains known Chroma dependency

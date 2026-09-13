@@ -3,13 +3,17 @@ title: MCP server
 description: Install the public AgentDomain MCP server and expose identity tools to an MCP client.
 ---
 
-`@agentdomain/mcp-server` 0.10.0 runs over stdio and exposes the public AgentDomain lifecycle to
+`@agentdomain/mcp-server` 0.11.0 runs over stdio and exposes the public AgentDomain lifecycle to
 MCP-compatible clients.
+
+Version **0.11.0 is a release candidate**; npm publication has not been
+verified. Use the reviewed source build below until that registry release is
+confirmed. The npm commands are for use after verification.
 
 ## Install
 
 ```bash
-npm install --global @agentdomain/mcp-server@0.10.0
+npm install --global @agentdomain/mcp-server@0.11.0
 ```
 
 Or let an MCP client launch the pinned package directly:
@@ -19,13 +23,12 @@ Or let an MCP client launch the pinned package directly:
   "mcpServers": {
     "agentdomain": {
       "command": "npx",
-      "args": ["-y", "@agentdomain/mcp-server@0.10.0"]
+      "args": ["-y", "@agentdomain/mcp-server@0.11.0"]
     }
   }
 }
 ```
 
-[MCP server 0.10.0 is published on npm](https://www.npmjs.com/package/@agentdomain/mcp-server/v/0.10.0).
 Workspace versions in the generated catalog remain source metadata, not a
 registry availability check.
 
@@ -48,8 +51,8 @@ client's protected secret controls; do not place them in a committed configurati
 
 ## Independent identity inspection
 
-`inspect_agent_identity` is included in the published `@agentdomain/mcp-server@0.10.0`
-package and is enabled by default. The older 0.9.0 release does not include it.
+`inspect_agent_identity` is included in the `@agentdomain/mcp-server@0.11.0`
+source candidate and is enabled by default. The older 0.9.0 release does not include it.
 For development from the reviewed source checkout, build from the repository root:
 
 ```bash
@@ -133,7 +136,7 @@ must remain explicit errors, not successful cached or invented observations.
 
 ### Renewal tools
 
-The published MCP 0.10.0 includes these default read-only tools. They call
+The MCP 0.11.0 source candidate includes these default read-only tools. They call
 standalone SDK functions and do not create new
 HTTP API endpoints:
 

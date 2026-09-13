@@ -13,11 +13,11 @@ related documentation and tests in the same pull request.
 
 ## Package Availability
 
-[SDK 0.10.0](https://www.npmjs.com/package/@agentdomain/sdk/v/0.10.0) and
-[MCP server 0.10.0](https://www.npmjs.com/package/@agentdomain/mcp-server/v/0.10.0)
-are published on npm. They include independent identity inspection and the
-renewal read/unsigned-plan workflow. `@agentdomain/langchain-plugin` 0.1.0 remains
-unpublished; use its reviewed source checkout, not an assumed npm release.
+All eight publishable packages target **0.11.0 as release candidates**: shared,
+SDK, MCP, AgentKit, Eliza and LangChain on npm, plus `agentdomain-crewai` and
+`agentdomain-autogen` on PyPI. Registry publication has not been verified for
+this version. Use reviewed workspace builds or local Python wheels until each
+release is verified; package versions alone are not publication evidence.
 
 The native CrewAI and AutoGen examples passed their scoped Windows and Linux
 qualification. Their Python environments are separate from npm dependencies;
@@ -27,7 +27,8 @@ not a clean dependency audit. See the framework guides for those boundaries.
 ## Machine-readable Outputs
 
 The static Astro build generates these resources from the public docs,
-reviewed HTTP contract map, shared Zod schemas and package manifests:
+reviewed HTTP contract map, shared Zod schemas, six npm manifests and two Python
+`pyproject.toml` manifests:
 
 - `/llms-full.txt`: every allowlisted public documentation page in one text file.
 - `/openapi.json`: OpenAPI 3.0.3 for explicitly documented HTTP routes only.
@@ -41,7 +42,7 @@ The generator refuses routes absent from the HTTP reference or documented routes
 without a reviewed mapping. SDK/MCP onchain functions are not invented REST paths.
 
 The build records deterministic source hashes and workspace package versions,
-not build-time timestamps or an assertion that npm publication has happened.
+not build-time timestamps or an assertion that npm or PyPI publication has happened.
 Response projections deliberately mark unspecified fields. Shared Zod runtime
 refinements, ownership and payment authorization remain authoritative; OpenAPI
 cannot replace them. Legacy provider-specific nested snapshot details are not
@@ -53,6 +54,11 @@ Generated files retain the static Workers asset boundary and exact MIME headers.
 Do not add authenticated server handlers or credential-bearing generation inputs.
 
 ## Validation
+
+Full-repository validation requires Python 3.11+ on `PATH` as `python` for the
+pre-install public-boundary check (`ast` and `tomllib`); CI uses Python 3.12.
+This also applies to `pnpm ci:public`, not to npm-only package consumers. See the
+[contributor prerequisites](../../CONTRIBUTING.md#repository-validation-prerequisites).
 
 Build the public shared package before checking docs from a fresh checkout:
 

@@ -1,7 +1,20 @@
 # Changelog
 
-Notable changes to AgentDomain's public npm packages are recorded here. Package
-versions are immutable once published to npm.
+Notable changes to AgentDomain's public packages are recorded here. Published
+versions are immutable in their respective registries.
+
+## All Packages 0.11.0 - Release Candidate
+
+All eight publishables target 0.11.0: `@agentdomain/shared`, `@agentdomain/sdk`,
+`@agentdomain/mcp-server`, `@agentdomain/agentkit-plugin`,
+`@agentdomain/eliza-plugin`, `@agentdomain/langchain-plugin`,
+`agentdomain-crewai` and `agentdomain-autogen`. This version is a source release
+candidate; npm and PyPI publication have not been verified.
+
+- CrewAI and AutoGen gain standalone Python package entrypoints, retaining the
+  native MCP protocol and read-only/unsigned-plan boundaries.
+- Machine-readable docs derive all eight versions from npm and Python manifests.
+- Existing third-party dependency pins and earlier release history remain intact.
 
 ## SDK/MCP 0.10.0 - 2026-09-13
 
