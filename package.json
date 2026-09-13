@@ -21,7 +21,7 @@
     "lint:public": "turbo run lint --filter=!@agentdomain/contracts",
     "test": "turbo run test",
     "test:license-gate": "node --test scripts/check-production-licenses.test.mjs",
-    "test:public": "pnpm test:license-gate && pnpm --filter @agentdomain/contracts test && turbo run test --filter=!@agentdomain/contracts",
+    "test:public": "node --test scripts/verify-release-ci.test.mjs && pnpm test:license-gate && pnpm --filter @agentdomain/contracts test && turbo run test --filter=!@agentdomain/contracts",
     "typecheck": "turbo run typecheck",
     "typecheck:public": "turbo run typecheck --filter=!@agentdomain/contracts",
     "format:check": "prettier --check \"**/*.{js,mjs,cjs,ts,tsx,md,mdx,json,yml,yaml}\""

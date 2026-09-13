@@ -94,5 +94,34 @@ jobs:
       - name: Verify public source and production dependencies
         run: pnpm ci:public
 
+      - name: Set up native integration Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Qualify the official CrewAI connector without model or wallet access
+        shell: bash
+        env:
+          OTEL_SDK_DISABLED: 'true'
+          CREWAI_TELEMETRY_DISABLED: 'true'
+          CREWAI_TRACING_ENABLED: 'false'
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/agentdomain-crewai"
+          "$RUNNER_TEMP/agentdomain-crewai/bin/python" -m pip install --disable-pip-version-check --require-hashes -r packages/mcp-server/examples/crewai/requirements.lock
+          AGENTDOMAIN_CREWAI_PYTHON="$RUNNER_TEMP/agentdomain-crewai/bin/python" node packages/mcp-server/test/crewai-integration.mjs
+
+      - name: Qualify the official AutoGen connector without model or wallet access
+        shell: bash
+        env:
+          OTEL_SDK_DISABLED: 'true'
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/agentdomain-autogen"
+          "$RUNNER_TEMP/agentdomain-autogen/bin/python" -m pip install --disable-pip-version-check -r packages/mcp-server/examples/autogen/requirements.txt -c packages/mcp-server/examples/autogen/constraints.txt
+          AGENTDOMAIN_AUTOGEN_PYTHON="$RUNNER_TEMP/agentdomain-autogen/bin/python" node --test packages/mcp-server/test/autogen.integration.test.mjs
+
       - name: Build and dry-run Cloudflare artifacts on Linux
         run: pnpm ci:cloudflare
