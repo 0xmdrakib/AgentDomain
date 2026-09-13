@@ -20,6 +20,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { RenewalReadiness } from './renewal-readiness';
 import {
   baseScanLink,
   inspectionFailure,
@@ -236,6 +237,13 @@ export function IdentityVerifier() {
       <p role="status" className="min-h-6 pt-2 text-right text-xs text-muted-foreground">
         {feedback}
       </p>
+      {result?.status === 'found' && (
+        <RenewalReadiness
+          key={`${result.tokenId}:${result.block.hash}:${result.input.expectedOwner ?? ''}`}
+          tokenId={result.tokenId}
+          expectedOwner={result.input.expectedOwner}
+        />
+      )}
     </div>
   );
 }

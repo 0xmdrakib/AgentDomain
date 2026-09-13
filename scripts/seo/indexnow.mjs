@@ -18,7 +18,7 @@ export const INDEXNOW_LIMITS = Object.freeze({
 const ENDPOINT = 'https://api.indexnow.org/indexnow';
 const COMMIT = /^[0-9a-f]{40}$/;
 const KEY = /^[A-Za-z0-9-]{8,128}$/;
-const FRONTEND_ROUTES = new Set(['/', '/register', '/registry', '/privacy', '/terms']);
+const FRONTEND_ROUTES = new Set(['/', '/register', '/registry', '/verify', '/privacy', '/terms']);
 const SITES = {
   frontend: {
     host: 'agentdomain.app',

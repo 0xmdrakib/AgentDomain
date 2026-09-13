@@ -23,6 +23,8 @@ const captures = resolve(root, '.qa/identity-verifier');
 const origin = 'https://identity-check.fixture.test';
 const rpc = 'https://mainnet.base.org/';
 const registry = '0x234a2B83B32910436A35CDa797CCC57988B9Bd15';
+const vault = '0xb7b19826a566ebd9e8b50bee986a8da04bbb2c0a';
+const usdc = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const owner = '0x' + '1'.repeat(40);
 const other = '0x' + '2'.repeat(40);
 const hash = '0x' + 'a'.repeat(64);
@@ -39,6 +41,18 @@ const abi = parseAbi([
   'function ownerOf(uint256 tokenId) view returns (address)',
   'function tokenURI(uint256 tokenId) view returns (string)',
   'function isActive(uint256 tokenId) view returns (bool)',
+  'function renewalVault() view returns (address)',
+  'function balanceOfToken(uint256 tokenId) view returns (uint256)',
+  'function autoRenewEnabled(uint256 tokenId) view returns (bool)',
+  'function pendingRenewals(uint256 tokenId) view returns (uint256 amount,uint64 expiresAt,uint64 reservedAt)',
+  'function renewalWindow() view returns (uint64)',
+  'function renewalDuration() view returns (uint64)',
+  'function renewalFee() view returns (uint256)',
+  'function nft() view returns (address)',
+  'function registry() view returns (address)',
+  'function usdc() view returns (address)',
+  'function lastRenewedAt(uint256 tokenId) view returns (uint64)',
+  'function isRenewable(uint256 tokenId) view returns (bool)',
 ]);
 const block = {
   baseFeePerGas: '0x1',
@@ -196,12 +210,20 @@ try {
             },
           });
         function execute(target, callData) {
+          const call = decodeFunctionData({ abi, data: callData });
+          const registryRead = [
+            'getTokenIdByDomain',
+            'getIdentity',
+            'ownerOf',
+            'tokenURI',
+            'isActive',
+            'renewalVault',
+          ].includes(call.functionName);
           assert.equal(
             target.toLowerCase(),
-            registry.toLowerCase(),
-            'Only canonical registry calls',
+            (registryRead ? registry : vault).toLowerCase(),
+            'Only the canonical registry or renewal vault may be read',
           );
-          const call = decodeFunctionData({ abi, data: callData });
           if (fixture.scenario === 'missing-token' && call.functionName === 'getIdentity')
             return {
               success: false,
@@ -237,6 +259,45 @@ try {
             case 'isActive':
               value = !['expired', 'revoked'].includes(fixture.scenario);
               break;
+            case 'renewalVault':
+              value = vault;
+              break;
+            case 'balanceOfToken':
+              value = fixture.scenario === 'renewal-underfunded' ? 1n : 5_000_000n;
+              break;
+            case 'autoRenewEnabled':
+              value = fixture.scenario === 'renewal-underfunded';
+              break;
+            case 'pendingRenewals':
+              value =
+                fixture.scenario === 'renewal-pending'
+                  ? [4_000_000n, now + 1000n, now - 60n]
+                  : [0n, 0n, 0n];
+              break;
+            case 'renewalWindow':
+              value = 2_592_000n;
+              break;
+            case 'renewalDuration':
+              value = 31_536_000n;
+              break;
+            case 'renewalFee':
+              value = fixture.scenario === 'renewal-unset-fee' ? 0n : 3_900_000n;
+              break;
+            case 'nft':
+              value = fixture.scenario === 'renewal-mismatch' ? other : registry;
+              break;
+            case 'registry':
+              value = registry;
+              break;
+            case 'usdc':
+              value = usdc;
+              break;
+            case 'lastRenewedAt':
+              value = now - 1000n;
+              break;
+            case 'isRenewable':
+              value = fixture.scenario === 'renewal-underfunded';
+              break;
             default:
               throw new Error('Unexpected contract method');
           }
@@ -252,11 +313,29 @@ try {
         if (data.params[0].to.toLowerCase() === '0xca11bde05977b3631167028862be2a173976ca11') {
           const call = decodeFunctionData({ abi: multicall3Abi, data: data.params[0].data });
           assert.equal(call.functionName, 'aggregate3');
+          const vaultBatch = call.args[0][0].target.toLowerCase() === vault;
+          if (vaultBatch && fixture.scenario === 'renewal-vault-failure')
+            return route.fulfill({ json: { jsonrpc: '2.0', id: data.id, error } });
           assert.deepEqual(
             call.args[0].map(
               (entry) => decodeFunctionData({ abi, data: entry.callData }).functionName,
             ),
-            ['ownerOf', 'tokenURI', 'getTokenIdByDomain', 'isActive'],
+            vaultBatch
+              ? [
+                  'balanceOfToken',
+                  'autoRenewEnabled',
+                  'pendingRenewals',
+                  'renewalWindow',
+                  'renewalDuration',
+                  'renewalFee',
+                  'nft',
+                  'registry',
+                  'usdc',
+                  'lastRenewedAt',
+                  'isRenewable',
+                  'renewalVault',
+                ]
+              : ['ownerOf', 'tokenURI', 'getTokenIdByDomain', 'isActive'],
           );
           result = encodeFunctionResult({
             abi: multicall3Abi,
@@ -284,7 +363,15 @@ try {
     await page.goto(origin + '/verify');
     await page.addStyleTag({ content: css });
     await page.addScriptTag({ content: bundle.outputFiles[0].text });
-    await page.getByRole('heading', { name: 'AgentDomain Identity Check' }).waitFor();
+    await page
+      .getByRole('heading', { name: 'AgentDomain Identity Check' })
+      .waitFor()
+      .catch((error) => {
+        throw new Error(
+          `Identity page failed to render; browser errors: ${JSON.stringify(errors)}`,
+          { cause: error },
+        );
+      });
     await page.waitForFunction(() =>
       [...document.images].every((image) => image.complete && image.naturalWidth > 0),
     );
@@ -431,6 +518,158 @@ try {
     await page.getByRole('button', { name: 'Check identity', exact: true }).click();
     await page.getByText('Identity not found', { exact: true }).last().waitFor();
     assert.equal(await page.getByRole('heading', { name: 'Token 999' }).count(), 1);
+    assert.equal(await page.getByRole('button', { name: 'Check renewal', exact: true }).count(), 0);
+
+    fixture.scenario = 'found';
+    await input.fill(hugeToken.toString());
+    await page.getByRole('button', { name: 'Check identity', exact: true }).click();
+    await page.getByText('Records consistent', { exact: true }).last().waitFor();
+    const readiness = page.getByRole('region', { name: 'Renewal readiness', exact: true });
+    await readiness.getByText('Not checked', { exact: true }).waitFor();
+    const beforeRenewal = fixture.requests.length;
+    await page.waitForTimeout(250);
+    assert.equal(
+      fixture.requests.length,
+      beforeRenewal,
+      'Identity lookup does not automatically fetch renewal',
+    );
+    fixture.hold = true;
+    await readiness.getByRole('button', { name: 'Check renewal', exact: true }).click();
+    await readiness.getByText('Reading renewal state', { exact: true }).waitFor();
+    assert.equal(
+      await readiness.getByRole('button', { name: 'Checking renewal', exact: true }).isDisabled(),
+      true,
+    );
+    await readiness
+      .getByRole('button', { name: 'Checking renewal', exact: true })
+      .dispatchEvent('click');
+    await page.waitForTimeout(100);
+    assert.equal(
+      fixture.requests.length,
+      beforeRenewal + 1,
+      'One in-flight renewal inspection only',
+    );
+    fixture.release();
+    await readiness.getByText('Vault records consistent', { exact: true }).waitFor();
+    assert.equal(await readiness.getByText('5 USDC', { exact: true }).count(), 1);
+    assert.equal(await readiness.getByText('3.9 USDC', { exact: true }).count(), 1);
+    assert.equal(
+      await readiness.getByText('Minimum fee (not a quote)', { exact: true }).count(),
+      1,
+    );
+    assert.equal(await readiness.getByText('30 days', { exact: true }).count(), 1);
+    assert.equal(
+      await readiness.getByRole('link', { name: 'Manage in dashboard' }).getAttribute('href'),
+      '/dashboard',
+    );
+    assert.equal(
+      await readiness
+        .getByRole('link', { name: 'View renewal block on BaseScan' })
+        .getAttribute('href'),
+      `https://basescan.org/block/${hash}`,
+    );
+    await readiness.getByRole('button', { name: 'Copy renewal JSON', exact: true }).click();
+    const renewalCopied = JSON.parse(await page.evaluate(() => window.fixtureCopied));
+    assert.equal(renewalCopied.identity.tokenId, hugeToken.toString());
+    assert.equal(renewalCopied.identity.block.hash, hash);
+    assert.equal(renewalCopied.vault.minimumFeeAtomicUsdc, '3900000');
+    const renewalDownload = page.waitForEvent('download');
+    await readiness.getByRole('button', { name: 'Download renewal JSON', exact: true }).click();
+    const downloadedRenewal = await renewalDownload;
+    assert.equal(downloadedRenewal.suggestedFilename(), 'agentdomain-renewal-observation.json');
+    const renewalPath = resolve(captures, `renewal-${width}.json`);
+    await downloadedRenewal.saveAs(renewalPath);
+    assert.deepEqual(JSON.parse(await readFile(renewalPath, 'utf8')), renewalCopied);
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }));
+    await page.screenshot({
+      path: resolve(captures, `renewal-readiness-${width}.png`),
+      fullPage: true,
+    });
+    await readiness.evaluate((element) =>
+      window.scrollTo({
+        top: element.getBoundingClientRect().top + window.scrollY - 96,
+        left: 0,
+        behavior: 'instant',
+      }),
+    );
+    await page.screenshot({ path: resolve(captures, `renewal-viewport-${width}.png`) });
+    const renewalBounds = await readiness.evaluate((section) => {
+      const boundary = section.getBoundingClientRect();
+      return [...section.querySelectorAll('button,h2,h3,dd,li')]
+        .filter((element) => {
+          const rect = element.getBoundingClientRect();
+          return rect.left < boundary.left - 1 || rect.right > boundary.right + 1;
+        })
+        .map((element) => element.tagName);
+    });
+    assert.deepEqual(renewalBounds, [], 'Renewal values and controls remain within the section');
+    assert.equal(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      true,
+    );
+    const renewalCount = fixture.requests.length;
+    await page.waitForTimeout(300);
+    assert.equal(fixture.requests.length, renewalCount, 'No renewal polling');
+
+    for (const scenario of [
+      'renewal-pending',
+      'renewal-underfunded',
+      'renewal-unset-fee',
+      'renewal-mismatch',
+    ]) {
+      fixture.scenario = scenario;
+      await readiness.getByRole('button', { name: 'Check renewal', exact: true }).click();
+      await readiness
+        .getByText(
+          scenario === 'renewal-mismatch' ? 'Renewal records differ' : 'Vault records consistent',
+          { exact: true },
+        )
+        .waitFor();
+      if (scenario === 'renewal-pending') {
+        assert.equal(await readiness.getByText('4 USDC', { exact: true }).count(), 2);
+        assert.equal(
+          await readiness
+            .getByText('Disabling auto-renew does not cancel this pending reservation.', {
+              exact: true,
+            })
+            .count(),
+          1,
+        );
+      }
+      if (scenario === 'renewal-underfunded') {
+        assert.equal(await readiness.getByText('0.000001 USDC', { exact: true }).count(), 1);
+        assert.equal(await readiness.getByText('Eligible', { exact: true }).count(), 1);
+        assert.equal(await readiness.getByText('No', { exact: true }).count(), 1);
+      }
+      if (scenario === 'renewal-unset-fee')
+        assert.equal(await readiness.getByText('Not configured', { exact: true }).count(), 1);
+    }
+    fixture.scenario = 'missing-token';
+    await readiness.getByRole('button', { name: 'Check renewal', exact: true }).click();
+    await readiness.getByText('Identity no longer found', { exact: true }).waitFor();
+    assert.equal(await readiness.getByText('Available USDC', { exact: true }).count(), 0);
+    for (const scenario of ['renewal-vault-failure', 'hash-unsupported']) {
+      fixture.scenario = scenario;
+      await readiness.getByRole('button', { name: 'Check renewal', exact: true }).click();
+      await readiness.getByRole('alert').waitFor();
+      assert.match(await readiness.getByRole('alert').innerText(), /The RPC check failed/);
+      assert.equal(await readiness.getByRole('button', { name: 'Copy renewal JSON' }).count(), 0);
+      assert.equal(await readiness.getByText('Available USDC', { exact: true }).count(), 0);
+    }
+    fixture.scenario = 'found';
+    fixture.hold = true;
+    await readiness.getByRole('button', { name: 'Check renewal', exact: true }).click();
+    await readiness.getByText('Reading renewal state', { exact: true }).waitFor();
+    await page.waitForTimeout(100);
+    await input.fill('2');
+    assert.equal(
+      await readiness.count(),
+      0,
+      'Query editing discards renewal result and in-flight completion',
+    );
+    fixture.release();
+    await page.waitForTimeout(700);
+    assert.equal(await readiness.count(), 0);
     assert.deepEqual(errors, []);
     assert.deepEqual(fixture.unexpected, [], 'No metadata, wallet, API or other network requests');
     completed.push({
@@ -453,6 +692,20 @@ try {
         'unsupported-hash-no-fallback',
         'invalid-input',
         'missing-token',
+        'renewal-explicit-only',
+        'renewal-inflight-deduplication',
+        'renewal-found-provenance',
+        'renewal-json-copy-download',
+        'renewal-responsive',
+        'renewal-no-polling',
+        'renewal-pending',
+        'renewal-underfunded',
+        'renewal-unset-fee',
+        'renewal-mismatch',
+        'renewal-not-found',
+        'renewal-partial-rpc-failure',
+        'renewal-unsupported-hash',
+        'renewal-stale-completion',
       ],
     });
     await context.close();
