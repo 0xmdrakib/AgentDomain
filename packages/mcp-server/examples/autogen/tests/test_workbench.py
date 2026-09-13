@@ -4,10 +4,12 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import os
 import sys
 import unittest
+from importlib.metadata import version
 from pathlib import Path
 from unittest.mock import patch
 
@@ -34,6 +36,9 @@ from autogen_ext.tools.mcp import McpWorkbench
 
 OWNER = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
 NODE = Path(os.environ["AGENTDOMAIN_AUTOGEN_NODE"]).resolve()
+MCP_VERSION = json.loads((ROOT / "packages/mcp-server/package.json").read_text())[
+    "version"
+]
 
 
 def workbench(mode: str = "found") -> AgentDomainWorkbench:
@@ -52,6 +57,15 @@ def workbench(mode: str = "found") -> AgentDomainWorkbench:
 
 
 class InputAndEnvironmentTests(unittest.TestCase):
+    def test_connector_is_loaded_from_the_installed_distribution_not_checkout(self):
+        self.assertEqual(version("agentdomain-autogen"), "0.11.0")
+        implementation = Path(inspect.getfile(AgentDomainWorkbench)).resolve()
+        self.assertTrue(implementation.is_relative_to(Path(sys.prefix).resolve()))
+        self.assertNotIn("packages/autogen-plugin/src", implementation.as_posix())
+        self.assertEqual(
+            AgentDomainWorkbench.__module__, "agentdomain_autogen.workbench"
+        )
+
     def test_minimal_environment_is_allowlisted_not_a_copy_of_ambient_secrets(self):
         ambient = {
             key: "synthetic-do-not-forward"
@@ -145,7 +159,9 @@ class RealWorkbenchTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(
                     tools.initialize_result.serverInfo.name, "agentdomain-mcp"
                 )
-                self.assertEqual(tools.initialize_result.serverInfo.version, "0.10.0")
+                self.assertEqual(
+                    tools.initialize_result.serverInfo.version, MCP_VERSION
+                )
                 self.assertIn("inspect_agent_identity", names)
                 self.assertTrue(names.issubset(TOOL_NAMES))
                 result = result_json(
