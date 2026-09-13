@@ -11,6 +11,7 @@ import {
   documentedHttpRoutes,
   extractPublicFeatures,
   MACHINE_FILES,
+  parsePythonPackage,
 } from '../scripts/machine-docs.mjs';
 import { validateMachineDocuments } from '../scripts/validate-machine-docs.mjs';
 import { publicSchemas } from '../scripts/public-api-contract.mjs';
@@ -22,6 +23,7 @@ test('machine docs are deterministic, source-derived and valid OpenAPI without e
   const result = await validateMachineDocuments(first);
   assert.equal(result.files, 4);
   assert.equal(result.pages, 21);
+  assert.equal(result.packages, 8);
   assert.ok(result.operations >= 30);
   const source = JSON.parse(first['api-index.json']).source;
   const tools = JSON.parse(first['api-index.json']).mcp.tools;
@@ -39,13 +41,31 @@ test('machine docs are deterministic, source-derived and valid OpenAPI without e
     { required: ['tokenId'] },
   ]);
   for (const pkg of source.packages) {
-    const directory = pkg.name.replace('@agentdomain/', '');
-    const actual = JSON.parse(
-      await readFile(join(DOCS_ROOT, '..', '..', 'packages', directory, 'package.json'), 'utf8'),
-    );
+    const manifest = await readFile(join(DOCS_ROOT, '..', '..', pkg.manifest), 'utf8');
+    const actual =
+      pkg.ecosystem === 'npm' ? JSON.parse(manifest) : parsePythonPackage(manifest, pkg.name);
     assert.equal(pkg.version, actual.version);
+    assert.equal(pkg.version, '0.11.0');
     assert.equal(pkg.publication, 'workspace-version-not-registry-verification');
   }
+});
+
+test('Python package discovery parses TOML and rejects mismatched or dynamic release metadata', () => {
+  const source = `[project]\nname = "agentdomain-crewai"\nversion = "0.11.0"\ndescription = "Native CrewAI integration"\nrequires-python = ">=3.10"\nlicense = "Apache-2.0"\n`;
+  assert.equal(parsePythonPackage(source, 'agentdomain-crewai').version, '0.11.0');
+  assert.throws(() => parsePythonPackage(source, 'agentdomain-autogen'), /Invalid public/);
+  assert.throws(
+    () => parsePythonPackage(source + 'dynamic = ["version"]\n', 'agentdomain-crewai'),
+    /Invalid public/,
+  );
+  assert.throws(
+    () => parsePythonPackage(source.replace('Apache-2.0', 'UNLICENSED'), 'agentdomain-crewai'),
+    /Invalid public/,
+  );
+  assert.throws(
+    () => parsePythonPackage(source.replace('version = "0.11.0"', ''), 'agentdomain-crewai'),
+    /Invalid public/,
+  );
 });
 
 test('documented route extraction canonicalizes only real HTTP paths', () => {

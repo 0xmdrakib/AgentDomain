@@ -9,15 +9,30 @@ remains a Node.js package; CrewAI runs separately in Python. The reviewed helper
 opens and closes a local stdio client for each invocation. See
 [CrewAI's native MCP documentation](https://docs.crewai.com/en/mcp/dsl-integration).
 
-## Prepare the local server
+## Install the Python package
 
-The identity and renewal workflow is included in the published
-[MCP server 0.10.0](https://www.npmjs.com/package/@agentdomain/mcp-server/v/0.10.0),
-which uses SDK 0.10.0. Install the pinned Node package in a local project:
+`agentdomain-crewai` is a standalone Python distribution using CrewAI's native
+tools. It and the Node MCP server target **0.11.0 release candidates**, not
+verified PyPI or npm releases. Use an isolated Python 3.12 environment. Before
+publication, install the reviewed package from the repository root:
 
 ```bash
-npm install --save-exact @agentdomain/mcp-server@0.10.0
+python -m pip install ./packages/crewai-plugin
 ```
+
+After both registry releases are verified, the normal pinned installs are:
+
+```bash
+python -m pip install agentdomain-crewai==0.11.0
+npm install --save-exact @agentdomain/mcp-server@0.11.0
+```
+
+The Python package does not download Node.js or install the MCP server. Those
+are separate prerequisites; no executable path is selected by a model.
+See the [Python package](https://github.com/0xmdrakib/AgentDomain/tree/main/packages/crewai-plugin)
+for its wheel, dependency and security instructions.
+
+## Prepare the local server
 
 Use that project's `node_modules/@agentdomain/mcp-server/dist/index.js` as the
 server entry. For development from the reviewed repository instead:
@@ -47,20 +62,20 @@ create the environment and `.venv-native/Scripts/python.exe` to install. The
 native recipe does not install `crewai-tools` or `mcpadapt`. Read the dependency
 warning below before installing; changing the lock needs a new qualification.
 
-The native example passed scoped Windows and Linux qualification with the real
+The underlying native flow passed scoped Windows and Linux qualification with the real
 Node MCP server and SDK, using synthetic RPC fixtures and no paid model or live
 transaction. This does not qualify arbitrary framework features or remove the
 dependency advisories below.
 
 ## Inspect without a model key
 
-Run this next to the example's reviewed `readonly_flow.py`. It uses the real
+Run this with `agentdomain-crewai` installed. It uses the real
 CrewAI native tools without needing an LLM, wallet or AgentDomain API key:
 
 ```python
 from pathlib import Path
 
-from readonly_flow import call_json, readonly_tools
+from agentdomain_crewai import call_json, readonly_tools
 
 
 def inspect_identity(node: Path, server: Path, token_id: str):
@@ -92,6 +107,10 @@ The full example uses only these three tool names:
 spend, create a token allowance or submit a transaction. It includes a plan ID,
 the observation, exact transaction fields and `noChange`. Keep any later owner
 review and wallet execution in a separate trusted host workflow.
+
+The retained `readonly_flow.py` example is a thin entrypoint into the same Python
+package, not another connector implementation. Existing MCP-aware hosts can
+still use the Node server through the [native stdio interface](/sdk/mcp/).
 
 When giving tools to a CrewAI agent, bind only the reviewed allowlist. Keep the
 helper context open for the crew's complete use and close it afterwards. Model

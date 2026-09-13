@@ -7,10 +7,18 @@ renewal inspection, owner-approved auto-renew controls, three framework
 integrations and machine-readable documentation. [PREEXISTING.md](PREEXISTING.md)
 separates the pre-event platform, earlier event commits and final-day additions.
 
-SDK/MCP **0.10.0** are published with GitHub Actions provenance. The new frontend
-and docs outputs are deployed. LangChain **0.1.0** is implemented and tested as
-source, but its first npm publication remains pending. The founder's hands-on
+The current **0.11.0 release candidate** coordinates eight distributions: six
+npm packages (shared, SDK, MCP, AgentKit, Eliza and LangChain) and standalone
+Python `agentdomain-crewai` and `agentdomain-autogen`. Their registry publication
+is not yet verified. Existing SDK/MCP 0.10.0 publication and the earlier
+frontend/docs deployment remain historical evidence, not a claim that 0.11.0
+is published or deployed. The founder's hands-on
 review, original voice recording and final submission approval remain required.
+
+The Python package directories now own their framework implementations; the
+retained MCP examples are thin entrypoints. They use the existing Node MCP
+protocol, not new REST endpoints or an invented Python chain SDK. Source and
+wheel qualification are separate from registry publication.
 
 ## 1. Resumable, Wallet-Safe Registration
 

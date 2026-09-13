@@ -64,9 +64,12 @@ machine-readable references from reviewed public sources. Tests use controlled
 RPC data and fake wallets where needed, not live paid execution. CrewAI's native
 MCP path passed Windows and Linux native fixture tests; its optional Python
 recipe retains known Chroma advisories, and no full security audit is claimed.
-SDK/MCP 0.10.0 are published with GitHub Actions provenance, and the UI/docs are
-deployed. LangChain 0.1.0 remains a tested source candidate pending its first npm
-publication. The exact release and deployment evidence is linked in
+The owner requested a coordinated 0.11.0 release candidate for all six npm
+packages and two standalone Python distributions, `agentdomain-crewai` and
+`agentdomain-autogen`. AI-assisted work includes their packaging, typed public
+interfaces, retained native MCP entrypoints and source-derived documentation.
+Their registry publication is not yet verified. Earlier SDK/MCP 0.10.0
+publication and UI/docs deployment are historical evidence only, linked in
 [BUILT_DURING_ETHONLINE.md](BUILT_DURING_ETHONLINE.md#release-and-demo-evidence).
 
 These are feature-specific public specifications, not copies of operational

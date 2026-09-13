@@ -8,11 +8,11 @@ the AgentID NFT owner can enable auto-renew or withdraw unused funds.
 
 ## Independent read and plan workflow
 
-The published [SDK 0.10.0](https://www.npmjs.com/package/@agentdomain/sdk/v/0.10.0)
-includes the standalone renewal workflow. It adds Base-only reads and unsigned
-planning without constructing an authenticated platform client. Install the
-pinned version using the [TypeScript setup](/sdk/typescript/#install), or build
-the reviewed source checkout for development.
+The SDK **0.11.0 release candidate** includes the standalone renewal workflow.
+It adds Base-only reads and unsigned planning without constructing an
+authenticated platform client. Publication is not yet verified; use the source
+build in the [TypeScript setup](/sdk/typescript/#install) until the npm release
+is confirmed.
 
 ```ts
 import { inspectAgentRenewal, prepareAutoRenewChange } from '@agentdomain/sdk';

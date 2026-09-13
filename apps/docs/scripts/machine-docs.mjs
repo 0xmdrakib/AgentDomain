@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
+import { parse as parseToml } from 'smol-toml';
 import {
   DNS_RECORD_TYPES,
   SERVICE_PLAN_KEYS,
@@ -34,6 +35,10 @@ const packagePaths = [
   'eliza-plugin',
   'langchain-plugin',
 ];
+const pythonPackages = [
+  { directory: 'crewai-plugin', name: 'agentdomain-crewai', guide: 'crewai' },
+  { directory: 'autogen-plugin', name: 'agentdomain-autogen', guide: 'autogen' },
+];
 const publicToolDescriptions = {
   register_agent_identity:
     'Submit a paid identity registration using host-controlled wallet authorization. The host must obtain explicit payment approval and recover uncertain submissions instead of paying again.',
@@ -42,6 +47,29 @@ const publicToolDescriptions = {
 };
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 const canonicalJson = (value) => `${JSON.stringify(value, null, 2)}\n`;
+
+export function parsePythonPackage(source, expectedName) {
+  const { project } = parseToml(source);
+  const license = typeof project?.license === 'string' ? project.license : project?.license?.text;
+  if (
+    project?.name !== expectedName ||
+    typeof project.version !== 'string' ||
+    !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(project.version) ||
+    project.dynamic?.includes('version') ||
+    license !== 'Apache-2.0' ||
+    typeof project.description !== 'string' ||
+    !project.description.trim() ||
+    typeof project['requires-python'] !== 'string' ||
+    !project['requires-python'].trim()
+  )
+    throw new Error(`Invalid public Python package metadata: ${expectedName}`);
+  return {
+    name: project.name,
+    version: project.version,
+    description: project.description,
+    requiresPython: project['requires-python'],
+  };
+}
 
 export function documentedHttpRoutes(documents) {
   const routes = new Set();
@@ -238,7 +266,19 @@ export async function createMachineDocuments({ docsRoot = defaultRoot } = {}) {
     packages.push({
       name: pkg.name,
       version: pkg.version,
+      ecosystem: 'npm',
+      manifest: path,
       source: `${publicRepo}/tree/main/packages/${name}`,
+      publication: 'workspace-version-not-registry-verification',
+    });
+  }
+  for (const { directory, name } of pythonPackages) {
+    const path = `packages/${directory}/pyproject.toml`;
+    packages.push({
+      ...parsePythonPackage(await readPublic(path), name),
+      ecosystem: 'pypi',
+      manifest: path,
+      source: `${publicRepo}/tree/main/packages/${directory}`,
       publication: 'workspace-version-not-registry-verification',
     });
   }
@@ -263,7 +303,7 @@ export async function createMachineDocuments({ docsRoot = defaultRoot } = {}) {
     sourceSha256: hash(canonicalJson(sourceManifest)),
     packages,
     versionPolicy:
-      'Versions come from reviewed workspace package manifests. This static build does not query npm or assert publication. Use the matching built source until a release is verified.',
+      'Versions come from reviewed npm and Python workspace package manifests. This static build does not query npm or PyPI or assert publication. Use matching built source or local wheels until each registry release is verified.',
     files: sourceManifest,
   };
   const openapi = buildOpenApi(source);
@@ -322,6 +362,14 @@ export async function createMachineDocuments({ docsRoot = defaultRoot } = {}) {
         .sort(),
     })),
     ...features,
+    python: pythonPackages.map(({ name, directory, guide }) => ({
+      package: name,
+      ecosystem: 'pypi',
+      source: `${publicRepo}/tree/main/packages/${directory}`,
+      documentation: `${DOCS_ORIGIN}/frameworks/${guide}/`,
+      transport: 'local-stdio-mcp',
+      nodeServerPackage: '@agentdomain/mcp-server',
+    })),
     integrations: ['agentkit', 'elizaos', 'langchain', 'crewai', 'autogen'].map((name) => ({
       name,
       documentation: `${DOCS_ORIGIN}/frameworks/${name}/`,
@@ -359,6 +407,14 @@ export async function createMachineDocuments({ docsRoot = defaultRoot } = {}) {
         documentation: `${DOCS_ORIGIN}/sdk/mcp/`,
         remoteHttpEndpoint: null,
       },
+      ...pythonPackages.map(({ name, guide }) => ({
+        type: 'python-package',
+        package: name,
+        ecosystem: 'pypi',
+        documentation: `${DOCS_ORIGIN}/frameworks/${guide}/`,
+        transport: 'local-stdio-mcp',
+        nodeServerPackage: '@agentdomain/mcp-server',
+      })),
     ],
     safety,
   };

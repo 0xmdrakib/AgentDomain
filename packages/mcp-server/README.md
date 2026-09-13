@@ -11,10 +11,11 @@ and output. It does not open a public listener.
 
 ## Versions
 
-These examples require MCP and SDK **0.10.0**. The npm commands require that
-version to be available; earlier packages do not supply these inspection and
-unsigned-plan tools. Use this explicit public-source build until the version is
-available on npm, running from the reviewed checkout's root:
+These examples target the MCP and SDK **0.11.0 release candidates**. The npm
+commands require registry verification first. Inspection and unsigned planning
+were already available in 0.10.0; the coordinated candidate also packages the
+standalone Python integrations. Use this public-source build before publication,
+running from the reviewed checkout's root:
 
 ```bash
 pnpm --filter @agentdomain/shared build
@@ -25,16 +26,16 @@ node packages/mcp-server/dist/index.js
 
 ## Run
 
-Once version 0.10.0 is available on npm:
+Once version 0.11.0 is available on npm:
 
 ```bash
-npx -y @agentdomain/mcp-server@0.10.0
+npx -y @agentdomain/mcp-server@0.11.0
 ```
 
 For a persistent installation:
 
 ```bash
-npm install -g @agentdomain/mcp-server@0.10.0
+npm install -g @agentdomain/mcp-server@0.11.0
 agentdomain-mcp
 ```
 
@@ -102,7 +103,7 @@ change is not a completed domain renewal. See the
 - [Microsoft AutoGen Python McpWorkbench](examples/autogen/README.md): allowlisted
   inspection/planning with separate owner review.
 - [LangChain TypeScript tools](https://docs.agentdomain.app/frameworks/langchain/):
-  separate `@agentdomain/langchain-plugin`; its examples target 0.1.0. Use its
+  separate `@agentdomain/langchain-plugin`; its examples target 0.11.0. Use its
   reviewed source build until that version is available.
 
 Python dependencies are installed separately; npm supplies the Node MCP server,
@@ -124,7 +125,7 @@ read-only operations. For example:
   "mcpServers": {
     "agentdomain": {
       "command": "npx",
-      "args": ["-y", "@agentdomain/mcp-server@0.10.0"],
+      "args": ["-y", "@agentdomain/mcp-server@0.11.0"],
       "env": {
         "AGENTDOMAIN_API_URL": "https://api.agentdomain.app/api/v1"
       }

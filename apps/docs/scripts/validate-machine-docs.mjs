@@ -40,6 +40,19 @@ export async function validateMachineDocuments(documents) {
   assert.equal(discovery.format, 'agentdomain.documentation-discovery');
   assert.deepEqual(index.source, discovery.source);
   assert.deepEqual(index.source, openapi['x-source']);
+  assert.equal(index.source.packages.length, 8);
+  assert.equal(index.source.packages.filter((pkg) => pkg.ecosystem === 'npm').length, 6);
+  assert.deepEqual(
+    index.source.packages
+      .filter((pkg) => pkg.ecosystem === 'pypi')
+      .map((pkg) => pkg.name)
+      .sort(),
+    ['agentdomain-autogen', 'agentdomain-crewai'],
+  );
+  for (const pkg of index.source.packages) {
+    assert.equal(pkg.version, '0.11.0');
+    assert.equal(pkg.publication, 'workspace-version-not-registry-verification');
+  }
   assert.match(index.source.sourceSha256, /^[a-f0-9]{64}$/);
   assert.match(documents['llms-full.txt'], new RegExp(index.source.sourceSha256));
   assert.equal(index.documents.length, EXPECTED_DOCS.length);
