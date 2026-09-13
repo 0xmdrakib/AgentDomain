@@ -6,4 +6,5 @@ build/
 .astro/
 .qa/
 .wrangler/
+packages/mcp-server/examples/crewai/.venv-native/
 apps/frontend/next-env.d.ts
