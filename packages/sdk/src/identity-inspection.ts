@@ -85,12 +85,20 @@ export interface MissingAgentIdentity extends InspectionSnapshot {
 
 export type IdentityInspectionResult = FoundAgentIdentity | MissingAgentIdentity;
 
+export type IdentityInspectionPublicClient = Pick<
+  PublicClient,
+  'getChainId' | 'readContract' | 'multicall' | 'ccipRead'
+> & {
+  getBlock(args: { blockTag: 'safe' } | { blockNumber: bigint }): Promise<{
+    number: bigint | null;
+    hash: Hex | null;
+    timestamp: bigint;
+  }>;
+};
+
 export interface IdentityInspectionOptions {
   /** A trusted Base RPC client with ccipRead: false; no wallet or signing capability is used. */
-  publicClient?: Pick<
-    PublicClient,
-    'getChainId' | 'getBlock' | 'readContract' | 'multicall' | 'ccipRead'
-  >;
+  publicClient?: IdentityInspectionPublicClient;
 }
 
 function invalidInput(message: string): never {

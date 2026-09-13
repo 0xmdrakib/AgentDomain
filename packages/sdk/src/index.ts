@@ -22,11 +22,32 @@ export {
   AGENT_IDENTITY_REGISTRY_BASE,
   type IdentityInspectionInput,
   type IdentityInspectionOptions,
+  type IdentityInspectionPublicClient,
   type IdentityInspectionResult,
   type IdentityInspectionErrorCode,
   type FoundAgentIdentity,
   type MissingAgentIdentity,
 } from './identity-inspection.js';
+export {
+  inspectAgentRenewal,
+  prepareAutoRenewChange,
+  executeAutoRenewChange,
+  confirmAutoRenewChange,
+  RenewalWorkflowError,
+  AGENT_RENEWAL_VAULT_BASE,
+  AGENT_RENEWAL_USDC_BASE,
+  type RenewalWorkflowErrorCode,
+  type RenewalWorkflowOptions,
+  type RenewalPublicClient,
+  type AgentRenewalInspection,
+  type FoundAgentRenewal,
+  type MissingAgentRenewal,
+  type AutoRenewChangeInput,
+  type AutoRenewChangePlan,
+  type ExecuteAutoRenewChangeOptions,
+  type AutoRenewChangeExecution,
+  type AutoRenewChangeConfirmation,
+} from './renewal-workflow.js';
 import { z } from 'zod';
 import { x402Client, x402HTTPClient } from '@x402/core/client';
 import type { PaymentPayloadResult, PaymentRequirements } from '@x402/core/types';
