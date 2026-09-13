@@ -14,8 +14,11 @@ API bases must use HTTPS; explicitly configured HTTP `localhost`, `127.0.0.1`, a
 `[::1]` endpoints are allowed for local development. Embedded credentials, query
 strings, and fragments are rejected before requests begin.
 
+These examples target SDK **0.10.0**. The npm install requires that version to be
+available; use the explicit public-source build below until it is published.
+
 ```bash
-npm install @agentdomain/sdk@0.9.1 viem@2.56.3
+npm install @agentdomain/sdk@0.10.0 viem@2.56.3
 ```
 
 ## Quick start
@@ -45,11 +48,16 @@ Pass a viem `walletClient` only for wallet-authorized or paid operations. Pass a
 agent-scoped API key only to a trusted server or agent runtime; never expose it
 in browser-delivered configuration.
 
-## Identity inspection (unreleased)
+## Identity inspection (0.10.0)
 
-The public source tree now includes `inspectAgentIdentity`. This export is not
-included in the already-published npm `0.9.1` package. Build this checkout to use
-it until a subsequent release is published.
+The standalone identity and renewal workflows require SDK **0.10.0**. Earlier
+packages do not supply these exports. Before that version is available on npm,
+build the reviewed public checkout from its root:
+
+```bash
+pnpm --filter @agentdomain/shared build
+pnpm --filter @agentdomain/sdk build
+```
 
 ```ts
 import { inspectAgentIdentity } from '@agentdomain/sdk';
@@ -93,6 +101,77 @@ responsibility. It must be created with `ccipRead: false`; clients with CCIP rea
 enabled or unspecified are rejected before requests begin. The default client
 also disables CCIP read, preventing RPC-provided offchain URLs and callbacks.
 All reads still require chain ID 8453 and the same safe block.
+
+## Renewal workflow (0.10.0)
+
+| Export                                                    | Purpose                                                                     |
+| --------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `inspectAgentRenewal(input, options?)`                    | Read identity and canonical RenewalVault state at the same safe-block hash. |
+| `prepareAutoRenewChange(input, options?)`                 | Check owner/state and return an unsigned, attributed `setAutoRenew` plan.   |
+| `executeAutoRenewChange(plan, options)`                   | Require host human approval, revalidate and request one wallet submission.  |
+| `confirmAutoRenewChange(plan, transactionHash, options?)` | Read the actual transaction, canonical receipt and current safe flag once.  |
+
+Inspection accepts the same domain/token input as identity inspection and needs
+no wallet or API credential. The returned `availableAtomicUsdc`,
+`reservedAtomicUsdc` and `minimumFeeAtomicUsdc` are decimal strings, not JS numbers.
+Pending reservations, timing, flags and consistency are reported separately.
+`minimumFeeAtomicUsdc` is a minimum accepted keeper quote, **not a registrar
+price**; zero means unset. `isRenewable` checks native timing/flags, not funding or
+registrar completion. Both inspections support a trusted `publicClient` with
+`ccipRead: false`; the client and transport are host configuration, not tool inputs.
+
+For a setting change, supply a string `tokenId`, current `expectedOwner`, boolean
+`enabled` and public `builderCode`. This helper illustrates the separate host
+approval boundary without loading keys or supplying an automatic approval:
+
+```ts
+import {
+  prepareAutoRenewChange,
+  executeAutoRenewChange,
+  confirmAutoRenewChange,
+  type AutoRenewChangeInput,
+  type ExecuteAutoRenewChangeOptions,
+} from '@agentdomain/sdk';
+
+async function reviewAutoRenewSetting(
+  input: AutoRenewChangeInput,
+  walletClient: ExecuteAutoRenewChangeOptions['walletClient'],
+  reviewInOwnerUI: ExecuteAutoRenewChangeOptions['approve'],
+) {
+  const plan = await prepareAutoRenewChange(input);
+  const attempt = await executeAutoRenewChange(plan, {
+    walletClient,
+    approve: reviewInOwnerUI,
+  });
+  if (attempt.status !== 'submitted') return { plan, attempt };
+  const confirmation = await confirmAutoRenewChange(plan, attempt.transactionHash);
+  return { plan, attempt, confirmation };
+}
+```
+
+`reviewInOwnerUI` must display the fresh complete plan and warnings, resolving
+`true` only after explicit human approval. Never replace it with an LLM boolean
+or unconditional approval. The SDK rechecks canonical ownership and vault state
+after approval and reconstructs transaction fields; caller JSON is not execution
+authority. No-change results require no signing. Keep the plan and any returned
+hash for later read-only confirmation.
+
+`no_change` means a fresh read already matched the desired flag. Reusing that
+plan object performs fresh checks and asks for new approval if a change is now
+needed. `submitted`, `rejected` and `submission_unknown` outcomes stay cached for
+that object in this process; this is not persistent idempotency. An unknown
+submission does not prove failure and must not trigger a new plan/signature or
+automatic resend. Confirmation may be `pending`, `unverified` or `reverted`;
+`confirmed` means a matching flag transaction **after the plan's recorded block**
+and matching safe readback, not cryptographic proof of a particular approval or
+completion of a domain renewal.
+
+Enabling permits authorized renewal operators to use this token's funded vault
+balance without a new signature for each renewal; the actual quote may exceed
+the minimum. Disabling prevents new reservations, but an existing one can still
+complete and charge. The setting transaction has zero native value but can cost
+network gas. See the [renewal guide](https://docs.agentdomain.app/guides/renewal/)
+for the full result/error contracts and billing boundaries.
 
 ## Authentication model
 
