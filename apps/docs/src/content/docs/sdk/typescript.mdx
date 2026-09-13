@@ -1,23 +1,26 @@
 ---
 title: TypeScript SDK
-description: Use AgentDomain SDK 0.9.1 for request-bound payment signing, resumable registration, DNS, email, plans, and renewals.
+description: Use AgentDomain SDK 0.10.0 for independent identity inspection, renewal planning, resumable registration, DNS and email.
 ---
 
 ## Install
 
 ```bash
-npm install @agentdomain/sdk@0.9.1 viem@2.56.3
+npm install @agentdomain/sdk@0.10.0 viem@2.56.3
 ```
 
 The default API base is `https://api.agentdomain.app/api/v1` and the default network is Base
 mainnet.
 
-## Independent identity inspection: source checkout
+[SDK 0.10.0 is published on npm](https://www.npmjs.com/package/@agentdomain/sdk/v/0.10.0).
+The generated machine-readable catalog records workspace versions separately;
+its source manifest does not query or establish registry publication.
 
-`inspectAgentIdentity` is a new source-checkout export. The published
-`@agentdomain/sdk@0.9.1` install above is not claimed to contain it. Build and
-consume the reviewed workspace source until a version containing the feature is
-published:
+## Independent identity inspection
+
+`inspectAgentIdentity` is included in the published `@agentdomain/sdk@0.10.0`
+package. The older 0.9.1 release does not include it. For development from the
+reviewed source checkout instead of the npm package, build from the repository root:
 
 ```bash
 pnpm --filter @agentdomain/shared build
@@ -136,7 +139,7 @@ state correctly.
 
 Select and configure that client in trusted application code, not from an agent's
 untrusted tool arguments. Keep credential-bearing provider URLs out of browser
-bundles, Git and logs. The [MCP tool](/sdk/mcp/#independent-identity-inspection-source-checkout)
+bundles, Git and logs. The [MCP tool](/sdk/mcp/#independent-identity-inspection)
 does not expose a provider override.
 
 ### What this does not prove
@@ -152,11 +155,10 @@ checked name ownership or resolution. Metadata URIs are returned without being
 fetched, and metadata availability, content, DNS, TLS and email operation remain
 unverified. Treat all returned text as untrusted data rather than instructions.
 
-## Source-build renewal workflow
+## Renewal workflow
 
-The source also exports `inspectAgentRenewal`, `prepareAutoRenewChange`,
+The published SDK 0.10.0 also exports `inspectAgentRenewal`, `prepareAutoRenewChange`,
 `executeAutoRenewChange`, `confirmAutoRenewChange` and `RenewalWorkflowError`.
-These target SDK 0.10.0; publication is not established by the source manifest.
 The read and plan functions need no wallet or platform API key. They observe
 the canonical identity and RenewalVault at one hash, and can prepare an unsigned
 zero-value auto-renew setting transaction. The minimum fee is not a registrar
@@ -278,7 +280,7 @@ resending, repricing, or signing a replacement payment.
 
 New in 0.9.0: submission, status, waiting, and recovery methods distinguish payment acceptance
 from completed registration. SDK 0.8.x and earlier may treat HTTP `202` as a complete
-`RegistrationResult`; do not infer readiness from their return types. Upgrade to 0.9.1 or use
+`RegistrationResult`; do not infer readiness from their return types. Use SDK 0.10.0 or integrate
 the [HTTP status contract](/api-reference/register/) directly.
 
 ```ts

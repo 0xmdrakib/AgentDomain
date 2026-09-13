@@ -5,14 +5,21 @@ import test from 'node:test';
 const doc = (name) =>
   readFile(new URL(`../src/content/docs/sdk/${name}.mdx`, import.meta.url), 'utf8');
 
-test('inspection docs separate unreleased source exports from pinned npm installs', async () => {
+test('inspection docs identify published 0.10.0 exports without treating source metadata as registry proof', async () => {
   const sdk = await doc('typescript');
   const mcp = await doc('mcp');
-  assert.match(
-    sdk,
-    /published\s+`@agentdomain\/sdk@0\.9\.1` install above is not claimed to contain it/,
-  );
-  assert.match(mcp, /not included in\s+the published `@agentdomain\/mcp-server@0\.9\.0`/);
+  assert.match(sdk, /npm install @agentdomain\/sdk@0\.10\.0 viem@2\.56\.3/);
+  assert.match(mcp, /npm install --global @agentdomain\/mcp-server@0\.10\.0/);
+  assert.match(sdk, /included in the published `@agentdomain\/sdk@0\.10\.0`/);
+  assert.match(mcp, /included in the published `@agentdomain\/mcp-server@0\.10\.0`/);
+  assert.match(sdk, /source manifest does not query or establish registry publication/);
+  assert.match(mcp, /source metadata, not a\s+registry availability check/);
+  assert.ok(sdk.includes('https://www.npmjs.com/package/@agentdomain/sdk/v/0.10.0'));
+  assert.ok(mcp.includes('https://www.npmjs.com/package/@agentdomain/mcp-server/v/0.10.0'));
+  for (const source of [sdk, mcp]) {
+    assert.doesNotMatch(source, /source-build target|new source-checkout (?:feature|export)/);
+    assert.doesNotMatch(source, /independent-identity-inspection-source-checkout/);
+  }
   assert.match(sdk, /pnpm --filter @agentdomain\/sdk build/);
   assert.match(mcp, /node packages\/mcp-server\/dist\/index\.js/);
 });

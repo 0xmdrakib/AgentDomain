@@ -62,9 +62,12 @@ For frameworks and documentation, the task was to use real framework APIs,
 restrict the new agent flows to inspection/unsigned planning, and generate
 machine-readable references from reviewed public sources. Tests use controlled
 RPC data and fake wallets where needed, not live paid execution. CrewAI's native
-MCP path has Windows fixture tests; Linux qualification and dependency review
-remain release gates, and no full security audit is claimed. SDK/MCP 0.10.0 and LangChain 0.1.0 are unpublished
-source candidates, and the new UI/docs changes are not yet deployed.
+MCP path passed Windows and Linux native fixture tests; its optional Python
+recipe retains known Chroma advisories, and no full security audit is claimed.
+SDK/MCP 0.10.0 are published with GitHub Actions provenance, and the UI/docs are
+deployed. LangChain 0.1.0 remains a tested source candidate pending its first npm
+publication. The exact release and deployment evidence is linked in
+[BUILT_DURING_ETHONLINE.md](BUILT_DURING_ETHONLINE.md#release-and-demo-evidence).
 
 These are feature-specific public specifications, not copies of operational
 planning or production configuration. No credentials, customer information,

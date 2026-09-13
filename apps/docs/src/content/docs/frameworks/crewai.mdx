@@ -11,10 +11,16 @@ opens and closes a local stdio client for each invocation. See
 
 ## Prepare the local server
 
-The identity and renewal workflow targets `@agentdomain/mcp-server` 0.10.0 and
-SDK 0.10.0. These are source-build targets, not a claim that the versions are
-already published. Build the reviewed checkout until a matching npm release is
-available:
+The identity and renewal workflow is included in the published
+[MCP server 0.10.0](https://www.npmjs.com/package/@agentdomain/mcp-server/v/0.10.0),
+which uses SDK 0.10.0. Install the pinned Node package in a local project:
+
+```bash
+npm install --save-exact @agentdomain/mcp-server@0.10.0
+```
+
+Use that project's `node_modules/@agentdomain/mcp-server/dist/index.js` as the
+server entry. For development from the reviewed repository instead:
 
 ```bash
 pnpm --filter @agentdomain/shared build
@@ -40,6 +46,11 @@ Run those commands from the example directory. On Windows, use `py -3.12` to
 create the environment and `.venv-native/Scripts/python.exe` to install. The
 native recipe does not install `crewai-tools` or `mcpadapt`. Read the dependency
 warning below before installing; changing the lock needs a new qualification.
+
+The native example passed scoped Windows and Linux qualification with the real
+Node MCP server and SDK, using synthetic RPC fixtures and no paid model or live
+transaction. This does not qualify arbitrary framework features or remove the
+dependency advisories below.
 
 ## Inspect without a model key
 

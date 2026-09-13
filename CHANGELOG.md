@@ -3,10 +3,12 @@
 Notable changes to AgentDomain's public npm packages are recorded here. Package
 versions are immutable once published to npm.
 
-## SDK/MCP 0.10.0 and LangChain 0.1.0 - Release Candidate
+## SDK/MCP 0.10.0 - 2026-09-13
 
-These versions are staged in source, **not yet published to npm**. The accompanying
-frontend and documentation changes are **not yet deployed**.
+SDK and MCP 0.10.0 are published on npm with GitHub Actions provenance. The
+accompanying frontend and documentation are deployed. The separate LangChain
+0.1.0 source candidate is implemented and tested, but its first npm publication
+remains pending; it is not included in the published-version claim.
 
 - Adds `inspectAgentIdentity` and `inspectAgentRenewal`: Base safe-block,
   EIP-1898 hash-pinned observations with CCIP Read disabled. Token IDs and atomic
@@ -27,8 +29,8 @@ frontend and documentation changes are **not yet deployed**.
 - Adds the real LangChain tools package and Python CrewAI/AutoGen stdio MCP
   examples. Their new flows inspect or prepare unsigned changes without sending
   transactions. CrewAI now uses its official core-native MCP APIs, with Windows
-  fixture tests completed; Linux qualification and Python dependency review
-  remain release gates. No clean dependency audit is claimed; see the
+  and Linux native fixture tests completed. Its optional Python recipe retains
+  known Chroma advisories. No clean dependency audit is claimed; see the
   [scoped security note](packages/mcp-server/examples/crewai/README.md#security-note).
 - Generates machine-readable documentation: full text, documented-route OpenAPI,
   SDK/MCP discovery index and a project-defined discovery document. These are
@@ -40,12 +42,13 @@ exceed the minimum. Disabling stops new reservations, not completion and chargin
 of an existing one. A zero-value setting transaction can still incur gas.
 
 The SDK moves from pre-1.0 `0.9.x` to `0.10.0`; existing `^0.9.0` ranges do not
-select it. Use the matching reviewed source until publication is verified.
+select it. Install `@agentdomain/sdk@0.10.0` and `@agentdomain/mcp-server@0.10.0`
+explicitly when adopting these features.
 
 ## SDK and shared 0.9.1 - 2026-09-08
 
 SDK and shared 0.9.1 were published to npm on September 8. The SDK 0.10.0
-candidate retains these existing fixes; they are not new final-day renewal work.
+release retains these existing fixes; they are not new final-day renewal work.
 The shared package remains 0.9.1, and MCP remained 0.9.0 for this patch release.
 No new fee or MCP, AgentKit or Eliza feature was introduced by this patch.
 
