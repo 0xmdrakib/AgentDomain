@@ -1,0 +1,3 @@
+# Native CrewAI MCP client (no crewai-tools/PDF adapter); Python 3.12.
+crewai==1.15.21
+mcp==1.28.1
