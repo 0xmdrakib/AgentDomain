@@ -1,0 +1,8 @@
+{
+  "include": ["readonly_flow.py", "../../test/crewai-integration.py"],
+  "extraPaths": ["."],
+  "venvPath": ".",
+  "venv": ".venv-native",
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "basic"
+}
