@@ -104,3 +104,36 @@ DELETE /api/v1/agents/:id/email/blocklist/:blockId
 
 Entries can match one normalized email address or an entire domain and apply to inbound senders and
 outbound recipients.
+
+## Successful responses
+
+| Operation                   | Success | Required outer fields                                               |
+| --------------------------- | ------- | ------------------------------------------------------------------- |
+| Inbox GET                   | `200`   | `inbox`, `addresses`, `limits`, `messages`                          |
+| Message DELETE              | `200`   | `deleted`, `messageId`                                              |
+| Primary address PATCH       | `200`   | `inbox`, `addresses`, `message`                                     |
+| Alias POST                  | `201`   | `address`, `addresses`                                              |
+| Alias DELETE                | `200`   | `deleted`, `addresses`                                              |
+| Send POST, normal enqueue   | `201`   | `id`, `status`, `messages`                                          |
+| Send POST, partial enqueue  | `202`   | `id`, `status`, `code`, `messages`, `usage`                         |
+| Batch POST, normal enqueue  | `202`   | `batchId`, `status`, `jobs`, `errors`                               |
+| Batch POST, partial enqueue | `202`   | `code`, `message`, `jobs`, `usage`                                  |
+| Usage GET                   | `200`   | Plan/cycle/counter fields, `used`, `remaining`, `requestsPerSecond` |
+| Webhook GET                 | `200`   | `webhook`, which can be `null`                                      |
+| Webhook PUT, update         | `200`   | `webhook`                                                           |
+| Webhook PUT, creation       | `201`   | `webhook`, `signingSecret`                                          |
+| Webhook PATCH, rotation     | `200`   | `webhook`, `signingSecret`                                          |
+| Blocklist GET               | `200`   | `entries`                                                           |
+| Blocklist POST              | `201`   | `entry`                                                             |
+| Blocklist DELETE            | `200`   | `ok`                                                                |
+
+`EMAIL_PARTIALLY_QUEUED` and `BATCH_PARTIALLY_QUEUED` identify accepted subsets.
+A partial batch response does not promise `batchId`, `status` or `errors` fields;
+inspect its actual variant and returned jobs. Optional `queueDeferred` can appear
+on normal queued responses. None of these statuses establishes final delivery.
+
+Do not resend the entire request with a new idempotency key after partial or
+uncertain acceptance. Keep the original key and reconcile its returned items.
+The `signingSecret` from webhook creation or rotation is sensitive: retain it
+only in the receiving application's protected storage, never model context,
+public source, analytics or logs. It is not returned again on an ordinary update.

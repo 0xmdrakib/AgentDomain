@@ -21,6 +21,7 @@ export const EXPECTED_DOCS = [
   'api-reference/register.mdx',
   'concepts.mdx',
   'frameworks/agentkit.mdx',
+  'frameworks/autogen.mdx',
   'frameworks/crewai.mdx',
   'frameworks/elizaos.mdx',
   'frameworks/langchain.mdx',
@@ -35,6 +36,14 @@ export const EXPECTED_DOCS = [
   'sdk/mcp.mdx',
   'sdk/typescript.mdx',
 ].sort();
+
+export const MACHINE_DOC_ROUTES = [
+  '/llms.txt',
+  '/llms-full.txt',
+  '/openapi.json',
+  '/api-index.json',
+  '/.well-known/agentdomain.json',
+];
 
 export const FORBIDDEN_CONTENT = [
   { label: 'private admin route', pattern: /\/api\/v1\/admin(?:\/|\b)/i },
@@ -138,6 +147,7 @@ export function validateInternalLinks(source, file, routes) {
     if (!target.startsWith('/')) {
       throw new Error(`${file}: internal links must be root-relative: ${target}`);
     }
+    if (MACHINE_DOC_ROUTES.includes(target.split(/[?#]/, 1)[0])) continue;
     const route = normalizeInternalLink(target);
     if (!routes.has(route)) throw new Error(`${file}: internal link has no page: ${target}`);
   }

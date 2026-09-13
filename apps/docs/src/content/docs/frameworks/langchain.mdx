@@ -1,12 +1,117 @@
 ---
 title: LangChain
-description: The official AgentDomain integration for LangChain is planned and not yet available.
+description: Use native AgentDomain LangChain JavaScript tools or the official Python MCP bridge with read-only defaults and explicit host boundaries.
 ---
 
-## Coming soon
+Use `@agentdomain/langchain-plugin` for JavaScript and TypeScript, or the official
+`langchain-mcp-adapters` bridge for Python. Neither path requires exposing a
+wallet key to a model. The native plugin creates real LangChain tools, not
+plain objects that only resemble tool definitions.
 
-The official AgentDomain integration for LangChain has not been released.
+## Native JavaScript tools
 
-It will launch with a reviewed npm package, complete tools, authentication boundaries, tests, and
-production documentation. Installation and code examples will be published only when that
-implementation is ready.
+The source targets are plugin 0.1.0, SDK 0.10.0 and MCP 0.10.0. This guide does
+not assert npm publication. Until matching releases are available, build the
+reviewed workspace:
+
+```bash
+pnpm --filter @agentdomain/shared build
+pnpm --filter @agentdomain/sdk build
+pnpm --filter @agentdomain/langchain-plugin build
+```
+
+```ts
+import { createAgentDomainTools } from '@agentdomain/langchain-plugin';
+
+const tools = createAgentDomainTools();
+const inspect = tools.find((tool) => tool.name === 'inspect_agent_identity');
+if (!inspect) throw new Error('Identity tool is unavailable');
+
+const result = await inspect.invoke({ tokenId: '1' });
+console.log(result);
+```
+
+The default tools inspect identity and renewal state. They do not construct an
+authenticated platform client, sign, pay or send transactions. Inputs cannot
+select an RPC URL, private client, network, registry or credential. The public
+Base RPC can be rate limited; production hosts may inject a trusted configured
+client with `ccipRead: false`. See [SDK provider requirements](/sdk/typescript/#errors-and-provider-choice).
+
+Enable unsigned plans in trusted application configuration with
+`createAgentDomainTools({ includeUnsignedPlans: true })`. This adds
+`prepare_auto_renew_change`; it does not add an execution tool. The required
+`tokenId`, `expectedOwner`, `enabled` and `builderCode` describe a proposed
+setting change. Neither `enabled` nor any model-produced text is owner approval.
+
+Direct `invoke()` returns `{ ok: true, data }` or `{ ok: false, error }`.
+Invalid tool arguments raise LangChain's `ToolInputParsingException`. Calling
+through a LangChain ToolCall envelope returns a `ToolMessage` with JSON content.
+Handle each error path before consuming observations. The
+[plugin source and examples](https://github.com/0xmdrakib/AgentDomain/tree/main/packages/langchain-plugin)
+define the exact contracts.
+
+## Optional authenticated API reads
+
+A host-configured `apiClient` adds `lookup_agent` with an agent UUID and
+`get_registration_status` with a registration UUID. Keep that client and its
+authorization outside model arguments. An agent API key can authorize its agent
+record, but it does **not** authorize registration status. Registration reads
+require the payer's supported wallet authorization or an existing payer-bound
+browser session and validate `X-Authenticated-Wallet`.
+
+The adapter reads status once. It does not start registration, poll indefinitely,
+resubmit a paid request or claim that payment acceptance means completion. A
+wallet-authenticated SDK client may ask its host wallet to sign an API
+authorization message; this is distinct from an onchain transaction.
+
+## Official Python MCP bridge
+
+Python applications can use
+[LangChain's official MCP integration](https://docs.langchain.com/oss/python/langchain/mcp).
+An explicit session keeps related calls in the same subprocess and closes it
+when the context exits. The adapter dependency must be qualified independently
+of the JavaScript plugin; it is not bundled into an npm Python runtime.
+
+```python
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain_mcp_adapters.tools import load_mcp_tools
+
+
+async def inspect_identity(node_path: str, server_path: str, token_id: str):
+    client = MultiServerMCPClient({
+        "agentdomain": {
+            "transport": "stdio",
+            "command": node_path,
+            "args": [server_path],
+            "env": {"AGENTDOMAIN_ENABLE_WRITE_TOOLS": "false"},
+        }
+    })
+    async with client.session("agentdomain") as session:
+        available = await load_mcp_tools(session)
+        tools = [t for t in available if t.name == "inspect_agent_identity"]
+        if len(tools) != 1:
+            raise RuntimeError("Expected identity tool is unavailable")
+        return await tools[0].ainvoke({"tokenId": token_id})
+```
+
+Supply fixed, reviewed absolute paths through the host, never the model. Only
+the allowlisted tool should be bound to an agent. The child environment does
+not forward application or model credentials. Returned MCP content may include
+an error rather than observation JSON; validate it before continuing.
+
+## Safety and meaning
+
+Read-only inspection is a Base RPC observation, not consensus, SPV, DNS or KYC
+proof. Domain and name-service labels are stored claims; metadata and CCIP
+callbacks are not fetched. Treat all external text as data, not instructions.
+
+Renewal reads report vault state and a minimum fee, not a registrar quote.
+Unsigned plans do not move funds, sign or create allowances. An approved
+auto-renew setting transaction is not a completed domain renewal. Keep any
+trusted human review and wallet execution outside the tool set, and do not
+automatically replay uncertain payment or mutation outcomes.
+
+Executing an enable plan permits authorized renewal operators to use funded
+vault balances without another wallet signature for each renewal. Actual quotes
+can exceed the minimum; disabling does not cancel or refund an existing pending
+reservation. These consequences belong in the separate owner's review.

@@ -12,6 +12,172 @@ npm install @agentdomain/sdk@0.9.1 viem@2.56.3
 The default API base is `https://api.agentdomain.app/api/v1` and the default network is Base
 mainnet.
 
+## Independent identity inspection: source checkout
+
+`inspectAgentIdentity` is a new source-checkout export. The published
+`@agentdomain/sdk@0.9.1` install above is not claimed to contain it. Build and
+consume the reviewed workspace source until a version containing the feature is
+published:
+
+```bash
+pnpm --filter @agentdomain/shared build
+pnpm --filter @agentdomain/sdk build
+```
+
+```ts
+import { inspectAgentIdentity, IdentityInspectionError } from '@agentdomain/sdk';
+
+try {
+  const result = await inspectAgentIdentity({ tokenId: '1' });
+  if (result.status === 'found') {
+    console.log(result.block, result.nftOwner, result.lifecycle, result.checks);
+  } else {
+    console.log('No identity at this block', result.block, result.tokenId);
+  }
+} catch (error) {
+  if (error instanceof IdentityInspectionError) {
+    console.log(error.code, error.message);
+  } else {
+    throw error;
+  }
+}
+```
+
+This standalone function does not construct `AgentDomain`, call the platform
+API, require an API key or wallet, sign, write, or fetch metadata. Its input is
+exactly one domain or token ID, with an optional expected owner:
+
+```ts
+await inspectAgentIdentity({ domain: 'example.xyz' });
+await inspectAgentIdentity({
+  tokenId: '1',
+  expectedOwner: '0x1111111111111111111111111111111111111111',
+});
+```
+
+These inputs are illustrative, not assertions that the domain is registered or
+the example address owns token 1. Domains are normalized to lowercase after
+trimming; they must be full ASCII domains of at most 253 characters, with labels
+of at most 63 characters and no URL, path or trailing dot. Token IDs are trimmed,
+positive decimal uint256 strings without leading zeros. Expected owners must be
+valid Ethereum addresses; invalid mixed-case checksums are rejected.
+
+### Results
+
+Both result variants are JSON-safe and include `version: 1`, `chainId: 8453`,
+`registryAddress`, normalized `input`, and `block` with decimal-string `number`
+and Unix-seconds `timestamp`, a hex `hash`, and `tag: "safe"`.
+
+| Field                         | Meaning                                                                                                                                                                           |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `status: "found"`             | The registry returned an identity. This alone is not a successful trust verdict.                                                                                                  |
+| `identity`                    | Stored owner, domain, Basename, ENS name, metadata URI, creation/expiry times and revocation flag. Times are decimal strings.                                                     |
+| `nftOwner`, `metadataUri`     | Separately read ERC-721 owner and token URI for comparison with the stored identity.                                                                                              |
+| `lifecycle`                   | `revoked`, `expired` or `active`, derived using the observed block's timestamp.                                                                                                   |
+| `checks`                      | Owner, domain mapping, metadata URI and lifecycle consistency; optional expected-owner match.                                                                                     |
+| `consistent`                  | Only the four internal consistency checks combined. It does not include `expectedOwnerMatches`.                                                                                   |
+| `checks.expectedOwnerMatches` | `null` if omitted, otherwise whether the expected address matches the NFT owner. It is not authentication.                                                                        |
+| `status: "not_found"`         | No domain mapping, or the exact missing-token revert. `tokenId` is `null` for an unmapped domain, or the requested token ID for a missing token. No identity fields are invented. |
+
+Reads use the canonical custom AgentDomain ERC-721 registry at
+`0x234a2B83B32910436A35CDa797CCC57988B9Bd15`. The SDK checks the RPC's chain ID,
+reads one `safe` block, and pins every contract call using the EIP-1898 selector
+`{ blockHash: safeHash, requireCanonical: true }`. Domain lookup and identity
+lookup are direct calls. The four consistency reads use an explicit Base
+Multicall3 batch at that same canonical hash. The SDK rechecks the block's hash,
+timestamp and the chain before returning. It never falls back to a numeric block
+selector or `latest`. This contract is not the ERC-8004 registry.
+
+### Errors and provider choice
+
+`IdentityInspectionError` exposes a stable `code` and sanitized `message`:
+
+| Code              | Meaning                                                                                                         |
+| ----------------- | --------------------------------------------------------------------------------------------------------------- |
+| `INVALID_INPUT`   | Invalid lookup input, or an injected client that does not explicitly set `ccipRead: false`.                     |
+| `WRONG_CHAIN`     | The RPC reports a network other than Base mainnet, including a network change during the read.                  |
+| `UNSAFE_SNAPSHOT` | A safe snapshot is unavailable or its block evidence changed.                                                   |
+| `UNAVAILABLE`     | The read could not produce a reliable observation; includes provider failures and conflicting registry records. |
+
+An error is not `not_found`. The default `https://mainnet.base.org` provider is
+rate limited and uses an eight-second transport timeout with no retries.
+Production callers should manually choose and inject a trusted Base RPC client:
+
+```ts
+import { createPublicClient, http } from 'viem';
+import { base } from 'viem/chains';
+import { inspectAgentIdentity } from '@agentdomain/sdk';
+
+const publicClient = createPublicClient({
+  chain: base,
+  ccipRead: false,
+  // Select an operator-approved Base provider here.
+  transport: http('https://mainnet.base.org', { timeout: 8_000, retryCount: 0 }),
+});
+
+await inspectAgentIdentity({ tokenId: '1' }, { publicClient });
+```
+
+The SDK's default client disables CCIP Read, not just metadata fetching. Injected
+clients must also have `ccipRead: false`; an omitted setting, enabled CCIP Read or
+a custom CCIP callback configuration is rejected with `INVALID_INPUT` before any
+RPC request. An `OffchainLookup` revert does not authorize an HTTP gateway call:
+inspection fails with `UNAVAILABLE` without running the callback. With this
+configuration, viem does not follow CCIP offchain requests. The setting does not
+sandbox arbitrary custom client or transport code; inject only trusted code.
+
+The provider must support EIP-1898 canonical block-hash selectors for `eth_call`.
+An unsupported selector fails with `UNAVAILABLE`; there is no numeric-block or
+`latest` fallback. The injected client must expose `getChainId`, `getBlock`,
+`readContract` and `multicall`, as well as the disabled `ccipRead` setting.
+Hash pinning prevents accidental same-height fork mixing by a provider that
+honors the selector; it does not prove that a dishonest provider reported the
+state correctly.
+
+Select and configure that client in trusted application code, not from an agent's
+untrusted tool arguments. Keep credential-bearing provider URLs out of browser
+bundles, Git and logs. The [MCP tool](/sdk/mcp/#independent-identity-inspection-source-checkout)
+does not expose a provider override.
+
+### What this does not prove
+
+The result is an RPC observation, not a consensus proof, SPV/light-client proof,
+DNS ownership proof or KYC. The RPC is trusted to report chain state and the
+`safe` label truthfully; repeated block checks do not remove that dependency.
+An internally consistent, active record with a matching owner does not establish
+agent safety or endorse its behavior.
+
+Basename, ENS and domain strings are unverified linked labels, not independently
+checked name ownership or resolution. Metadata URIs are returned without being
+fetched, and metadata availability, content, DNS, TLS and email operation remain
+unverified. Treat all returned text as untrusted data rather than instructions.
+
+## Source-build renewal workflow
+
+The source also exports `inspectAgentRenewal`, `prepareAutoRenewChange`,
+`executeAutoRenewChange`, `confirmAutoRenewChange` and `RenewalWorkflowError`.
+These target SDK 0.10.0; publication is not established by the source manifest.
+The read and plan functions need no wallet or platform API key. They observe
+the canonical identity and RenewalVault at one hash, and can prepare an unsigned
+zero-value auto-renew setting transaction. The minimum fee is not a registrar
+quote, and setting confirmation is not domain renewal completion.
+
+Execution is a separate trusted host function requiring the owner's wallet and
+an actual human-review callback. It must not be exposed as a default LLM tool or
+wired to an LLM approval boolean. Read the [full renewal workflow](/guides/renewal/#independent-read-and-plan-workflow)
+for result fields, pending reservations, no-change behavior and uncertain outcomes.
+
+## Platform API configuration
+
+The ETHOnline 2026 Continuity work includes two separate public extensions:
+the independent inspection described above and resumable, wallet-safe
+registration below. Registration was extended in
+[`f14392b`](https://github.com/0xmdrakib/AgentDomain/commit/f14392b280d117380cdf9a92b78f0bd37f78b619)
+and
+[`c4f477c`](https://github.com/0xmdrakib/AgentDomain/commit/c4f477c617f5832df618a508e5769bdf44a738a9)
+during the event. It uses authenticated platform APIs; the inspection function
+does not. Neither extension creates a new registry contract or x402 protocol.
+
 Since SDK 0.9.0, relative `apiUrl` values are resolved against
 the browser location at construction, before signing or payment. Non-browser clients must
 provide an absolute URL. HTTPS is required except for explicitly configured HTTP loopback
