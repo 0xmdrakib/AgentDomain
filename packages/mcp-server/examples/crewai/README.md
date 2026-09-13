@@ -1,9 +1,11 @@
 # AgentDomain With Native CrewAI
 
-This example uses CrewAI's official native `MCPClient`, `StdioTransport` and
-`MCPNativeTool`, backed by the official Python MCP SDK, to call the Node.js
-AgentDomain MCP server. CrewAI is a Python dependency, not an npm-native
-AgentDomain plugin. It does not install `crewai-tools` or `mcpadapt`.
+This thin example imports the separately installable **`agentdomain-crewai`**
+Python package. The package uses CrewAI's official native `MCPClient`,
+`StdioTransport` and `MCPNativeTool`, backed by the official Python MCP SDK,
+to call the separately installed Node.js AgentDomain MCP server. It does not
+install `crewai-tools` or `mcpadapt`. The implementation is maintained only in
+`packages/crewai-plugin/src/agentdomain_crewai`, not duplicated in this example.
 
 The deterministic example needs **no LLM, model API key, platform API key or
 wallet private key**. Its exact tool allowlist is:
@@ -37,7 +39,21 @@ py -3.12 -m venv .venv-native
 .venv-native/Scripts/python.exe -m pip install --require-hashes -r requirements.lock
 ```
 
-The target SDK and MCP versions are **0.10.0**. At authoring time this is an
+After the Python 0.11.0 release is published, install `agentdomain-crewai==0.11.0`
+in that environment as well. To retain the exact hash-locked runtime graph:
+
+```sh
+.venv-native/bin/python -m pip install --no-deps agentdomain-crewai==0.11.0
+.venv-native/bin/python -m pip check
+```
+
+Before publication, build `packages/crewai-plugin` with `python -m build` from
+the repository root, then replace the distribution name above with the absolute
+path to `agentdomain_crewai-0.11.0-py3-none-any.whl`. Use the corresponding Windows
+Python path on Windows. The built wheel is required; the example does not
+silently import an uninstalled source tree.
+
+The target SDK, MCP and Python package versions are **0.11.0**. At authoring time this is an
 unpublished release candidate. Do not assume the older npm release contains the
 new inspection/planning tools. For source validation, build the reviewed public
 checkout from its root:
@@ -49,11 +65,11 @@ pnpm --filter @agentdomain/sdk build
 pnpm --filter @agentdomain/mcp-server build
 ```
 
-After 0.10.0 is published, consumers can instead install the updated npm server
+After 0.11.0 is published, consumers can instead install the updated npm server
 in their own project:
 
 ```sh
-npm install --save-exact @agentdomain/mcp-server@0.10.0
+npm install --save-exact @agentdomain/mcp-server@0.11.0
 ```
 
 Point `--server` to that installation's
@@ -117,7 +133,7 @@ your own configured model. Each invocation owns and closes a separate MCP client
 
 ```python
 from pathlib import Path
-from readonly_flow import readonly_tools
+from agentdomain_crewai import readonly_tools
 from crewai import Agent, Crew, Process, Task
 
 # your_llm is supplied by your application. No model credentials enter Node.
@@ -195,8 +211,21 @@ After building the reviewed SDK/MCP, run from `packages/mcp-server`:
 node test/crewai-integration.mjs
 ```
 
+From the public repository root, the installed-wheel/artifact verifier is:
+
+```sh
+packages/crewai-plugin/.venv-consumer/bin/python -B packages/mcp-server/test/crewai-package.py --dist packages/crewai-plugin/dist -v
+```
+
+Replace that Python path with your fresh environment's executable (on Windows,
+use its `Scripts/python.exe`). Install the exact local wheel from the supplied
+`--dist` directory first. The verifier checks artifact allowlists, license and
+dependency metadata, RECORD hashes, installed package bytes and non-editable
+provenance, and both CLI entry points outside the source checkout. The native
+suite also verifies that the thin example calls the installed package.
+
 It uses this example's `.venv-native` by default. `AGENTDOMAIN_CREWAI_PYTHON` may point
-to another environment installed from this lock. Missing dependencies fail the
+to another environment installed from this lock plus the built Python wheel. Missing dependencies fail the
 suite with installation instructions; it never silently skips or installs them.
 
 The suite starts the actual official Python connector, real Node MCP server and
@@ -206,7 +235,7 @@ checks that each MCP child exits, and fails if a Chroma entrypoint is used.
 No model, wallet, chain write, platform API,
 cloud service, customer identity or paid service is contacted.
 
-Regenerate dependencies deliberately with uv 0.12.13, then rerun integration:
+Regenerate dependencies deliberately with the lock's recorded uv version, then rerun integration:
 
 ```sh
 uv pip compile requirements.in --python-version 3.12 --universal --generate-hashes --output-file requirements.lock
@@ -216,8 +245,8 @@ Development checks, from the public repository root (the pinned tools are not
 runtime dependencies):
 
 ```sh
-uvx --from ruff==0.15.6 ruff check packages/mcp-server/examples/crewai/readonly_flow.py packages/mcp-server/test/crewai-integration.py
-uvx --from ruff==0.15.6 ruff format --check packages/mcp-server/examples/crewai/readonly_flow.py packages/mcp-server/test/crewai-integration.py
+uvx --from ruff==0.15.6 ruff check packages/crewai-plugin/src/agentdomain_crewai packages/mcp-server/examples/crewai/readonly_flow.py packages/mcp-server/test/crewai-integration.py packages/mcp-server/test/crewai-package.py
+uvx --from ruff==0.15.6 ruff format --check packages/crewai-plugin/src/agentdomain_crewai packages/mcp-server/examples/crewai/readonly_flow.py packages/mcp-server/test/crewai-integration.py packages/mcp-server/test/crewai-package.py
 uvx --from pyright==1.1.407 pyright --project packages/mcp-server/examples/crewai/pyrightconfig.json
 ```
 
