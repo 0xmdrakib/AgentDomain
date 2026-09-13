@@ -1,0 +1,13 @@
+AgentDomain public developer tools and verified Base contracts
+Copyright 2026 Md. Rakib
+
+AgentDomain and related names and logos are trademarks or service marks of
+their respective owner. This license does not grant trademark rights.
+
+This package uses separately installed dependencies, which retain their own
+licenses. It does not relicense or embed their source:
+- @agentdomain/sdk: Apache-2.0
+- @langchain/core: MIT (https://github.com/langchain-ai/langchainjs)
+- zod: MIT (https://github.com/colinhacks/zod)
+
+Development dependencies: TypeScript (Apache-2.0) and viem (MIT).

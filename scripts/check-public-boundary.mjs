@@ -17,12 +17,15 @@ const allowedRootFiles = new Set([
   '.prettierignore',
   '.prettierrc',
   '.prettierrc.json',
+  'AI_DISCLOSURE.md',
+  'BUILT_DURING_ETHONLINE.md',
   'CHANGELOG.md',
   'CODE_OF_CONDUCT.md',
   'CONTRIBUTING.md',
   'frontend.env.example',
   'LICENSE',
   'NOTICE',
+  'PREEXISTING.md',
   'README.md',
   'SECURITY.md',
   'package.json',
@@ -35,6 +38,7 @@ const allowedApplicationRoots = new Set(['docs', 'frontend']);
 const allowedPackageRoots = new Set([
   'agentkit-plugin',
   'eliza-plugin',
+  'langchain-plugin',
   'mcp-server',
   'sdk',
   'shared',
@@ -103,7 +107,7 @@ const forbiddenImportRules = [
     'backend database or storage package',
   ],
   [
-    /^@agentdomain\/(?!(?:sdk|shared|mcp-server|agentkit-plugin|eliza-plugin|contracts|brand-assets)(?:\/|$))/,
+    /^@agentdomain\/(?!(?:sdk|shared|mcp-server|agentkit-plugin|eliza-plugin|langchain-plugin|contracts|brand-assets)(?:\/|$))/,
     'non-public AgentDomain package',
   ],
   [/(?:^|\/)apps\/web(?:\/|$)/, 'private web source'],
@@ -353,11 +357,16 @@ function checkRepository() {
 }
 
 function runSelfTest() {
+  assert.equal(repositoryScopeViolation('AI_DISCLOSURE.md'), null);
+  assert.equal(repositoryScopeViolation('BUILT_DURING_ETHONLINE.md'), null);
+  assert.equal(repositoryScopeViolation('PREEXISTING.md'), null);
+  assert.equal(repositoryScopeViolation('private-pitch.md'), 'unapproved root file');
   assert.equal(repositoryScopeViolation('README.md'), null);
   assert.equal(repositoryScopeViolation('CHANGELOG.md'), null);
   assert.equal(repositoryScopeViolation('apps/frontend/src/app/page.tsx'), null);
   assert.equal(repositoryScopeViolation('contracts/src/PaymentRouter.sol'), null);
   assert.equal(repositoryScopeViolation('packages/mcp-server/src/index.ts'), null);
+  assert.equal(repositoryScopeViolation('packages/langchain-plugin/src/index.ts'), null);
   assert.equal(
     repositoryScopeViolation('apps/mcp-server/src/index.ts'),
     'unapproved public application root',
@@ -382,6 +391,7 @@ function runSelfTest() {
   assert.equal(pathViolation('frontend.env.example'), null);
   assert.equal(pathViolation('backend.env.example'), 'environment file');
   assert.equal(importViolation('@agentdomain/sdk'), null);
+  assert.equal(importViolation('@agentdomain/langchain-plugin'), null);
   assert.equal(importViolation('@agentdomain/storage'), 'non-public AgentDomain package');
   assert.equal(importViolation('@aws-sdk/client-s3'), 'AWS SDK');
   assert.equal(importViolation('../storage/private-client'), 'private backend source area');

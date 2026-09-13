@@ -1,0 +1,66 @@
+{
+  "name": "@agentdomain/langchain-plugin",
+  "version": "0.1.0",
+  "description": "Read-only LangChain tools for AgentDomain identity and renewal observations",
+  "keywords": [
+    "agentdomain",
+    "langchain",
+    "ai-agents",
+    "identity",
+    "base",
+    "renewal"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/0xmdrakib/AgentDomain.git",
+    "directory": "packages/langchain-plugin"
+  },
+  "homepage": "https://docs.agentdomain.app/frameworks/langchain",
+  "bugs": {
+    "url": "https://github.com/0xmdrakib/AgentDomain/issues"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "examples",
+    "README.md",
+    "LICENSE",
+    "NOTICE",
+    "package.json"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "pnpm run build",
+    "test": "pnpm --filter @agentdomain/sdk build && pnpm run build && node --test test/*.test.mjs",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agentdomain/sdk": "workspace:^",
+    "zod": "3.25.76"
+  },
+  "peerDependencies": {
+    "@langchain/core": "^1.2.11"
+  },
+  "devDependencies": {
+    "@langchain/core": "1.2.11",
+    "typescript": "^5.7.2",
+    "viem": "^2.56.3"
+  }
+}
