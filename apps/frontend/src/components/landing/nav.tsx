@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { AuthButton } from '@/components/wallet/auth-button';
-import { Mail, Menu, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { BrandMark } from '@/components/brand/brand-mark';
 
 const WALLET_DIALOG_OPEN_ATTR = 'data-agentdomain-wallet-dialog-open';
@@ -118,13 +118,12 @@ function NavLinks({ onNavigate, mobile }: { onNavigate: () => void; mobile?: boo
       <Link href="/verify" className={linkClass} onClick={onNavigate}>
         Identity Check
       </Link>
+      <a href="mailto:contact@agentdomain.app" className={linkClass} onClick={onNavigate}>
+        Support
+      </a>
       <Link href="https://docs.agentdomain.app" className={linkClass} onClick={onNavigate}>
         Docs
       </Link>
-      <a href="mailto:contact@agentdomain.app" className={linkClass} onClick={onNavigate}>
-        <Mail className="h-4 w-4 shrink-0" aria-hidden />
-        Support
-      </a>
     </>
   );
 }

@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-html-link-for-pages -- Public pages use full navigation to avoid shipping router JavaScript. */
 
-import { Mail, Menu, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { BrandMark } from '@/components/brand/brand-mark';
 import { Button } from '@/components/ui/button';
 
@@ -10,8 +10,8 @@ const links = [
   { href: '/#pricing', label: 'Pricing' },
   { href: '/registry', label: 'Registry' },
   { href: '/verify', label: 'Identity Check' },
-  { href: 'https://docs.agentdomain.app', label: 'Docs' },
   { href: 'mailto:contact@agentdomain.app', label: 'Support' },
+  { href: 'https://docs.agentdomain.app', label: 'Docs' },
 ] as const;
 
 export function PublicNav() {
@@ -35,7 +35,6 @@ export function PublicNav() {
               href={link.href}
               className="inline-flex items-center gap-2 whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground"
             >
-              {link.label === 'Support' && <Mail className="h-4 w-4 shrink-0" aria-hidden />}
               {link.label}
             </a>
           ))}
@@ -65,7 +64,6 @@ export function PublicNav() {
                   href={link.href}
                   className="touch-target flex items-center gap-2 rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent/80 hover:text-foreground"
                 >
-                  {link.label === 'Support' && <Mail className="h-4 w-4 shrink-0" aria-hidden />}
                   {link.label}
                 </a>
               ))}
