@@ -37,7 +37,10 @@ import { z } from 'zod';
 import {
   AgentDomain,
   IdentityInspectionError,
+  RenewalWorkflowError,
   inspectAgentIdentity,
+  inspectAgentRenewal,
+  prepareAutoRenewChange,
   validateBuilderCode,
 } from '@agentdomain/sdk';
 import {
@@ -52,7 +55,7 @@ import {
   SUPPORTED_FRAMEWORKS,
   SUPPORTED_TLDS,
 } from '@agentdomain/shared/constants';
-import { createPublicClient, createWalletClient, http, type Address } from 'viem';
+import { createPublicClient, createWalletClient, http, maxUint256, type Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { base, baseSepolia } from 'viem/chains';
 
@@ -68,6 +71,28 @@ const identityInspectionInput = z.union([
   z.object({ domain: z.string(), expectedOwner: z.string().optional() }).strict(),
   z.object({ tokenId: z.string(), expectedOwner: z.string().optional() }).strict(),
 ]);
+const renewalTokenId = z
+  .string()
+  .regex(/^[1-9][0-9]{0,77}$/)
+  .refine((value) => /^[1-9][0-9]{0,77}$/.test(value) && BigInt(value) <= maxUint256);
+const renewalOwner = z
+  .string()
+  .length(42)
+  .regex(/^0x[0-9a-fA-F]{40}$/);
+const renewalInspectionInput = z.union([
+  z
+    .object({ domain: z.string().trim().min(1).max(253), expectedOwner: renewalOwner.optional() })
+    .strict(),
+  z.object({ tokenId: renewalTokenId, expectedOwner: renewalOwner.optional() }).strict(),
+]);
+const autoRenewChangeInput = z
+  .object({
+    tokenId: renewalTokenId,
+    expectedOwner: renewalOwner,
+    enabled: z.boolean(),
+    builderCode: z.string().regex(/^[a-z0-9_]{1,32}$/),
+  })
+  .strict();
 
 function getClient(): AgentDomain {
   const config: ConstructorParameters<typeof AgentDomain>[0] = {
@@ -103,6 +128,74 @@ const server = new Server(
 // ----------------------------------------------------------------------
 
 const TOOL_DEFINITIONS: Tool[] = [
+  {
+    name: 'inspect_agent_renewal',
+    description:
+      'Read the custom AgentDomain ERC-721 identity and canonical renewal vault on Base mainnet at one safe block. Supply exactly one domain or decimal tokenId, optionally expectedOwner. No platform API, wallet, signing, metadata fetch, or CCIP callback. The minimum fee is not a registrar quote; balances, flags, and pending reservations are observations, not confirmation that a renewal executed.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        domain: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 253,
+          description: 'Full ASCII domain, without a URL, path, or trailing dot.',
+        },
+        tokenId: {
+          type: 'string',
+          pattern: '^[1-9][0-9]{0,77}$',
+          maxLength: 78,
+          description:
+            'Positive uint256 decimal token ID, without leading zeros; not an agent UUID.',
+        },
+        expectedOwner: {
+          type: 'string',
+          pattern: '^0x[0-9a-fA-F]{40}$',
+          minLength: 42,
+          maxLength: 42,
+          description: 'Optional EVM owner comparison, not authorization. SDK validates checksum.',
+        },
+      },
+      oneOf: [{ required: ['domain'] }, { required: ['tokenId'] }],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'prepare_auto_renew_change',
+    description:
+      "Prepare an UNSIGNED, zero-value setAutoRenew transaction for the current canonical NFT owner on Base mainnet. Preparation does not sign, submit, or spend; the returned plan is not authority to execute. If separately approved and executed, enabling permits keepers to spend this token's funded vault balance without a new signature for each renewal; the actual quote may exceed the minimum fee. Disabling stops new reservations, but existing reservations can still complete and charge. noChange identifies an already matching flag.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tokenId: {
+          type: 'string',
+          pattern: '^[1-9][0-9]{0,77}$',
+          maxLength: 78,
+          description: 'Positive uint256 decimal token ID, without leading zeros.',
+        },
+        expectedOwner: {
+          type: 'string',
+          pattern: '^0x[0-9a-fA-F]{40}$',
+          minLength: 42,
+          maxLength: 42,
+          description: 'Current NFT owner to verify. SDK validates and normalizes checksum.',
+        },
+        enabled: {
+          type: 'boolean',
+          description: 'Desired auto-renew flag; never execution approval.',
+        },
+        builderCode: {
+          type: 'string',
+          pattern: '^[a-z0-9_]{1,32}$',
+          minLength: 1,
+          maxLength: 32,
+          description: 'Explicit ERC-8021 builder attribution for the unsigned calldata.',
+        },
+      },
+      required: ['tokenId', 'expectedOwner', 'enabled', 'builderCode'],
+      additionalProperties: false,
+    },
+  },
   {
     name: 'inspect_agent_identity',
     description:
@@ -647,6 +740,8 @@ const TOOL_DEFINITIONS: Tool[] = [
 
 const READ_ONLY_TOOL_NAMES = new Set([
   'inspect_agent_identity',
+  'inspect_agent_renewal',
+  'prepare_auto_renew_change',
   'check_domain_availability',
   'quote_registration',
   'lookup_agent',
@@ -710,6 +805,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === 'inspect_agent_identity') {
       const input = identityInspectionInput.parse(args);
       const result = await inspectAgentIdentity(input);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+    if (name === 'inspect_agent_renewal') {
+      const result = await inspectAgentRenewal(renewalInspectionInput.parse(args));
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+    if (name === 'prepare_auto_renew_change') {
+      const result = await prepareAutoRenewChange(autoRenewChangeInput.parse(args));
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     }
 
@@ -1121,6 +1224,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
     }
   } catch (e) {
+    if (name === 'inspect_agent_renewal' || name === 'prepare_auto_renew_change') {
+      const error =
+        e instanceof RenewalWorkflowError
+          ? { code: e.code, message: e.message }
+          : e instanceof z.ZodError
+            ? {
+                code: 'INVALID_INPUT',
+                message:
+                  name === 'inspect_agent_renewal'
+                    ? 'Provide exactly one domain or positive decimal tokenId, optionally expectedOwner. Other arguments are not accepted.'
+                    : 'Provide a positive decimal tokenId, expectedOwner, boolean enabled, and builderCode. Other arguments are not accepted.',
+              }
+            : {
+                code: 'UNAVAILABLE',
+                message:
+                  'Base renewal inspection or unsigned preparation is unavailable. No transaction was submitted.',
+              };
+      return {
+        isError: true,
+        content: [{ type: 'text', text: JSON.stringify({ error }, null, 2) }],
+      };
+    }
     if (name === 'inspect_agent_identity') {
       const error =
         e instanceof IdentityInspectionError
