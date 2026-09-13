@@ -3,6 +3,7 @@ import { dirname, extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { findForbiddenMatches } from './validate-content.mjs';
+import { validateBuiltMachineDocuments } from './validate-machine-docs.mjs';
 
 const docsRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(docsRoot, 'dist');
@@ -111,6 +112,7 @@ async function validateOutput() {
   const robots = await requireFile('robots.txt');
   const llms = await requireFile('llms.txt');
   const headers = await requireFile('_headers');
+  const machine = await validateBuiltMachineDocuments(dist);
   const sitemapLines = robots
     .split(/\r?\n/)
     .map((line) => line.match(/^Sitemap:\s*(\S+)\s*$/i)?.[1])
@@ -141,7 +143,7 @@ async function validateOutput() {
   }
 
   console.log(
-    `Docs output valid: ${JSON.stringify({ files: files.length, html: htmlFiles.length, search: true })}`,
+    `Docs output valid: ${JSON.stringify({ files: files.length, html: htmlFiles.length, search: true, machine })}`,
   );
 }
 

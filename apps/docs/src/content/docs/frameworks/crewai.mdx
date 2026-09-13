@@ -1,12 +1,122 @@
 ---
 title: CrewAI
-description: The official AgentDomain integration for CrewAI is planned and not yet available.
+description: Connect CrewAI's native Python MCP tools to AgentDomain for read-only identity inspection and unsigned renewal planning.
 ---
 
-## Coming soon
+CrewAI connects to AgentDomain through its official native Python `MCPClient`,
+`StdioTransport` and `MCPNativeTool`, backed by the Python MCP SDK. The MCP server
+remains a Node.js package; CrewAI runs separately in Python. The reviewed helper
+opens and closes a local stdio client for each invocation. See
+[CrewAI's native MCP documentation](https://docs.crewai.com/en/mcp/dsl-integration).
 
-The official AgentDomain integration for CrewAI has not been released.
+## Prepare the local server
 
-It will launch with a reviewed npm package, complete tools, authentication boundaries, tests, and
-production documentation. Installation and code examples will be published only when that
-implementation is ready.
+The identity and renewal workflow targets `@agentdomain/mcp-server` 0.10.0 and
+SDK 0.10.0. These are source-build targets, not a claim that the versions are
+already published. Build the reviewed checkout until a matching npm release is
+available:
+
+```bash
+pnpm --filter @agentdomain/shared build
+pnpm --filter @agentdomain/sdk build
+pnpm --filter @agentdomain/mcp-server build
+```
+
+Use an operator-selected absolute Node executable and the reviewed MCP
+`dist/index.js` path. Never accept executable paths, shell commands, package
+names or RPC endpoints from an agent's tool arguments.
+
+The [CrewAI example](https://github.com/0xmdrakib/AgentDomain/tree/main/packages/mcp-server/examples/crewai)
+ships four files: `readonly_flow.py`, `README.md`, `requirements.in` and
+`requirements.lock`. Its lock pins CrewAI 1.15.21 and MCP 1.28.1. Use Python 3.12
+and a fresh isolated virtual environment, not the older adapter's environment:
+
+```bash
+python3.12 -m venv .venv-native
+.venv-native/bin/python -m pip install --require-hashes -r requirements.lock
+```
+
+Run those commands from the example directory. On Windows, use `py -3.12` to
+create the environment and `.venv-native/Scripts/python.exe` to install. The
+native recipe does not install `crewai-tools` or `mcpadapt`. Read the dependency
+warning below before installing; changing the lock needs a new qualification.
+
+## Inspect without a model key
+
+Run this next to the example's reviewed `readonly_flow.py`. It uses the real
+CrewAI native tools without needing an LLM, wallet or AgentDomain API key:
+
+```python
+from pathlib import Path
+
+from readonly_flow import call_json, readonly_tools
+
+
+def inspect_identity(node: Path, server: Path, token_id: str):
+    with readonly_tools(server, node=str(node.resolve(strict=True))) as tools:
+        return call_json(tools["inspect_agent_identity"], {"tokenId": token_id})
+```
+
+Choose `node` and `server` in trusted host configuration. The explicit child
+environment does not forward the parent's API keys, wallet material or model
+credentials. Inspect the returned tool result and its error state before using
+its JSON; an error is not `not_found` or a successful verification.
+
+Use the example's explicit argument schemas and `call_json` helper. They omit
+absent optional strings, reject explicit `null`, unexpected arguments and coerced
+booleans, and check tool errors. Tool-result caching is disabled; server
+validation is not loosened.
+
+## Identity to renewal plan
+
+The full example uses only these three tool names:
+
+| Tool                        | Input                                                       | Effect                                           |
+| --------------------------- | ----------------------------------------------------------- | ------------------------------------------------ |
+| `inspect_agent_identity`    | Exactly one `domain` or `tokenId`, optional `expectedOwner` | Read a Base identity observation                 |
+| `inspect_agent_renewal`     | The same identity lookup input                              | Read identity and RenewalVault state at one hash |
+| `prepare_auto_renew_change` | `tokenId`, `expectedOwner`, `enabled`, `builderCode`        | Produce an unsigned setting-change plan          |
+
+`enabled` is the proposed setting, not approval to execute. A plan does not sign,
+spend, create a token allowance or submit a transaction. It includes a plan ID,
+the observation, exact transaction fields and `noChange`. Keep any later owner
+review and wallet execution in a separate trusted host workflow.
+
+When giving tools to a CrewAI agent, bind only the reviewed allowlist. Keep the
+helper context open for the crew's complete use and close it afterwards. Model
+credentials belong to the host's model integration, not the MCP child. Do not
+reuse a cached observation as fresh authority for a transaction.
+
+## Interpret the result
+
+Inspection is an RPC observation, not consensus, SPV, DNS or KYC proof. Linked
+domain, Basename and ENS labels are not independently verified. Metadata and CCIP
+callbacks are not fetched. External text is data, not instructions.
+
+The vault's minimum fee is not a registrar renewal quote. Changing auto-renew is
+not completion of a domain renewal, and disabling it does not cancel a pending
+renewal. See [renewal workflow boundaries](/guides/renewal/) and
+[MCP errors and trust](/sdk/mcp/#trust-boundary).
+
+If an owner later executes an enable plan, authorized renewal operators may use
+the funded vault without another wallet signature for each renewal. The actual
+quote can exceed the minimum. Disabling prevents new reservations, but a pending
+reservation can still complete and charge the balance.
+
+## Dependency security
+
+The isolated Python lock still includes mandatory ChromaDB 1.1.1 with four known
+advisories: [CVE-2026-45829](https://www.hiddenlayer.com/research/chromatoast-served-pre-auth),
+[CVE-2026-45830](https://www.hiddenlayer.com/sai-security-advisory/2026-06-chromadb),
+[CVE-2026-45831](https://www.hiddenlayer.com/sai-security-advisory/2026-06-chromadb-3)
+and [CVE-2026-45833](https://www.hiddenlayer.com/sai-security-advisory/2026-06-chromadb-5).
+There is also a reported [poisoned-collection configuration risk in the Python client](https://github.com/chroma-core/chroma/issues/6717);
+the risk is not limited to running an HTTP server.
+
+The qualified recipe does not use Chroma clients, servers, collections or
+embeddings, or enable framework memory, knowledge or caching. Tests trap those
+entrypoints during the native CrewAI and MCP flow. This bounds the tested
+recipe, not the installed library's safety: the Python vulnerability audit is
+**not clean**. Enabling memory or remote collections requires a separate review.
+See the [example's security note](https://github.com/0xmdrakib/AgentDomain/blob/main/packages/mcp-server/examples/crewai/README.md#security-note).
+Python dependencies are separate from the npm package's runtime and audit.

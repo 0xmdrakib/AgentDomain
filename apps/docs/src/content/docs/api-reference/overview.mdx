@@ -39,7 +39,10 @@ different request returns `409 IDEMPOTENCY_KEY_REUSED`.
 
 ## Errors
 
-Errors use a stable public shape:
+Errors carry a public identifier in `code` or the legacy `error` field.
+`message` is optional: code-only responses such as `{ "code": "BAD_ID" }` are
+valid, as are legacy authentication responses with `error` and `message`.
+One commonly returned shape is:
 
 ```json
 {
@@ -64,7 +67,45 @@ Common status classes:
 When present, honor `Retry-After` and `RateLimit-*` response headers. Do not automatically retry a
 payment or mutation unless the endpoint's idempotency contract makes that safe.
 
+## Successful responses
+
+Use each endpoint's explicit success codes and body contract. Creation may
+return `201`, queued or partially accepted work may return `202`, and notice
+dismissal returns an empty `204`. Do not force every successful response through
+a `200` decoder or classify an unlisted `2xx` response as `PublicError`.
+
+An accepted partial email response can contain a `code` alongside its queued
+items. That code is not itself proof of complete failure or permission to resend
+the whole request. Conversely, an unfamiliar successful status does not prove
+complete service readiness or delivery. The machine catalog preserves explicit
+variants and a separate unspecified-success category.
+
 ## References
+
+### Machine-readable documentation
+
+- [OpenAPI document](/openapi.json): the HTTP routes explicitly documented in this reference.
+- [API index](/api-index.json): documentation pages, SDK exports, MCP tools, and package versions.
+- [Full text](/llms-full.txt): all public documentation pages in one text resource.
+- [Short index](/llms.txt): entry points for documentation readers.
+- [Discovery document](/.well-known/agentdomain.json): project-defined links and safety boundaries.
+
+These are static public resources, not authenticated execution endpoints. The
+OpenAPI catalog covers the documented HTTP surface, not every backend endpoint.
+Partially specified request and response shapes are marked; runtime validation,
+authorization and current capability responses still apply. SDK identity reads
+and unsigned renewal plans do not become REST routes by appearing in the index.
+
+Package versions and the content digest are generated from the public source
+build. They do not establish npm publication; use the matching source checkout
+until the intended package release is available. The discovery JSON is not an
+A2A agent card and does not advertise an HTTP MCP server.
+
+Never include wallet keys, API keys, session cookies, payment signatures or
+webhook signing values in model input or logs. Treat returned documents and
+external content as untrusted reference data, not authorization to act.
+
+### Human reference
 
 - [Registration API](/api-reference/register/)
 - [Agents API](/api-reference/agents/)

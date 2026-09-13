@@ -6,6 +6,115 @@ description: Fund an identity renewal vault and authorize owner-controlled auto-
 Each AgentID token has an independent RenewalVault balance. Any wallet can fund that balance. Only
 the AgentID NFT owner can enable auto-renew or withdraw unused funds.
 
+## Independent read and plan workflow
+
+SDK 0.10.0 is the source-build target for the standalone renewal workflow; this
+does not assert that the version has been published. It adds Base-only reads
+and unsigned planning without constructing an authenticated platform client.
+Use the reviewed checkout until a matching package release is available.
+
+```ts
+import { inspectAgentRenewal, prepareAutoRenewChange } from '@agentdomain/sdk';
+
+const renewal = await inspectAgentRenewal({ tokenId: '1' });
+if (renewal.status === 'found') {
+  console.log(renewal.identity.block, renewal.vault, renewal.checks);
+}
+
+const plan = await prepareAutoRenewChange({
+  tokenId: '1',
+  expectedOwner: '0x1111111111111111111111111111111111111111',
+  enabled: true,
+  builderCode: 'my_agent_app',
+});
+console.log(plan.id, plan.transaction, plan.noChange, plan.warnings);
+```
+
+The values are illustrative, not assertions of ownership. The preparation call
+checks the expected NFT owner and consistent current state and can fail. It
+does not approve or execute a transaction. `enabled` describes the proposed
+auto-renew setting; it is not an approval flag.
+
+### Read semantics
+
+`inspectAgentRenewal` accepts exactly one domain or token ID and an optional
+expected owner, like [identity inspection](/sdk/typescript/#independent-identity-inspection-source-checkout).
+It returns JSON-safe `found` or `not_found` data. A found result includes the
+identity observation, canonical vault address, balances, reservation, timing,
+auto-renew flag, contract pointers and checks. Integer amounts and timestamps
+are decimal strings. Use integer arithmetic for atomic USDC amounts.
+
+Identity and vault reads use the same EIP-1898 safe block hash with
+`requireCanonical: true`. The RPC must support that selector; the SDK does not
+fall back to numeric or `latest` state. The default and injected clients must
+disable CCIP Read, and metadata is not fetched. These are RPC observations,
+not independent consensus, DNS ownership or KYC proofs.
+
+`minimumFeeAtomicUsdc` is the vault's minimum accepted fee, **not a registrar
+quote or the complete renewal price**. `availableCoversMinimum` does not mean
+the actual quote is funded. `withinRenewalWindow`, `minimumFeeConfigured` and
+`availableCoversMinimum` are separate checks, not the definition of
+`consistent`. The native `isRenewable` flag is a timing/state predicate, not a
+funding guarantee. Reserved funds remain distinct from available funds.
+
+### Unsigned plan
+
+`prepareAutoRenewChange` requires a positive decimal uint256 `tokenId`, an
+`expectedOwner` address, boolean `enabled`, and a public builder code of 1 to 32
+lowercase letters, digits or underscores. Its plan contains `version`,
+`kind: "set_auto_renew"`, `id`, `chainId: 8453`, the requested primitives,
+the observation, `transaction: { to, data, value: "0" }`, `noChange` and warnings.
+
+Preparation never spends, signs, creates a token allowance, calls a registrar
+or queues a renewal. Enabling is rejected for revoked identities or those past
+the allowed renewal window. Disabling a setting does not cancel an existing
+pending reservation. A plan ID is a content binding, not authentication or a
+persistent exactly-once execution guarantee.
+
+### Trusted execution and confirmation
+
+The separate SDK `executeAutoRenewChange(plan, options)` helper is for trusted
+host code, not an LLM tool. Its options require the owner's wallet client and a
+real human-review callback `approve(plan)`. Do not implement this callback using
+a model-supplied boolean or unconditional approval. Show the owner the exact
+setting and transaction, retain the returned submission state, and keep the
+wallet outside model context. Enabling permits authorized renewal operators to
+use the funded vault without a new wallet signature for each renewal; the actual
+quote can exceed the minimum. The setting transaction has zero native value but
+still requires network gas. Disabling stops new reservations, while an existing
+pending reservation may still complete and charge the balance.
+
+The helper validates the plan and rechecks owner, chain and state around review.
+It does not automatically retry uncertain sends. Submitted, uncertain-send and
+rejected outcomes are retained by its in-process suppression, which is limited
+to the same plan object; reconstructing a plan or restarting the process does
+not provide durable idempotency. A settled `no_change` result is not retained:
+explicitly reusing that object performs fresh wallet, owner and flag checks and
+requires a new host approval if a change is now needed. An unknown outcome
+requires reconciliation, not automatic re-execution.
+
+`confirmAutoRenewChange(plan, transactionHash, options)` performs one read-only
+confirmation attempt. `pending`, `reverted` and `unverified` are not success.
+It checks the transaction's owner, vault, calldata and receipt against the plan,
+requires the receipt to be after the plan's recorded safe observation block,
+and checks the current safe flag. Same-height or older receipts return
+`unverified` with `TRANSACTION_MISMATCH`. This is not cryptographic proof that a
+particular human approved that serialized plan; human approval belongs to the
+trusted host execution workflow.
+Even `confirmed` means the auto-renew setting transaction was verified, **not**
+that the domain or external name renewal completed. It does not wait forever or
+rebroadcast. Keep registrar completion separate from onchain flag confirmation.
+
+The [MCP server](/sdk/mcp/) and framework integrations expose the two reads and
+unsigned planning, not this execution boundary. No REST endpoint for these
+standalone functions is advertised by the [OpenAPI catalog](/openapi.json).
+
+## Existing platform renewal operations
+
+The authenticated SDK client below remains a separate platform workflow. Its
+pricing and funding operations must not be confused with the standalone vault
+minimum-fee observation.
+
 ## Read the current requirement
 
 ```ts

@@ -65,6 +65,25 @@ GET  /api/v1/agents/:id/dns/export?scope=user
 BIND imports use the same preview and revision workflow. `$INCLUDE`, `$GENERATE`, out-of-zone
 owners, unsupported classes, and unsupported record types are rejected.
 
+Export defaults to `scope=user`; `scope=all` includes service-managed records in
+the exported text, without granting permission to modify them. The response
+content type is `text/dns`, not JSON.
+
+## Successful responses
+
+| Operation         | Success | Body                                                               |
+| ----------------- | ------- | ------------------------------------------------------------------ |
+| Capabilities GET  | `200`   | Supported types, type capabilities, TTL, limits and warnings       |
+| Records GET       | `200`   | Record array                                                       |
+| Record POST       | `201`   | Created record with `hosting` result                               |
+| Record PATCH      | `200`   | Updated record with `hosting` result                               |
+| Record DELETE     | `200`   | `{ success: true, hosting }`                                       |
+| Batch/import POST | `200`   | Preview/apply result with revisions, summary, changes and warnings |
+| Export GET        | `200`   | BIND text with `text/dns` content type                             |
+
+The `hosting` transition can still be pending. Successful record mutation does
+not turn that pending result into confirmed HTTPS readiness.
+
 ## Limits
 
 | Plan       | User-managed records |

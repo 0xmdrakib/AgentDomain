@@ -18,6 +18,11 @@ platform fee, and total USDC amount. This display quote is not a reservation. Re
 before starting checkout; the registration `402` supplies the sealed terms for that request.
 Do not reprice a challenged request or start another payment to resolve an uncertain submission.
 
+Quote requests require only `preferredName`; an omitted `tld` defaults to `xyz`.
+HTTP `200` returns the pricing object directly, not a wrapper. Monetary amounts
+such as `totalUsdc` are decimal strings. This differs from the registration POST,
+where `tld` is required.
+
 ## Register
 
 ```http
@@ -300,6 +305,15 @@ Set the path segment to `encodeURIComponent(noticeId)` and choose `popup` or `da
 Dismissal closes only that channel's notice. It does not cancel registration work, stop or refund
 payment, dismiss the other channel, or authorize another payment.
 
+Successful dismissal is HTTP `204` with no body. Do not call a JSON decoder for
+that response. It still includes `X-Authenticated-Wallet`, which must match the
+intended payer.
+
+Cookie-authenticated notice mutations require the trusted same-origin browser
+flow. Missing or foreign `Origin` is rejected for cookie-authenticated writes;
+server-side signature requests without an `Origin` are distinct from that flow.
+Never remove or forge a browser origin as an authorization workaround.
+
 Popup notices expire after **5 days** and dashboard notices after **10 days**, measured from
 original creation, not the latest update or dismissal. Expiry removes them from active notice
 reads; physical cleanup occurs on the next successful scheduled cleanup. This is not an
@@ -308,6 +322,20 @@ Retain separate recovery handles when an outcome is still uncertain: notice expi
 registration cancellation or proof that no payment occurred.
 
 ## Lost responses and upgrades
+
+### Success status matrix
+
+| Operation                    | Success      | Body                                                                         |
+| ---------------------------- | ------------ | ---------------------------------------------------------------------------- |
+| Quote GET                    | `200`        | Pricing object                                                               |
+| Registration POST            | `200`, `202` | Result or processing/action-required/refunded handle; read the actual status |
+| Registration detail/list GET | `200`        | Progress object or `{ items, total, hasMore }`                               |
+| Notice GET                   | `200`        | `{ items, nextCursor }`                                                      |
+| Notice PUT/POST              | `200`        | `{ items }`                                                                  |
+| Notice DELETE                | `204`        | No body                                                                      |
+
+A `202` recovery handle can report `refunded`; do not constrain all such
+responses to `processing`, settled payment or completed service readiness.
 
 If the submission response is lost, authenticate as the payer and read the registration list.
 Match the exact domain and submission time interval; do not guess if multiple attempts match.

@@ -17,7 +17,7 @@ import { validateHtmlUrls } from '../scripts/validate-output.mjs';
 
 test('the complete public docs contract validates', async () => {
   const result = await validateDocs();
-  assert.deepEqual(result, { files: 20, routes: 20, approvedAssets: 4 });
+  assert.deepEqual(result, { files: 21, routes: 21, approvedAssets: 4 });
 });
 
 test('forbidden infrastructure and operator details are detected', () => {
@@ -131,24 +131,56 @@ test('package cannot be published to npm', async () => {
   assert.equal(pkg.repository.url, 'https://github.com/0xmdrakib/AgentDomain.git');
 });
 
-test('unreleased framework integrations remain code-free coming-soon placeholders', async () => {
-  for (const framework of ['langchain', 'crewai']) {
+test('framework guides distinguish real language bridges from source release targets', async () => {
+  for (const framework of ['langchain', 'crewai', 'autogen']) {
     const source = await readFile(
       join(DOCS_ROOT, 'src', 'content', 'docs', 'frameworks', `${framework}.mdx`),
       'utf8',
     );
-    assert.match(source, /## Coming soon/);
-    assert.match(source, /has not been released/);
-    assert.doesNotMatch(source, /```|npm\s+(?:install|add)|@agentdomain\/|\bimport\s+/);
+    assert.match(source, /```python/);
+    assert.match(source, /inspect_agent_identity/);
+    assert.match(source, /prepare_auto_renew_change/);
+    assert.match(source, /publication|published/);
+    assert.match(source, /unsigned/i);
+    assert.doesNotMatch(source, /## Coming soon/);
   }
 
   const docsConfig = await readFile(join(DOCS_ROOT, 'astro.config.mjs'), 'utf8');
-  assert.match(docsConfig, /label: 'LangChain \(Coming soon\)'/);
-  assert.match(docsConfig, /label: 'CrewAI \(Coming soon\)'/);
+  assert.match(docsConfig, /label: 'LangChain'/);
+  assert.match(docsConfig, /label: 'CrewAI'/);
+  assert.match(docsConfig, /label: 'AutoGen'/);
+});
 
-  const sharedConstants = await readFile(
-    join(DOCS_ROOT, '..', '..', 'packages', 'shared', 'src', 'constants.ts'),
+test('CrewAI guide matches the native helper and discloses the pinned Python dependency risk', async () => {
+  const source = await readFile(
+    join(DOCS_ROOT, 'src', 'content', 'docs', 'frameworks', 'crewai.mdx'),
     'utf8',
   );
-  assert.doesNotMatch(sharedConstants, /['"](?:langchain|crewai)['"]/);
+  for (const term of [
+    'MCPClient',
+    'StdioTransport',
+    'MCPNativeTool',
+    'readonly_flow.py',
+    'README.md',
+    'requirements.in',
+    'requirements.lock',
+    'call_json(tools["inspect_agent_identity"], {"tokenId": token_id})',
+    '.venv-native',
+    '--require-hashes',
+    'ChromaDB 1.1.1',
+    'CVE-2026-45829',
+    'CVE-2026-45830',
+    'CVE-2026-45831',
+    'CVE-2026-45833',
+    '/crewai/README.md#security-note',
+    'https://github.com/chroma-core/chroma/issues/6717',
+  ]) {
+    assert.ok(source.includes(term), `CrewAI: missing ${term}`);
+  }
+  assert.doesNotMatch(source, /MCPServerAdapter|from crewai_tools/);
+  assert.match(source, /reject explicit `null`/);
+  assert.match(source, /opens and closes a local stdio client for each invocation/);
+  assert.match(source, /risk is not limited to running an HTTP server/);
+  assert.match(source, /not the installed library's safety/);
+  assert.match(source, /\*\*not clean\*\*/);
 });

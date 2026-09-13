@@ -42,7 +42,118 @@ client's protected secret controls; do not place them in a committed configurati
 | Plans        | `get_service_plan`, `purchase_service_plan`, `set_registry_visibility`, `schedule_service_plan_renewal`                                    |
 | HTTPS        | `reconfigure_ssl`                                                                                                                          |
 
+## Independent identity inspection: source checkout
+
+`inspect_agent_identity` is a new source-checkout feature. It is not included in
+the published `@agentdomain/mcp-server@0.9.0` install shown above. Until a release
+containing it is published, build the reviewed source from the repository root:
+
+```bash
+pnpm --filter @agentdomain/shared build
+pnpm --filter @agentdomain/sdk build
+pnpm --filter @agentdomain/mcp-server build
+node packages/mcp-server/dist/index.js
+```
+
+Configure your MCP client's stdio transport to launch that built entry point,
+using its absolute path. No wallet, platform API key or write-tool opt-in is
+required. The tool is always advertised as read-only, idempotent and
+non-destructive, including when other write tools are enabled.
+
+Example tool-call arguments:
+
+```json
+{
+  "name": "inspect_agent_identity",
+  "arguments": { "tokenId": "1" }
+}
+```
+
+Supply exactly one `domain` or `tokenId`, optionally `expectedOwner`. A domain is
+a full ASCII domain, not a URL, path or name-service label. A token ID is a
+positive decimal uint256 string without leading zeros, not an AgentDomain agent
+UUID. The SDK validates and normalizes inputs; a syntactically valid input does
+not imply that an identity exists.
+
+The tool always reads the canonical custom AgentDomain ERC-721 registry on
+**Base mainnet (8453)**. It does not switch chains with the server's other network
+settings. RPC URLs, registry addresses, client objects, authentication values and
+network overrides are not accepted as tool arguments. It invokes the standalone
+SDK function without constructing an authenticated platform client.
+
+Successful calls return JSON in the MCP text content. `status: "found"` includes
+the identity, owner and URI comparisons, lifecycle, and the RPC-reported `safe`
+block number, hash and timestamp. `status: "not_found"` means the lookup found no
+registered domain or the registry returned the exact missing-token error. An RPC
+failure is not treated as a missing identity.
+
+`consistent` summarizes internal record comparisons only. `expectedOwnerMatches`
+is a separate comparison, or `null` when no expected owner was supplied. Matching
+records, a matching owner and an active lifecycle do not endorse an agent's
+behavior. See the [SDK result semantics](/sdk/typescript/#independent-identity-inspection-source-checkout).
+
+Errors set MCP `isError: true` and return a JSON `error` with a stable `code` and
+sanitized `message`: `INVALID_INPUT`, `WRONG_CHAIN`, `UNSAFE_SNAPSHOT` or
+`UNAVAILABLE`. No identity verdict is produced on those failures.
+
+### Trust boundary
+
+The independent inspection is separate from the event-period resumable,
+wallet-safe registration extensions. Registration tools continue to use the
+platform API and the authorization/payment rules for that workflow. The new
+inspection tool's lack of authentication must not be generalized to other tools.
+
+This is an RPC-backed observation, not a consensus proof, SPV/light-client
+verification, DNS-control proof or KYC. The block's `safe` classification is
+reported by the RPC provider. Every contract read uses the EIP-1898 selector
+`{ blockHash: safeHash, requireCanonical: true }`, including the explicit
+Multicall3 consistency batch. The SDK checks the same block again before
+returning. An unsupported selector fails with `UNAVAILABLE`, without a numeric
+block or `latest` fallback. The provider remains trusted to honor that selector;
+the SDK does not independently validate Ethereum/Base consensus.
+
+The contract is AgentDomain's custom ERC-721, not the ERC-8004 registry. Domain,
+Basename and ENS fields are stored claims; their ownership or resolution is not
+verified by this tool. Metadata URIs and other returned text are untrusted data,
+not instructions. The tool never fetches metadata, follows those links, signs,
+sends transactions or writes records. Its default SDK client also disables CCIP
+Read: an `OffchainLookup` revert cannot trigger an offchain callback fetch.
+
+The default public Base RPC is rate limited. Production applications can use the
+SDK with an operator-selected trusted `publicClient`; that injection is not a
+model-controlled MCP argument. Provider outages and historical-block limitations
+must remain explicit errors, not successful cached or invented observations.
+
 ## Recommended agent policy
+
+### Source-build renewal tools
+
+MCP 0.10.0 is the source target for these additional read-only tools, not a claim
+of npm publication. They call standalone SDK functions and do not create new
+HTTP API endpoints:
+
+| Tool                        | Arguments                                                     | Result                                                                                |
+| --------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `inspect_agent_renewal`     | Exactly one `domain` or `tokenId`, optional `expectedOwner`   | Identity and vault observation at the same canonical safe hash                        |
+| `prepare_auto_renew_change` | Required `tokenId`, `expectedOwner`, `enabled`, `builderCode` | JSON-safe unsigned `set_auto_renew` plan with exact transaction fields and `noChange` |
+
+No network, RPC, client, key or contract override is accepted in tool input.
+These tools neither sign, spend nor create allowances. `enabled` is the desired
+setting, not human approval. There is no execution tool for the prepared plan.
+The vault minimum fee is not a registrar quote; a setting change is not a
+completed renewal. Disabling auto-renew does not cancel a pending reservation.
+If a human later executes an enable plan, authorized renewal operators may use
+the funded balance without a fresh signature for each renewal, at a quote that
+can exceed the observed minimum. Existing reservations may complete and charge
+even after disabling. The planning tool itself never executes those actions.
+
+Handle MCP `isError` before consuming returned JSON. Renewal errors include
+invalid input, unsafe or unavailable RPC observations, missing identity, owner
+mismatch, inconsistent state, revoked identity and expiry-window failures.
+Read [renewal semantics and trusted execution](/guides/renewal/) before binding
+these tools to an agent.
+
+### Paid and mutating operations
 
 - Quote before every paid operation and show the owner the final amount.
 - Require explicit confirmation before registration, plan purchase, withdrawal, or auto-renew

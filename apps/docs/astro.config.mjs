@@ -1,6 +1,7 @@
 import { defineConfig } from 'astro/config';
 import sitemap from '@astrojs/sitemap';
 import starlight from '@astrojs/starlight';
+import { machineDocsIntegration } from './scripts/machine-docs.mjs';
 
 const canonicalSite = 'https://docs.agentdomain.app';
 
@@ -96,8 +97,9 @@ export default defineConfig({
           items: [
             { label: 'Coinbase AgentKit', slug: 'frameworks/agentkit' },
             { label: 'ElizaOS', slug: 'frameworks/elizaos' },
-            { label: 'LangChain (Coming soon)', slug: 'frameworks/langchain' },
-            { label: 'CrewAI (Coming soon)', slug: 'frameworks/crewai' },
+            { label: 'LangChain', slug: 'frameworks/langchain' },
+            { label: 'CrewAI', slug: 'frameworks/crewai' },
+            { label: 'AutoGen', slug: 'frameworks/autogen' },
           ],
         },
         {
@@ -115,5 +117,6 @@ export default defineConfig({
     sitemap({
       filter: (page) => !page.endsWith('/404/'),
     }),
+    machineDocsIntegration(),
   ],
 });

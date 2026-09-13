@@ -10,7 +10,10 @@ GET /api/v1/agents/search?q=research&limit=20
 ```
 
 Optional filters include `framework` and `capability`. Results include only identities visible to
-the caller and are capped by the API's returned pagination or limit metadata.
+the public and are capped by the API's returned pagination or limit metadata.
+This search is unauthenticated and always public-only; adding credentials does
+not turn it into a private fleet search. HTTP `200` returns
+`{ items, total, hasMore }`.
 
 ## Look up by wallet
 
@@ -20,6 +23,9 @@ GET /api/v1/agents/by-wallet/:wallet
 
 The wallet must be a valid EVM address. A wallet can own more than one identity, so clients should
 handle an array response rather than assuming a single record.
+HTTP `200` requires a session or wallet signature authenticated as that same
+owner wallet. An agent-scoped API key is rejected with `403` and cannot list a
+wallet fleet. Another wallet is also rejected.
 
 ## Get by agent ID
 
@@ -27,8 +33,10 @@ handle an array response rather than assuming a single record.
 GET /api/v1/agents/:id
 ```
 
-Agent-scoped API keys and owner authorization can access the assigned identity. Public callers may
-receive `404` for identities whose registry visibility is disabled.
+This is an authenticated endpoint, not an anonymous public registry lookup.
+Agent-scoped API keys and owner authorization can access the assigned identity.
+HTTP `200` returns the agent object. A missing or inaccessible identity returns
+`404`; missing authentication returns `401`.
 
 ## SDK
 

@@ -1,0 +1,90 @@
+---
+title: AutoGen
+description: Connect Microsoft's AutoGen Python McpWorkbench to AgentDomain for read-only identity and renewal observations without model-controlled execution.
+---
+
+Use Microsoft's `autogen-ext` MCP integration with `autogen-agentchat`, not an
+unrelated similarly named package. The official `McpWorkbench` wraps an MCP
+server and manages its session through an asynchronous context manager. See
+[Microsoft's MCP reference](https://microsoft.github.io/autogen/stable/reference/python/autogen_ext.tools.mcp.html).
+
+## Prepare the runtime
+
+The new workflow targets AgentDomain SDK and MCP 0.10.0. Those source versions
+do not establish npm publication. Build the reviewed source until the intended
+release is available:
+
+```bash
+pnpm --filter @agentdomain/shared build
+pnpm --filter @agentdomain/sdk build
+pnpm --filter @agentdomain/mcp-server build
+```
+
+The [native AutoGen example](https://github.com/0xmdrakib/AgentDomain/tree/main/packages/mcp-server/examples/autogen)
+contains Python dependencies and the bounded workflow. Its dependencies belong
+in a separate Python environment; npm installs only the Node.js MCP server.
+Use the example's qualified Python dependency versions rather than silently
+upgrading the MCP Python major version.
+
+## Read through the official workbench
+
+This direct invocation does not create an LLM client or need a model key:
+
+```python
+from autogen_ext.tools.mcp import McpWorkbench, StdioServerParams
+
+
+async def inspect_identity(node_path: str, server_path: str, token_id: str):
+    params = StdioServerParams(
+        command=node_path,
+        args=[server_path],
+        env={"AGENTDOMAIN_ENABLE_WRITE_TOOLS": "false"},
+    )
+    async with McpWorkbench(server_params=params) as workbench:
+        return await workbench.call_tool(
+            "inspect_agent_identity", {"tokenId": token_id}
+        )
+```
+
+The host must supply fixed reviewed absolute paths for Node and the MCP entry
+point. Stdio starts local code: do not let a model choose executable paths,
+arguments, packages or environment overrides. Do not forward wallet material,
+API keys or model credentials into the child. Check the returned tool error
+state before interpreting the content.
+
+## Bind an allowlisted workbench
+
+The complete example provides an allowlisted AgentDomain workbench for use with
+an AutoGen agent. It limits both tool discovery and invocation to:
+
+- `inspect_agent_identity`: exactly one domain or token ID, optional expected owner.
+- `inspect_agent_renewal`: the same lookup input; identity and vault observation.
+- `prepare_auto_renew_change`: token ID, expected owner, desired `enabled` setting and builder code.
+
+Use that guarded workbench when adding an LLM. Do not substitute a raw workbench
+that exposes every discovered operation. Keep the context alive during agent
+use and close it on success or failure. The model integration stays with the
+host; it is not supplied as an MCP sampling client.
+
+Preparation produces an unsigned plan with an ID, observation, transaction
+fields, and `noChange`. It neither signs nor spends, changes an allowance, or
+submits a transaction. `enabled` is the desired setting, not a human approval
+flag. A subsequent owner review and wallet execution must remain outside the
+model's tools.
+
+## Interpret observations correctly
+
+These are canonical-hash-pinned Base RPC observations, not consensus, SPV, DNS
+or KYC proofs. Name labels and external content are untrusted data, not
+instructions. Metadata and CCIP callback URLs are not fetched.
+
+The minimum vault fee is not a registrar quote, and a setting change is not
+domain renewal completion. Disabling auto-renew does not cancel an already
+pending renewal. Handle errors as errors, never fabricated `not_found`, fresh
+health or execution success. See [the renewal workflow](/guides/renewal/) and
+[MCP trust and errors](/sdk/mcp/#trust-boundary).
+
+An owner executing an enable plan permits authorized renewal operators to use
+funded vault balances without a new wallet signature for each renewal. Actual
+quotes can exceed the minimum. Disabling prevents new reservations; an existing
+pending reservation can still complete and charge the balance.

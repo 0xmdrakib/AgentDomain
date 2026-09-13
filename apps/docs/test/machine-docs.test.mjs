@@ -1,0 +1,151 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
+import { once } from 'node:events';
+import { join } from 'node:path';
+import test from 'node:test';
+import { registrationParamsSchema } from '@agentdomain/shared';
+
+import {
+  createMachineDocuments,
+  documentedHttpRoutes,
+  extractPublicFeatures,
+  MACHINE_FILES,
+} from '../scripts/machine-docs.mjs';
+import { validateMachineDocuments } from '../scripts/validate-machine-docs.mjs';
+import { publicSchemas } from '../scripts/public-api-contract.mjs';
+import { DOCS_ROOT, validateInternalLinks } from '../scripts/validate-content.mjs';
+
+test('machine docs are deterministic, source-derived and valid OpenAPI without external resolution', async () => {
+  const first = await createMachineDocuments();
+  assert.deepEqual(await createMachineDocuments(), first);
+  const result = await validateMachineDocuments(first);
+  assert.equal(result.files, 4);
+  assert.equal(result.pages, 21);
+  assert.ok(result.operations >= 30);
+  const source = JSON.parse(first['api-index.json']).source;
+  const tools = JSON.parse(first['api-index.json']).mcp.tools;
+  const prepare = tools.find((tool) => tool.name === 'prepare_auto_renew_change');
+  assert.deepEqual(prepare.inputSchema.required, [
+    'tokenId',
+    'expectedOwner',
+    'enabled',
+    'builderCode',
+  ]);
+  assert.equal(prepare.inputSchema.additionalProperties, false);
+  assert.equal(prepare.inputSchema.properties.enabled.type, 'boolean');
+  assert.deepEqual(tools.find((tool) => tool.name === 'inspect_agent_renewal').inputSchema.oneOf, [
+    { required: ['domain'] },
+    { required: ['tokenId'] },
+  ]);
+  for (const pkg of source.packages) {
+    const directory = pkg.name.replace('@agentdomain/', '');
+    const actual = JSON.parse(
+      await readFile(join(DOCS_ROOT, '..', '..', 'packages', directory, 'package.json'), 'utf8'),
+    );
+    assert.equal(pkg.version, actual.version);
+    assert.equal(pkg.publication, 'workspace-version-not-registry-verification');
+  }
+});
+
+test('documented route extraction canonicalizes only real HTTP paths', () => {
+  const routes = documentedHttpRoutes([
+    {
+      file: 'api-reference/agents.mdx',
+      body: 'GET /api/v1/agents/:id\nGET /api/v1/agents/search?q=one\ninspectAgentIdentity({ tokenId: "1" })',
+    },
+  ]);
+  assert.deepEqual([...routes], ['get /api/v1/agents/{id}', 'get /api/v1/agents/search']);
+});
+
+test('shared request schemas retain reviewed defaults, bounds and required fields', () => {
+  const schemas = publicSchemas();
+  assert.ok(schemas.RegistrationRequest.required.includes('wallet'));
+  assert.ok(schemas.RegistrationRequest.required.includes('preferredName'));
+  assert.equal(schemas.RegistrationRequest.properties.years.maximum, 10);
+  assert.equal(schemas.DnsBatchInput.properties.records.maxItems, 200);
+  const input = registrationParamsSchema.parse({
+    wallet: '0x1111111111111111111111111111111111111111',
+    preferredName: 'example',
+    tld: 'xyz',
+  });
+  assert.equal(schemas.RegistrationRequest.properties.years.default, input.years);
+  assert.equal(
+    schemas.RegistrationRequest.properties.registerBasename.default,
+    input.registerBasename,
+  );
+  assert.equal(
+    schemas.RegistrationResult.properties.renewalSnapshot['x-schema-coverage'],
+    'partial',
+  );
+  assert.equal(schemas.RegistrationResult.properties.basename.nullable, true);
+  assert.equal(schemas.RegistrationResult.properties.ensName.nullable, true);
+  assert.equal(schemas.RegistrationProgress.properties.agentId.nullable, true);
+  assert.ok(Object.keys(schemas.RegistrationProgress.properties).length > 10);
+  assert.equal(schemas.DnsRecordInput.properties.data.type, 'object');
+  assert.equal(schemas.DocumentedJson['x-schema-coverage'], 'unspecified');
+});
+
+test('machine validation rejects external references and undocumented routes', async () => {
+  const documents = await createMachineDocuments();
+  const api = JSON.parse(documents['openapi.json']);
+  api.components.schemas.Hostile = { $ref: 'https://untrusted.example/schema.json' };
+  await assert.rejects(
+    validateMachineDocuments({ ...documents, 'openapi.json': JSON.stringify(api) }),
+    /Only internal/,
+  );
+  const changed = JSON.parse(documents['openapi.json']);
+  changed.paths['/api/v1/inspect'] = structuredClone(changed.paths['/api/v1/agents/{id}']);
+  await assert.rejects(
+    validateMachineDocuments({ ...documents, 'openapi.json': JSON.stringify(changed) }),
+  );
+});
+
+test('HTTP-style responses parse as JSON or text and link to current public resources', async () => {
+  const documents = await createMachineDocuments();
+  const headers = await readFile(join(DOCS_ROOT, 'public', '_headers'), 'utf8');
+  const server = createServer((request, response) => {
+    const file = request.url.slice(1);
+    if (!Object.hasOwn(MACHINE_FILES, file)) {
+      response.writeHead(404).end();
+      return;
+    }
+    response.writeHead(200, {
+      'Content-Type': MACHINE_FILES[file],
+      'X-Content-Type-Options': 'nosniff',
+    });
+    response.end(documents[file]);
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  try {
+    const parsed = {};
+    for (const [file, contentType] of Object.entries(MACHINE_FILES)) {
+      const response = await fetch(`http://127.0.0.1:${server.address().port}/${file}`);
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get('content-type'), contentType);
+      assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+      parsed[file] = await response.text();
+      assert.ok(
+        headers.includes(`/${file}\n  Content-Type: ${contentType}`) ||
+          headers.includes(`/${file}\r\n  Content-Type: ${contentType}`),
+      );
+      assert.doesNotThrow(() =>
+        validateInternalLinks(`[Machine](/${file})`, 'machine.mdx', new Set()),
+      );
+    }
+    await validateMachineDocuments(parsed);
+  } finally {
+    server.closeAllConnections();
+    await new Promise((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve())),
+    );
+  }
+});
+
+test('source feature parsing is non-executing and fails closed if structure changes', () => {
+  assert.throws(
+    () => extractPublicFeatures('export const value = 1;', 'runEverything()'),
+    /could not be derived/,
+  );
+});
