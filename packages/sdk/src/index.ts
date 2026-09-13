@@ -16,6 +16,17 @@ import {
   encodeFunctionData,
 } from 'viem';
 import { base, baseSepolia } from 'viem/chains';
+export {
+  inspectAgentIdentity,
+  IdentityInspectionError,
+  AGENT_IDENTITY_REGISTRY_BASE,
+  type IdentityInspectionInput,
+  type IdentityInspectionOptions,
+  type IdentityInspectionResult,
+  type IdentityInspectionErrorCode,
+  type FoundAgentIdentity,
+  type MissingAgentIdentity,
+} from './identity-inspection.js';
 import { z } from 'zod';
 import { x402Client, x402HTTPClient } from '@x402/core/client';
 import type { PaymentPayloadResult, PaymentRequirements } from '@x402/core/types';

@@ -45,6 +45,55 @@ Pass a viem `walletClient` only for wallet-authorized or paid operations. Pass a
 agent-scoped API key only to a trusted server or agent runtime; never expose it
 in browser-delivered configuration.
 
+## Identity inspection (unreleased)
+
+The public source tree now includes `inspectAgentIdentity`. This export is not
+included in the already-published npm `0.9.1` package. Build this checkout to use
+it until a subsequent release is published.
+
+```ts
+import { inspectAgentIdentity } from '@agentdomain/sdk';
+
+const observation = await inspectAgentIdentity({
+  domain: 'testdomain001.xyz',
+  // Optional: compare the NFT owner with an address you already trust.
+  expectedOwner: '0xdE57dd241eA13A5EE749b940897538CF4ff4C25D',
+});
+console.log(JSON.stringify(observation, null, 2));
+```
+
+Alternatively supply `tokenId` as a positive uint256 decimal string, not a JS
+number. Supply exactly one domain or token ID. No wallet, signature, transaction,
+platform API key, or backend API request is used. All contract calls target the
+canonical AgentDomain ERC-721 registry on Base mainnet at one RPC-reported safe
+block. Every read uses that block's hash with EIP-1898 `requireCanonical: true`,
+including the explicit Multicall3 aggregation. A provider that cannot honor the
+hash selector fails closed; the SDK never falls back to a block number or latest.
+The SDK also rechecks the block header and chain before returning a result.
+
+`status: 'found'` establishes that a record was read, not that it is active or
+endorsed. Check `lifecycle`, `consistent` and, when supplied,
+`checks.expectedOwnerMatches` separately. A wallet mismatch does not change the
+internal `consistent` flag. Missing records are distinct from RPC failures;
+errors use `IdentityInspectionError` with `INVALID_INPUT`, `WRONG_CHAIN`,
+`UNSAFE_SNAPSHOT` or `UNAVAILABLE`. No failed inspection is retried automatically.
+
+This is a fixed-block RPC observation, **not a consensus/SPV proof, DNS-control
+verification, KYC check, or agent-behavior guarantee**. Basename/ENS labels and
+metadata URIs are recorded claims. Their ownership, resolution, content and
+availability are not checked or fetched. JSON exports retain the observation's
+block number, hash and timestamp; they are not signed certificates.
+
+The default rate-limited public Base RPC uses an 8-second timeout per request,
+zero transport retries. Four consistency reads are grouped using viem's explicit
+Multicall3 action with a 4,096-byte batch bound and the same canonical block hash.
+There is no polling. Production callers should pass a trusted viem
+`publicClient` as the second argument; its transport policy remains their
+responsibility. It must be created with `ccipRead: false`; clients with CCIP read
+enabled or unspecified are rejected before requests begin. The default client
+also disables CCIP read, preventing RPC-provided offchain URLs and callbacks.
+All reads still require chain ID 8453 and the same safe block.
+
 ## Authentication model
 
 - Public availability, quote, and registry search methods need no credential.
