@@ -4,15 +4,14 @@ These files are thin imports and CLI launchers for the native Python package
 `agentdomain-autogen` (import `agentdomain_autogen`). The guarded workbench,
 argument validation, environment policy, AssistantAgent and command-line logic
 are maintained only in that package. AgentDomain still uses its separate Node.js
-MCP bridge over stdio; Python AutoGen has not become an npm framework.
+MCP bridge over stdio.
 
 ## Install
 
-Release targets: `agentdomain-autogen==0.11.0` on PyPI and
-`@agentdomain/mcp-server@0.11.0` on npm. Do not assume either new release has
-been published merely because these source files exist.
+These examples use `agentdomain-autogen==0.11.0` on PyPI and
+`@agentdomain/mcp-server@0.11.0` on npm.
 
-After verified publication, install the Python requirements in an isolated venv
+Install the Python requirements in an isolated venv
 and the exact Node MCP bridge in a trusted directory:
 
 ```bash

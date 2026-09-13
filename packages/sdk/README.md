@@ -14,8 +14,8 @@ API bases must use HTTPS; explicitly configured HTTP `localhost`, `127.0.0.1`, a
 `[::1]` endpoints are allowed for local development. Embedded credentials, query
 strings, and fragments are rejected before requests begin.
 
-These examples target the SDK **0.11.0 release candidate**. The npm install requires that version to be
-available; use the explicit public-source build below until it is published.
+These examples use SDK **0.11.0**. An explicit public-source build is also
+documented below for local development.
 
 ```bash
 npm install @agentdomain/sdk@0.11.0 viem@2.56.3
@@ -50,9 +50,9 @@ in browser-delivered configuration.
 
 ## Identity inspection (0.11.0)
 
-These examples pin the SDK **0.11.0 release candidate**. The standalone identity
+These examples pin SDK **0.11.0**. The standalone identity
 and renewal workflows were introduced in 0.10.0, not recreated by this packaging
-release. Before 0.11.0 publication is verified, build the reviewed checkout:
+release. To build from a reviewed source checkout:
 
 ```bash
 pnpm --filter @agentdomain/shared build
@@ -242,7 +242,7 @@ automatic resend, repricing, or replacement payment signature. See the
 New in 0.9.0: submission, status, waiting, and recovery methods distinguish payment
 acceptance from completed registration. SDK 0.8.x and earlier may treat HTTP `202`
 as a `RegistrationResult`; their return type is not evidence that registration
-finished. Use the reviewed 0.11.0 candidate or integrate the documented HTTP status contract directly.
+finished. Use SDK 0.11.0 or integrate the documented HTTP status contract directly.
 
 ```ts
 import {
