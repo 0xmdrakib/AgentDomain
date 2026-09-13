@@ -1,6 +1,9 @@
-"""Compatibility import; agentdomain_autogen is the only implementation."""
+"""Guarded native AutoGen integration for AgentDomain; no wallet execution."""
 
-from agentdomain_autogen import (
+from importlib.metadata import version
+
+from .assistant import create_assistant
+from .workbench import (
     MAX_ARGUMENT_BYTES,
     MAX_RESULT_BYTES,
     MCP_NPM_VERSION,
@@ -18,6 +21,8 @@ from agentdomain_autogen import (
     server_parameters,
 )
 
+__version__ = version("agentdomain-autogen")
+
 __all__ = [
     "AgentDomainWorkbench",
     "IdentityInput",
@@ -34,4 +39,6 @@ __all__ = [
     "error_result",
     "result_json",
     "inspect_and_prepare",
+    "create_assistant",
+    "__version__",
 ]

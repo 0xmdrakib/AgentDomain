@@ -1,0 +1,6 @@
+# Build/CI dependencies only. Install the reviewed local wheel separately.
+autogen-agentchat==0.7.5
+autogen-core==0.7.5
+autogen-ext[mcp]==0.7.5
+mcp==1.30.0
+pydantic==2.13.5
