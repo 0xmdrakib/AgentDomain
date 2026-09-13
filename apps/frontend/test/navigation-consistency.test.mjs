@@ -10,6 +10,8 @@ for (const filename of ['nav.tsx', 'public-nav.tsx']) {
     );
     assert.ok(source.includes('mailto:contact@agentdomain.app'));
     assert.ok(source.includes('Support'));
+    assert.ok(source.includes('/verify'));
+    assert.ok(source.includes('https://docs.agentdomain.app'));
     assert.ok(source.indexOf('/verify') < source.indexOf('mailto:contact@agentdomain.app'));
     assert.ok(
       source.indexOf('mailto:contact@agentdomain.app') <
