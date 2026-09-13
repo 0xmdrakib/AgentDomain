@@ -1,0 +1,134 @@
+name: Publish Python packages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-python
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.ref == 'refs/heads/main' && github.repository == '0xmdrakib/AgentDomain'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      release-manifest-sha256: ${{ steps.build.outputs.release-manifest-sha256 }}
+      verifier-sha256: ${{ steps.build.outputs.verifier-sha256 }}
+    env:
+      OTEL_SDK_DISABLED: 'true'
+      CREWAI_TELEMETRY_DISABLED: 'true'
+      CREWAI_TRACING_ENABLED: 'false'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - run: node scripts/check-public-boundary.mjs
+      - name: Require successful Public CI for this exact main commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --method GET "repos/0xmdrakib/AgentDomain/actions/workflows/public-ci.yml/runs" \
+            -f branch=main -f event=push -f status=success -f head_sha="$GITHUB_SHA" -f per_page=10 \
+            | node scripts/verify-release-ci.mjs
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.14.0
+          package-manager-cache: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit:production:high
+      - run: pnpm --filter @agentdomain/shared build
+      - run: pnpm --filter @agentdomain/sdk build
+      - run: pnpm --filter @agentdomain/mcp-server build
+      - name: Test guards and build wheel from sdist with hash-pinned tools
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B -m unittest discover -s scripts -p test_release_artifacts.py
+          python -B -m unittest discover -s scripts -p test_python_boundary.py
+          python -m venv "$RUNNER_TEMP/python-build"
+          "$RUNNER_TEMP/python-build/bin/python" -m pip install --disable-pip-version-check --require-hashes -r scripts/python-build-requirements.lock
+          "$RUNNER_TEMP/python-build/bin/python" scripts/release-artifacts.py build-python --output "$RUNNER_TEMP/python-release"
+          cp scripts/release-artifacts.py "$RUNNER_TEMP/python-release/verifier.py"
+          printf 'verifier-sha256=%s\n' "$(sha256sum "$RUNNER_TEMP/python-release/verifier.py" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Test installed CrewAI wheel with real read-only MCP child processes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/crewai"
+          "$RUNNER_TEMP/crewai/bin/python" -m pip install --disable-pip-version-check --require-hashes -r packages/mcp-server/examples/crewai/requirements.lock
+          "$RUNNER_TEMP/crewai/bin/python" -m pip install --no-deps --no-index --force-reinstall "$RUNNER_TEMP/python-release/dist/agentdomain_crewai-0.11.0-py3-none-any.whl"
+          "$RUNNER_TEMP/crewai/bin/python" -m pip check
+          "$RUNNER_TEMP/crewai/bin/python" -I -c 'import importlib.util, importlib.metadata, sysconfig; from pathlib import Path; assert importlib.metadata.version("agentdomain-crewai") == "0.11.0"; assert Path(importlib.util.find_spec("agentdomain_crewai").origin).resolve().is_relative_to(Path(sysconfig.get_path("purelib")).resolve())'
+          "$RUNNER_TEMP/crewai/bin/python" packages/mcp-server/test/crewai-package.py --dist "$RUNNER_TEMP/python-release/dist" -v
+          AGENTDOMAIN_CREWAI_PYTHON="$RUNNER_TEMP/crewai/bin/python" node packages/mcp-server/test/crewai-integration.mjs
+      - name: Test installed AutoGen wheel with real read-only MCP child processes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/autogen"
+          "$RUNNER_TEMP/autogen/bin/python" -m pip install --disable-pip-version-check -r packages/mcp-server/examples/autogen/framework-requirements.txt -c packages/mcp-server/examples/autogen/constraints.txt
+          "$RUNNER_TEMP/autogen/bin/python" -m pip install --no-deps --no-index --force-reinstall "$RUNNER_TEMP/python-release/dist/agentdomain_autogen-0.11.0-py3-none-any.whl"
+          "$RUNNER_TEMP/autogen/bin/python" -m pip check
+          "$RUNNER_TEMP/autogen/bin/python" -I -c 'import importlib.util, importlib.metadata, sysconfig; from pathlib import Path; assert importlib.metadata.version("agentdomain-autogen") == "0.11.0"; assert Path(importlib.util.find_spec("agentdomain_autogen").origin).resolve().is_relative_to(Path(sysconfig.get_path("purelib")).resolve())'
+          "$RUNNER_TEMP/autogen/bin/python" packages/autogen-plugin/test/verify_artifacts.py "$RUNNER_TEMP/python-release/dist"
+          AGENTDOMAIN_AUTOGEN_PYTHON="$RUNNER_TEMP/autogen/bin/python" node --test packages/mcp-server/test/autogen.integration.test.mjs
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: python-packages-${{ github.sha }}
+          path: ${{ runner.temp }}/python-release
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  publish:
+    needs: validate
+    if: github.ref == 'refs/heads/main' && github.repository == '0xmdrakib/AgentDomain'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi-production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: python-packages-${{ github.sha }}
+          path: release-inputs
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - name: Verify immutable artifacts and exact source before requesting PyPI credentials
+        shell: bash
+        env:
+          EXPECTED_RELEASE_MANIFEST_SHA256: ${{ needs.validate.outputs.release-manifest-sha256 }}
+          EXPECTED_VERIFIER_SHA256: ${{ needs.validate.outputs.verifier-sha256 }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_VERIFIER_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          printf '%s  release-inputs/verifier.py\n' "$EXPECTED_VERIFIER_SHA256" | sha256sum --check --status
+          python -B release-inputs/verifier.py verify-python --output release-inputs
+      # Configure pending publishers for both exact project names against this
+      # workflow and pypi-production. No password/token fallback is accepted.
+      - name: Publish four verified distributions and OIDC attestations
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
+        with:
+          packages-dir: release-inputs/dist/
+          attestations: true
+          skip-existing: false
+          print-hash: true

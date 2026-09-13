@@ -24,6 +24,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
       - name: Verify public boundary before dependency installation
         run: node scripts/check-public-boundary.mjs
 
@@ -63,6 +67,8 @@ jobs:
       - name: Pack reviewed packages and the OIDC-capable npm CLI
         id: pack-release
         shell: bash
+        env:
+          npm_config_ignore_scripts: 'true'
         run: |
           set -euo pipefail
           release_dir="$RUNNER_TEMP/agentdomain-release"
@@ -99,14 +105,19 @@ jobs:
           pack_release packages/eliza-plugin
           pack_release packages/langchain-plugin
 
-          npm pack 'npm@11.5.1' --pack-destination "$tooling_dir" >/dev/null
+          npm pack 'npm@11.5.1' --ignore-scripts --pack-destination "$tooling_dir" >/dev/null
           npm_archive="$tooling_dir/npm-11.5.1.tgz"
           test -f "$npm_archive"
           printf '%s  tooling/%s\n' "$(sha256sum "$npm_archive" | cut -d ' ' -f 1)" "$(basename "$npm_archive")" >> "$checksums"
           printf '%s  publish-order.tsv\n' "$(sha256sum "$publish_order" | cut -d ' ' -f 1)" >> "$checksums"
+          for script in npm-release.mjs release-artifacts.py; do
+            cp "scripts/$script" "$tooling_dir/$script"
+            printf '%s  tooling/%s\n' "$(sha256sum "$tooling_dir/$script" | cut -d ' ' -f 1)" "$script" >> "$checksums"
+          done
 
           test "$(wc -l < "$publish_order")" -eq 6
-          test "$(wc -l < "$checksums")" -eq 8
+          test "$(wc -l < "$checksums")" -eq 10
+          python scripts/release-artifacts.py verify-npm --output "$release_dir"
           (cd "$release_dir" && sha256sum --check --strict release.sha256)
           manifest_sha256="$(sha256sum "$checksums" | cut -d ' ' -f 1)"
           test "${#manifest_sha256}" -eq 64
@@ -146,6 +157,10 @@ jobs:
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
 
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
       - name: Verify staged release inputs
         shell: bash
         env:
@@ -156,47 +171,37 @@ jobs:
           test -f "$release_dir/publish-order.tsv"
           test -f "$release_dir/release.sha256"
           test "$(wc -l < "$release_dir/publish-order.tsv")" -eq 6
-          test "$(wc -l < "$release_dir/release.sha256")" -eq 8
+          test "$(wc -l < "$release_dir/release.sha256")" -eq 10
           [[ "$EXPECTED_RELEASE_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]]
           printf '%s  %s\n' "$EXPECTED_RELEASE_MANIFEST_SHA256" "$release_dir/release.sha256" | sha256sum --check --status
           (cd "$release_dir" && sha256sum --check --strict release.sha256)
+          python "$release_dir/tooling/release-artifacts.py" verify-npm --output "$release_dir"
 
           mkdir -p "$RUNNER_TEMP/npm-cli"
           tar -xzf "$release_dir/tooling/npm-11.5.1.tgz" -C "$RUNNER_TEMP/npm-cli"
           test "$(node "$RUNNER_TEMP/npm-cli/package/bin/npm-cli.js" --version)" = '11.5.1'
 
-      - name: Publish packages
+      - name: Publish the five established packages using OIDC only
         shell: bash
         run: |
           set -euo pipefail
           release_dir="$RUNNER_TEMP/agentdomain-release"
           npm_cli="$RUNNER_TEMP/npm-cli/package/bin/npm-cli.js"
+          node "$release_dir/tooling/npm-release.mjs" "$release_dir" "$npm_cli" oidc
 
-          while IFS=$'\t' read -r name version archive_path; do
-            if [[ ! "$name" =~ ^@agentdomain/[a-z0-9-]+$ ]] \
-              || [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]] \
-              || [[ ! "$archive_path" =~ ^packages/agentdomain-[a-z0-9-]+-[0-9A-Za-z.+-]+\.tgz$ ]]; then
-              echo '::error::Invalid staged package metadata.'
-              exit 1
-            fi
+      - name: Recheck immutable inputs before the isolated bootstrap step
+        shell: bash
+        env:
+          EXPECTED_RELEASE_MANIFEST_SHA256: ${{ needs.validate.outputs.release-manifest-sha256 }}
+        run: |
+          set -euo pipefail
+          release_dir="$RUNNER_TEMP/agentdomain-release"
+          [[ "$EXPECTED_RELEASE_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          printf '%s  %s\n' "$EXPECTED_RELEASE_MANIFEST_SHA256" "$release_dir/release.sha256" | sha256sum --check --status
+          (cd "$release_dir" && sha256sum --check --strict release.sha256)
 
-            archive="$release_dir/$archive_path"
-            test -f "$archive"
-            tar -xOf "$archive" package/package.json | node -e '
-              let source = "";
-              process.stdin.setEncoding("utf8");
-              process.stdin.on("data", (chunk) => { source += chunk; });
-              process.stdin.on("end", () => {
-                const manifest = JSON.parse(source);
-                if (manifest.name !== process.argv[1] || manifest.version !== process.argv[2]) {
-                  process.exitCode = 1;
-                }
-              });
-            ' "$name" "$version"
-
-            if node "$npm_cli" view "${name}@${version}" version >/dev/null 2>&1; then
-              echo "Skipping ${name}@${version}; it is already published."
-              continue
-            fi
-            node "$npm_cli" publish "$archive" --access public --provenance
-          done < "$release_dir/publish-order.tsv"
+      - name: Publish exact LangChain 0.11.0 with optional first-package bootstrap
+        shell: bash
+        env:
+          NPM_BOOTSTRAP_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
+        run: node "$RUNNER_TEMP/agentdomain-release/tooling/npm-release.mjs" "$RUNNER_TEMP/agentdomain-release" "$RUNNER_TEMP/npm-cli/package/bin/npm-cli.js" bootstrap

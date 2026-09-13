@@ -352,6 +352,21 @@ function checkRepository() {
     errors.push('NOTICE: non-empty root notice is required');
   }
 
+  try {
+    execFileSync('python', ['-I', '-B', resolve(root, 'scripts/check-python-boundary.py')], {
+      cwd: root,
+      input: JSON.stringify(files),
+      encoding: 'utf8',
+      timeout: 10_000,
+      maxBuffer: 1024 * 1024,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+  } catch {
+    errors.push(
+      'Python source/package boundary check failed; run scripts/check-python-boundary.py with the Git file inventory for details.',
+    );
+  }
+
   if (errors.length > 0) {
     console.error('Public boundary check failed:');
     for (const error of [...new Set(errors)].sort()) console.error(`- ${error}`);
