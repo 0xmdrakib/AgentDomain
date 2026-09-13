@@ -8,6 +8,9 @@
     "lint": {
       "dependsOn": ["^lint"]
     },
+    "@agentdomain/langchain-plugin#lint": {
+      "dependsOn": ["^lint", "^build"]
+    },
     "test": {
       "dependsOn": ["^build"],
       "outputs": ["coverage/**"]
