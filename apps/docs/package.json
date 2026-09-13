@@ -17,16 +17,17 @@
   },
   "packageManager": "pnpm@10.33.2",
   "scripts": {
-    "dev": "astro dev",
-    "build": "astro build && node ../../scripts/seo/indexnow.mjs prepare-key --site=docs",
+    "build:dependencies": "pnpm --filter @agentdomain/shared build",
+    "dev": "pnpm run build:dependencies && astro dev",
+    "build": "pnpm run build:dependencies && astro build && node ../../scripts/seo/indexnow.mjs prepare-key --site=docs",
     "build:cloudflare:production": "node ../../scripts/seo/indexnow.mjs verify --site=docs --production && pnpm run check",
     "preview": "pnpm run build && wrangler dev --env preview",
     "deploy": "pnpm run check && node ../../scripts/seo/indexnow.mjs verify --site=docs --production && wrangler deploy && node ../../scripts/seo/indexnow.mjs submit --site=docs --production",
     "lint": "node scripts/validate-content.mjs",
-    "typecheck": "astro check",
-    "test": "node --test test/*.test.mjs",
+    "typecheck": "pnpm run build:dependencies && astro check",
+    "test": "pnpm run build:dependencies && node --test test/*.test.mjs",
     "validate:content": "node scripts/validate-content.mjs",
-    "validate:output": "node scripts/validate-output.mjs",
+    "validate:output": "pnpm run build:dependencies && node scripts/validate-output.mjs",
     "check": "pnpm run validate:content && pnpm run typecheck && pnpm run test && pnpm run build && pnpm run validate:output"
   },
   "dependencies": {
