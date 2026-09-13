@@ -3,13 +3,13 @@ title: MCP server
 description: Install the public AgentDomain MCP server and expose identity tools to an MCP client.
 ---
 
-`@agentdomain/mcp-server` 0.9.0 runs over stdio and exposes the public AgentDomain lifecycle to
+`@agentdomain/mcp-server` 0.10.0 runs over stdio and exposes the public AgentDomain lifecycle to
 MCP-compatible clients.
 
 ## Install
 
 ```bash
-npm install --global @agentdomain/mcp-server@0.9.0
+npm install --global @agentdomain/mcp-server@0.10.0
 ```
 
 Or let an MCP client launch the pinned package directly:
@@ -19,11 +19,15 @@ Or let an MCP client launch the pinned package directly:
   "mcpServers": {
     "agentdomain": {
       "command": "npx",
-      "args": ["-y", "@agentdomain/mcp-server@0.9.0"]
+      "args": ["-y", "@agentdomain/mcp-server@0.10.0"]
     }
   }
 }
 ```
+
+[MCP server 0.10.0 is published on npm](https://www.npmjs.com/package/@agentdomain/mcp-server/v/0.10.0).
+Workspace versions in the generated catalog remain source metadata, not a
+registry availability check.
 
 This configuration enables public discovery and tools that do not require a wallet. Paid or
 owner-scoped actions require wallet authorization. Configure those values only through the MCP
@@ -42,11 +46,11 @@ client's protected secret controls; do not place them in a committed configurati
 | Plans        | `get_service_plan`, `purchase_service_plan`, `set_registry_visibility`, `schedule_service_plan_renewal`                                    |
 | HTTPS        | `reconfigure_ssl`                                                                                                                          |
 
-## Independent identity inspection: source checkout
+## Independent identity inspection
 
-`inspect_agent_identity` is a new source-checkout feature. It is not included in
-the published `@agentdomain/mcp-server@0.9.0` install shown above. Until a release
-containing it is published, build the reviewed source from the repository root:
+`inspect_agent_identity` is included in the published `@agentdomain/mcp-server@0.10.0`
+package and is enabled by default. The older 0.9.0 release does not include it.
+For development from the reviewed source checkout, build from the repository root:
 
 ```bash
 pnpm --filter @agentdomain/shared build
@@ -55,8 +59,9 @@ pnpm --filter @agentdomain/mcp-server build
 node packages/mcp-server/dist/index.js
 ```
 
-Configure your MCP client's stdio transport to launch that built entry point,
-using its absolute path. No wallet, platform API key or write-tool opt-in is
+For a source build, configure your MCP client's stdio transport to launch that
+built entry point using its absolute path. The pinned npm configuration above
+also includes this tool. No wallet, platform API key or write-tool opt-in is
 required. The tool is always advertised as read-only, idempotent and
 non-destructive, including when other write tools are enabled.
 
@@ -90,7 +95,7 @@ failure is not treated as a missing identity.
 `consistent` summarizes internal record comparisons only. `expectedOwnerMatches`
 is a separate comparison, or `null` when no expected owner was supplied. Matching
 records, a matching owner and an active lifecycle do not endorse an agent's
-behavior. See the [SDK result semantics](/sdk/typescript/#independent-identity-inspection-source-checkout).
+behavior. See the [SDK result semantics](/sdk/typescript/#independent-identity-inspection).
 
 Errors set MCP `isError: true` and return a JSON `error` with a stable `code` and
 sanitized `message`: `INVALID_INPUT`, `WRONG_CHAIN`, `UNSAFE_SNAPSHOT` or
@@ -126,10 +131,10 @@ must remain explicit errors, not successful cached or invented observations.
 
 ## Recommended agent policy
 
-### Source-build renewal tools
+### Renewal tools
 
-MCP 0.10.0 is the source target for these additional read-only tools, not a claim
-of npm publication. They call standalone SDK functions and do not create new
+The published MCP 0.10.0 includes these default read-only tools. They call
+standalone SDK functions and do not create new
 HTTP API endpoints:
 
 | Tool                        | Arguments                                                     | Result                                                                                |

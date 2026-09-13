@@ -11,6 +11,19 @@ Documentation contributions should keep examples accurate, reproducible, and
 free of credentials or customer data. Public contract changes must update their
 related documentation and tests in the same pull request.
 
+## Package Availability
+
+[SDK 0.10.0](https://www.npmjs.com/package/@agentdomain/sdk/v/0.10.0) and
+[MCP server 0.10.0](https://www.npmjs.com/package/@agentdomain/mcp-server/v/0.10.0)
+are published on npm. They include independent identity inspection and the
+renewal read/unsigned-plan workflow. `@agentdomain/langchain-plugin` 0.1.0 remains
+unpublished; use its reviewed source checkout, not an assumed npm release.
+
+The native CrewAI and AutoGen examples passed their scoped Windows and Linux
+qualification. Their Python environments are separate from npm dependencies;
+the CrewAI lock still has four known ChromaDB advisories, so qualification is
+not a clean dependency audit. See the framework guides for those boundaries.
+
 ## Machine-readable Outputs
 
 The static Astro build generates these resources from the public docs,

@@ -7,10 +7,10 @@ renewal inspection, owner-approved auto-renew controls, three framework
 integrations and machine-readable documentation. [PREEXISTING.md](PREEXISTING.md)
 separates the pre-event platform, earlier event commits and final-day additions.
 
-SDK/MCP **0.10.0** and LangChain **0.1.0** are source release candidates, **not yet
-published**. The new frontend and docs outputs are **not yet deployed**. Final
-commit, package/deployment verification and the founder's recorded demo remain
-submission gates.
+SDK/MCP **0.10.0** are published with GitHub Actions provenance. The new frontend
+and docs outputs are deployed. LangChain **0.1.0** is implemented and tested as
+source, but its first npm publication remains pending. The founder's hands-on
+review, original voice recording and final submission approval remain required.
 
 ## 1. Resumable, Wallet-Safe Registration
 
@@ -137,12 +137,13 @@ implementations of those frameworks. Existing guide pages were updated rather
 than counted as entirely new integrations by themselves.
 
 Tests use real framework APIs and the Node MCP/SDK with controlled RPC fixtures,
-without paid models or live transactions. The new native CrewAI Windows run
-passed 18 tests with 33 real MCP child processes, all closed. Twelve checks
+without paid models or live transactions. Native CrewAI Windows and Linux runs
+each passed 18 tests with 33 real MCP child processes, all closed. Twelve checks
 trapped 32 actual Chroma entrypoints with zero calls. These results belong to the
-new native path, not the older adapter; Linux qualification remains pending.
+new native path, not the older adapter. Native AutoGen Windows and Linux checks
+also passed through its actual MCP workbench.
 
-Its mandatory Chroma dependency has four known advisories under review, not
+Its mandatory Chroma dependency retains four known advisories, not
 only server risks. [Upstream issue #6717](https://github.com/chroma-core/chroma/issues/6717)
 also describes Python-client code execution through a poisoned collection's
 embedding configuration. This exact recipe uses no Chroma client, collections,
@@ -168,13 +169,32 @@ The existing docs site and short `llms.txt` are reused, not new platforms.
 
 ## Release And Demo Evidence
 
-The old/new distinction above is backed by actual source and event commits.
-Final committed feature SHA, complete executed release checks, published versions
-and deployment evidence will be recorded after verification. Framework fixtures
-demonstrate read-only/unsigned flows, not live registrar renewals. The demo must
+The old/new distinction above is backed by actual source and event commits:
+
+- [PR 29](https://github.com/0xmdrakib/AgentDomain/pull/29) retained fourteen
+  meaningful feature/review commits. Its reviewed tree reached main at
+  `f93a82deafd724ae9bca92061fb6b8a6f4edccd8` on September 13.
+- [Exact-main Public CI](https://github.com/0xmdrakib/AgentDomain/actions/runs/34754639193)
+  passed boundary, secret, dependency/license, source, native framework and
+  Cloudflare artifact checks. SDK has 359 tests and LangChain has 65 tests.
+- [SDK 0.10.0](https://www.npmjs.com/package/@agentdomain/sdk/v/0.10.0) and
+  [MCP 0.10.0](https://www.npmjs.com/package/@agentdomain/mcp-server/v/0.10.0)
+  were published by [Actions run 34755083947](https://github.com/0xmdrakib/AgentDomain/actions/runs/34755083947).
+  That run subsequently failed on the new LangChain package's first-publication
+  permission. It is not presented as an entirely successful release run.
+- [PR 30](https://github.com/0xmdrakib/AgentDomain/pull/30) fixed a standalone
+  docs build-order failure. A fresh Linux checkout reproduced the original
+  error, then passed all 31 docs tests and the complete build with the patch.
+  Production docs deployed from `7f9daa50d70d682e4583402e7a83b694ced40285`.
+- [Live Identity Check](https://agentdomain.app/verify) passed actual Base
+  identity and renewal reads on desktop and mobile, without wallet or payment
+  actions. The machine docs cover 21 pages and 34 documented HTTP operations.
+
+Framework fixtures demonstrate read-only/unsigned flows, not live registrar
+renewals or a completed security audit. The demo must
 show actual use with the founder's original voice, not AI-generated video or
 narration; that recording is not asserted complete here.
 
 No sponsor integration, new contract deployment, open-sourcing of the commercial
-backend, final submission or award is claimed. Final source review, clean setup,
-human testing and the spoken demo remain submission gates.
+backend, final submission or award is claimed. Founder testing, final claim review
+and the spoken demo remain submission gates.
