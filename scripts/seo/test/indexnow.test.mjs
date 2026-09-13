@@ -131,11 +131,16 @@ test('exact pages are selected while ambiguous changes use roots and sitemaps', 
     planUrls('frontend', [
       'apps/frontend/src/app/page.tsx',
       'apps/frontend/src/app/privacy/page.tsx',
+      'apps/frontend/src/app/verify/page.tsx',
       'apps/frontend/test/isolation.test.mjs',
     ]),
     {
       mode: 'exact',
-      urls: ['https://agentdomain.app/', 'https://agentdomain.app/privacy'],
+      urls: [
+        'https://agentdomain.app/',
+        'https://agentdomain.app/privacy',
+        'https://agentdomain.app/verify',
+      ],
     },
   );
   assert.deepEqual(planUrls('docs', ['apps/docs/src/content/docs/guides/dns.mdx']), {
