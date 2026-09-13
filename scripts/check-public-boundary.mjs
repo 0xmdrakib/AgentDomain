@@ -37,6 +37,8 @@ const allowedRootFiles = new Set([
 const allowedApplicationRoots = new Set(['docs', 'frontend']);
 const allowedPackageRoots = new Set([
   'agentkit-plugin',
+  'autogen-plugin',
+  'crewai-plugin',
   'eliza-plugin',
   'langchain-plugin',
   'mcp-server',
@@ -58,6 +60,10 @@ const forbiddenPathRules = [
   [
     /(?:^|\/)(?:node_modules|dist|build|out|\.next|\.open-next|\.astro|\.qa|\.turbo|\.wrangler|coverage)(?:\/|$)/i,
     'generated or local build output',
+  ],
+  [
+    /(?:^|\/)(?:\.venv(?:-[^/]+)?|__pycache__|\.pytest_cache|\.ruff_cache|[^/]+\.egg-info)(?:\/|$)/i,
+    'Python environment or generated metadata',
   ],
   [/(?:^|\/)\.codex(?:\/|$)/i, 'local Codex state'],
   [/(?:^|\/)[^/]+\.(?:bak|orig|tmp)$/i, 'temporary file'],
@@ -367,6 +373,20 @@ function runSelfTest() {
   assert.equal(repositoryScopeViolation('contracts/src/PaymentRouter.sol'), null);
   assert.equal(repositoryScopeViolation('packages/mcp-server/src/index.ts'), null);
   assert.equal(repositoryScopeViolation('packages/langchain-plugin/src/index.ts'), null);
+  assert.equal(repositoryScopeViolation('packages/crewai-plugin/pyproject.toml'), null);
+  assert.equal(repositoryScopeViolation('packages/autogen-plugin/pyproject.toml'), null);
+  assert.equal(
+    repositoryScopeViolation('packages/private-python-service/pyproject.toml'),
+    'unapproved public package root',
+  );
+  for (const path of [
+    'packages/crewai-plugin/.venv-consumer/pyvenv.cfg',
+    'packages/autogen-plugin/.venv/pyvenv.cfg',
+    'packages/autogen-plugin/src/agentdomain_autogen/__pycache__/__init__.pyc',
+    'packages/crewai-plugin/src/agentdomain_crewai.egg-info/PKG-INFO',
+  ]) {
+    assert.equal(pathViolation(path), 'Python environment or generated metadata');
+  }
   assert.equal(
     repositoryScopeViolation('apps/mcp-server/src/index.ts'),
     'unapproved public application root',

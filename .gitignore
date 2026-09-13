@@ -34,5 +34,7 @@ secrets.json
 __pycache__/
 *.py[cod]
 .venv/
+packages/crewai-plugin/.venv-consumer/
+packages/autogen-plugin/.venv-consumer/
 .pytest_cache/
 .ruff_cache/

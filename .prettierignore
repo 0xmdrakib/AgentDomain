@@ -7,4 +7,6 @@ build/
 .qa/
 .wrangler/
 packages/mcp-server/examples/crewai/.venv-native/
+packages/crewai-plugin/.venv-consumer/
+packages/autogen-plugin/.venv-consumer/
 apps/frontend/next-env.d.ts
