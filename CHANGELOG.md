@@ -3,11 +3,51 @@
 Notable changes to AgentDomain's public npm packages are recorded here. Package
 versions are immutable once published to npm.
 
-## SDK and shared 0.9.1 - Unreleased
+## SDK/MCP 0.10.0 and LangChain 0.1.0 - Release Candidate
 
-Patch for `@agentdomain/sdk` and `@agentdomain/shared`; prepared for npm, not yet
-published. MCP, AgentKit, and Eliza package versions remain 0.9.0. Existing
-dependency ranges of `^0.9.0` accept these patches. No new fee is introduced.
+These versions are staged in source, **not yet published to npm**. The accompanying
+frontend and documentation changes are **not yet deployed**.
+
+- Adds `inspectAgentIdentity` and `inspectAgentRenewal`: Base safe-block,
+  EIP-1898 hash-pinned observations with CCIP Read disabled. Token IDs and atomic
+  amounts remain strings; unavailable data is not reported as missing or healthy.
+- Adds `prepareAutoRenewChange`, `executeAutoRenewChange` and
+  `confirmAutoRenewChange`. Execution requires a host human-approval callback and
+  fresh owner/state checks. Confirmation binds matching transaction data after
+  the recorded observation block and current safe readback, not proof that a
+  particular human approved the plan or that a registrar renewal completed.
+- Prevents reentrant duplicate submissions and automatic replay of submitted,
+  rejected or uncertain attempts for the same plan object. Explicit reuse after
+  `no_change` performs fresh checks. This is not persistent cross-process
+  idempotency.
+- Adds MCP `inspect_agent_identity`, `inspect_agent_renewal` and
+  `prepare_auto_renew_change` to the read-only surface; no execution tool is
+  added to that default surface. Existing opt-in write tools remain separate.
+  Adds read-only renewal observations to the verification view.
+- Adds the real LangChain tools package and Python CrewAI/AutoGen stdio MCP
+  examples. Their new flows inspect or prepare unsigned changes without sending
+  transactions. CrewAI now uses its official core-native MCP APIs, with Windows
+  fixture tests completed; Linux qualification and Python dependency review
+  remain release gates. No clean dependency audit is claimed; see the
+  [scoped security note](packages/mcp-server/examples/crewai/README.md#security-note).
+- Generates machine-readable documentation: full text, documented-route OpenAPI,
+  SDK/MCP discovery index and a project-defined discovery document. These are
+  source-derived static outputs, not a new backend or remote MCP service.
+
+An enabled auto-renew flag allows authorized renewal operators to use funded
+vault balances without per-renewal signatures; the actual registrar quote may
+exceed the minimum. Disabling stops new reservations, not completion and charging
+of an existing one. A zero-value setting transaction can still incur gas.
+
+The SDK moves from pre-1.0 `0.9.x` to `0.10.0`; existing `^0.9.0` ranges do not
+select it. Use the matching reviewed source until publication is verified.
+
+## SDK and shared 0.9.1 - 2026-09-08
+
+SDK and shared 0.9.1 were published to npm on September 8. The SDK 0.10.0
+candidate retains these existing fixes; they are not new final-day renewal work.
+The shared package remains 0.9.1, and MCP remained 0.9.0 for this patch release.
+No new fee or MCP, AgentKit or Eliza feature was introduced by this patch.
 
 - Fixes the duplicate payment-signature prompt for request-bound x402 checkout:
   create one EIP-3009 payment authorization using the issued request binding,
