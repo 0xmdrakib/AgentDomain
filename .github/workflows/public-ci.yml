@@ -74,6 +74,11 @@ jobs:
           fi
           echo 'Redacted full-history secret scan passed.'
 
+      - name: Set up Python for boundary checks and native integration
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
       - name: Verify public boundary before dependency installation
         run: node scripts/check-public-boundary.mjs
 
@@ -94,10 +99,16 @@ jobs:
       - name: Verify public source and production dependencies
         run: pnpm ci:public
 
-      - name: Set up native integration Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        with:
-          python-version: '3.12'
+      - name: Test release guards and build the exact Python distributions
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test scripts/npm-release.test.mjs scripts/verify-release-ci.test.mjs
+          python -B -m unittest discover -s scripts -p test_release_artifacts.py
+          python -B -m unittest discover -s scripts -p test_python_boundary.py
+          python -m venv "$RUNNER_TEMP/python-build"
+          "$RUNNER_TEMP/python-build/bin/python" -m pip install --disable-pip-version-check --require-hashes -r scripts/python-build-requirements.lock
+          "$RUNNER_TEMP/python-build/bin/python" scripts/release-artifacts.py build-python --output "$RUNNER_TEMP/python-release"
 
       - name: Qualify the official CrewAI connector without model or wallet access
         shell: bash
@@ -110,6 +121,10 @@ jobs:
           set -euo pipefail
           python -m venv "$RUNNER_TEMP/agentdomain-crewai"
           "$RUNNER_TEMP/agentdomain-crewai/bin/python" -m pip install --disable-pip-version-check --require-hashes -r packages/mcp-server/examples/crewai/requirements.lock
+          "$RUNNER_TEMP/agentdomain-crewai/bin/python" -m pip install --no-deps --no-index --force-reinstall "$RUNNER_TEMP/python-release/dist/agentdomain_crewai-0.11.0-py3-none-any.whl"
+          "$RUNNER_TEMP/agentdomain-crewai/bin/python" -m pip check
+          "$RUNNER_TEMP/agentdomain-crewai/bin/python" -I -c 'import importlib.util, importlib.metadata, sysconfig; from pathlib import Path; assert importlib.metadata.version("agentdomain-crewai") == "0.11.0"; assert Path(importlib.util.find_spec("agentdomain_crewai").origin).resolve().is_relative_to(Path(sysconfig.get_path("purelib")).resolve())'
+          "$RUNNER_TEMP/agentdomain-crewai/bin/python" packages/mcp-server/test/crewai-package.py --dist "$RUNNER_TEMP/python-release/dist" -v
           AGENTDOMAIN_CREWAI_PYTHON="$RUNNER_TEMP/agentdomain-crewai/bin/python" node packages/mcp-server/test/crewai-integration.mjs
 
       - name: Qualify the official AutoGen connector without model or wallet access
@@ -120,7 +135,11 @@ jobs:
         run: |
           set -euo pipefail
           python -m venv "$RUNNER_TEMP/agentdomain-autogen"
-          "$RUNNER_TEMP/agentdomain-autogen/bin/python" -m pip install --disable-pip-version-check -r packages/mcp-server/examples/autogen/requirements.txt -c packages/mcp-server/examples/autogen/constraints.txt
+          "$RUNNER_TEMP/agentdomain-autogen/bin/python" -m pip install --disable-pip-version-check -r packages/mcp-server/examples/autogen/framework-requirements.txt -c packages/mcp-server/examples/autogen/constraints.txt
+          "$RUNNER_TEMP/agentdomain-autogen/bin/python" -m pip install --no-deps --no-index --force-reinstall "$RUNNER_TEMP/python-release/dist/agentdomain_autogen-0.11.0-py3-none-any.whl"
+          "$RUNNER_TEMP/agentdomain-autogen/bin/python" -m pip check
+          "$RUNNER_TEMP/agentdomain-autogen/bin/python" -I -c 'import importlib.util, importlib.metadata, sysconfig; from pathlib import Path; assert importlib.metadata.version("agentdomain-autogen") == "0.11.0"; assert Path(importlib.util.find_spec("agentdomain_autogen").origin).resolve().is_relative_to(Path(sysconfig.get_path("purelib")).resolve())'
+          "$RUNNER_TEMP/agentdomain-autogen/bin/python" packages/autogen-plugin/test/verify_artifacts.py "$RUNNER_TEMP/python-release/dist"
           AGENTDOMAIN_AUTOGEN_PYTHON="$RUNNER_TEMP/agentdomain-autogen/bin/python" node --test packages/mcp-server/test/autogen.integration.test.mjs
 
       - name: Build and dry-run Cloudflare artifacts on Linux
