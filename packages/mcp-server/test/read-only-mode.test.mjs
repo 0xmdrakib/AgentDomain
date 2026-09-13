@@ -18,6 +18,7 @@ const readOnlyTools = [
   'get_dns_capabilities',
   'get_renewal_status',
   'get_service_plan',
+  'inspect_agent_identity',
   'list_agent_email',
   'list_dns_records',
   'lookup_agent',

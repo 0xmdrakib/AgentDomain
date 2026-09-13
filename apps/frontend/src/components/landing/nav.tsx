@@ -115,6 +115,9 @@ function NavLinks({ onNavigate, mobile }: { onNavigate: () => void; mobile?: boo
       <Link href="/registry" className={linkClass} onClick={onNavigate}>
         Registry
       </Link>
+      <Link href="/verify" className={linkClass} onClick={onNavigate}>
+        Identity Check
+      </Link>
       <Link href="https://docs.agentdomain.app" className={linkClass} onClick={onNavigate}>
         Docs
       </Link>

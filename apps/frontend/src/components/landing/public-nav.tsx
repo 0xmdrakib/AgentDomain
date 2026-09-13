@@ -9,6 +9,7 @@ const links = [
   { href: '/#how-it-works', label: 'How it works' },
   { href: '/#pricing', label: 'Pricing' },
   { href: '/registry', label: 'Registry' },
+  { href: '/verify', label: 'Identity Check' },
   { href: 'https://docs.agentdomain.app', label: 'Docs' },
   { href: 'mailto:contact@agentdomain.app', label: 'Support' },
 ] as const;

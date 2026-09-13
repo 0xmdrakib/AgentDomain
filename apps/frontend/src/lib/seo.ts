@@ -23,6 +23,7 @@ export const STATIC_INDEXABLE_ROUTES = [
   '/integrations/coinbase-agentkit',
   '/register',
   '/registry',
+  '/verify',
   '/privacy',
   '/terms',
 ] as const;

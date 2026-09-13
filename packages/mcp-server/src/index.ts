@@ -34,7 +34,12 @@ import {
   type ToolAnnotations,
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import { AgentDomain, validateBuilderCode } from '@agentdomain/sdk';
+import {
+  AgentDomain,
+  IdentityInspectionError,
+  inspectAgentIdentity,
+  validateBuilderCode,
+} from '@agentdomain/sdk';
 import {
   DNS_RECORD_TYPES,
   dnsRecordSchema,
@@ -59,6 +64,10 @@ const AGENTDOMAIN_BUILDER_CODE = process.env.AGENTDOMAIN_BUILDER_CODE;
 const RENEWAL_VAULT_ADDRESS = process.env.RENEWAL_VAULT_ADDRESS as Address | undefined;
 const WRITE_TOOLS_ENV = 'AGENTDOMAIN_ENABLE_WRITE_TOOLS';
 const WRITE_TOOLS_ENABLED = parseWriteToolsEnabled(process.env[WRITE_TOOLS_ENV]);
+const identityInspectionInput = z.union([
+  z.object({ domain: z.string(), expectedOwner: z.string().optional() }).strict(),
+  z.object({ tokenId: z.string(), expectedOwner: z.string().optional() }).strict(),
+]);
 
 function getClient(): AgentDomain {
   const config: ConstructorParameters<typeof AgentDomain>[0] = {
@@ -94,6 +103,27 @@ const server = new Server(
 // ----------------------------------------------------------------------
 
 const TOOL_DEFINITIONS: Tool[] = [
+  {
+    name: 'inspect_agent_identity',
+    description:
+      'Inspect the custom AgentDomain ERC-721 identity registry on Base mainnet at a safe block. Supply exactly one domain or decimal tokenId, optionally an expectedOwner. Uses public RPC without a wallet or platform API key; never fetches metadata, signs, or writes. Results are RPC observations, not consensus/SPV, DNS ownership, KYC, or verification of linked Basename/ENS labels.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        domain: { type: 'string', description: 'The registered domain, without a URL or path.' },
+        tokenId: {
+          type: 'string',
+          description: 'Decimal AgentDomain ERC-721 token ID, not an agent UUID.',
+        },
+        expectedOwner: {
+          type: 'string',
+          description: 'Optional EVM owner address to compare, not authorization.',
+        },
+      },
+      oneOf: [{ required: ['domain'] }, { required: ['tokenId'] }],
+      additionalProperties: false,
+    },
+  },
   {
     name: 'check_domain_availability',
     description:
@@ -616,6 +646,7 @@ const TOOL_DEFINITIONS: Tool[] = [
 ];
 
 const READ_ONLY_TOOL_NAMES = new Set([
+  'inspect_agent_identity',
   'check_domain_availability',
   'quote_registration',
   'lookup_agent',
@@ -673,6 +704,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         isError: true,
         content: [{ type: 'text', text: `Unknown or disabled tool: ${name}` }],
       };
+    }
+
+    // This public chain read must not construct a platform client or load a signer.
+    if (name === 'inspect_agent_identity') {
+      const input = identityInspectionInput.parse(args);
+      const result = await inspectAgentIdentity(input);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     }
 
     const client = getClient();
@@ -1083,6 +1121,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
     }
   } catch (e) {
+    if (name === 'inspect_agent_identity') {
+      const error =
+        e instanceof IdentityInspectionError
+          ? { code: e.code, message: e.message }
+          : e instanceof z.ZodError
+            ? {
+                code: 'INVALID_INPUT',
+                message:
+                  'Provide exactly one domain or decimal tokenId, optionally expectedOwner. Other arguments are not accepted.',
+              }
+            : {
+                code: 'UNAVAILABLE',
+                message: 'Identity inspection is unavailable. No identity verdict was produced.',
+              };
+      return {
+        isError: true,
+        content: [{ type: 'text', text: JSON.stringify({ error }, null, 2) }],
+      };
+    }
     return {
       isError: true,
       content: [{ type: 'text', text: `Error: ${e instanceof Error ? e.message : String(e)}` }],
