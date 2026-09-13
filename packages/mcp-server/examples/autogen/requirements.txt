@@ -1,0 +1,6 @@
+# Official Microsoft AutoGen, not the similarly named autogen/AG2 distribution.
+# MCP v1 is deliberate: AutoGen 0.7.5 does not cap its own MCP dependency at v2.
+autogen-agentchat==0.7.5
+autogen-core==0.7.5
+autogen-ext[mcp]==0.7.5
+mcp==1.30.0
