@@ -107,12 +107,12 @@ function readOnly(f) {
 }
 
 describe('read-only renewal MCP binding with real SDK over stdio', () => {
-  it('advertises 0.10.0, closed schemas, and both tools as default read-only without any fetch', async () => {
+  it('advertises 0.11.0, closed schemas, and both tools as default read-only without any fetch', async () => {
     const f = await start();
     const manifest = JSON.parse(
       await readFile(new URL('../package.json', import.meta.url), 'utf8'),
     );
-    assert.equal(manifest.version, '0.10.0');
+    assert.equal(manifest.version, '0.11.0');
     assert.deepEqual(f.client.getServerVersion(), {
       name: 'agentdomain-mcp',
       version: manifest.version,
