@@ -1,0 +1,6 @@
+AgentDomain CrewAI Integration
+Copyright 2026 AgentDomain Contributors
+
+This package contains AgentDomain's integration code, licensed under Apache-2.0.
+CrewAI, the Python MCP SDK and their transitive dependencies are installed
+separately and retain their respective licenses. They are not vendored here.

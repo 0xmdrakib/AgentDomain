@@ -18,7 +18,7 @@ const localPython = fileURLToPath(
 const python = process.env.AGENTDOMAIN_CREWAI_PYTHON ?? localPython;
 assert.ok(
   existsSync(python),
-  'Install examples/crewai/requirements.lock in a fresh .venv-native or set AGENTDOMAIN_CREWAI_PYTHON to its Python executable.',
+  'Install examples/crewai/requirements.lock and the built agentdomain-crewai wheel in a fresh .venv-native, or set AGENTDOMAIN_CREWAI_PYTHON to that environment.',
 );
 const env = {
   CREWAI_TEST_NODE: process.execPath,

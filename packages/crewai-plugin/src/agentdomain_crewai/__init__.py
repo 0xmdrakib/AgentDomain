@@ -1,6 +1,6 @@
-"""Compatibility example for the separately installed agentdomain-crewai package."""
+"""Typed, read-only AgentDomain tools backed by CrewAI's native MCP client."""
 
-from agentdomain_crewai import (
+from .connector import (
     READ_ONLY_TOOLS,
     AutoRenewArguments,
     IdentityArguments,
@@ -15,6 +15,8 @@ from agentdomain_crewai import (
     require_owned_identity,
     server_parameters,
 )
+
+__version__ = "0.11.0"
 
 __all__ = [
     "READ_ONLY_TOOLS",
@@ -31,6 +33,3 @@ __all__ = [
     "require_owned_identity",
     "server_parameters",
 ]
-
-if __name__ == "__main__":
-    raise SystemExit(main())

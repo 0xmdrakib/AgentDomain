@@ -9,6 +9,7 @@ from io import StringIO
 import os
 from pathlib import Path
 import sys
+import sysconfig
 import unittest
 from unittest.mock import patch
 
@@ -22,6 +23,7 @@ from crewai.mcp import MCPClient  # noqa: E402
 from crewai.tools.mcp_native_tool import MCPNativeTool  # noqa: E402
 from crewai.tools.tool_failure import ToolFailure  # noqa: E402
 from pydantic import ValidationError  # noqa: E402
+import agentdomain_crewai  # noqa: E402
 from readonly_flow import (  # noqa: E402
     AutoRenewArguments,
     IdentityArguments,
@@ -174,6 +176,17 @@ def flow(tools, **overrides):
 
 
 class ArgumentsTests(unittest.TestCase):
+    def test_connector_is_installed_wheel_and_example_is_only_a_bridge(self):
+        self.assertEqual(importlib.metadata.version("agentdomain-crewai"), "0.11.0")
+        self.assertEqual(agentdomain_crewai.__version__, "0.11.0")
+        assert agentdomain_crewai.__file__ is not None
+        installed_path = Path(agentdomain_crewai.__file__).resolve()
+        self.assertTrue(
+            installed_path.is_relative_to(Path(sysconfig.get_path("purelib")).resolve())
+        )
+        self.assertIs(readonly_tools, agentdomain_crewai.readonly_tools)
+        self.assertIs(inspect_and_prepare, agentdomain_crewai.inspect_and_prepare)
+
     def test_chroma_tripwires_really_reject_client_and_embedding_access(self):
         import chromadb
         from chromadb.api.models.CollectionCommon import CollectionCommon
