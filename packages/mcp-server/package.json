@@ -1,6 +1,6 @@
 {
   "name": "@agentdomain/mcp-server",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Secure-by-default MCP server for AgentDomain identity, DNS, email, and renewal workflows",
   "keywords": [
     "agentdomain",
@@ -32,6 +32,16 @@
   },
   "files": [
     "dist",
+    "examples/crewai/readonly_flow.py",
+    "examples/crewai/README.md",
+    "examples/crewai/requirements.in",
+    "examples/crewai/requirements.lock",
+    "examples/autogen/agentdomain_workbench.py",
+    "examples/autogen/assistant_example.py",
+    "examples/autogen/inspect_renewal.py",
+    "examples/autogen/README.md",
+    "examples/autogen/requirements.txt",
+    "examples/autogen/constraints.txt",
     "README.md",
     "LICENSE",
     "NOTICE",

@@ -3,29 +3,52 @@
 [Model Context Protocol](https://modelcontextprotocol.io) server for AgentDomain.
 
 It lets MCP-compatible clients discover and manage agent identities through the
-[AgentDomain API](https://api.agentdomain.app/api/v1).
+[AgentDomain API](https://api.agentdomain.app/api/v1), with separate public Base
+RPC tools for identity and renewal inspection.
 
 The server requires Node.js 20 or newer and communicates over standard input
 and output. It does not open a public listener.
 
-## Run
+## Versions
+
+These examples require MCP and SDK **0.10.0**. The npm commands require that
+version to be available; earlier packages do not supply these inspection and
+unsigned-plan tools. Use this explicit public-source build until the version is
+available on npm, running from the reviewed checkout's root:
 
 ```bash
-npx -y @agentdomain/mcp-server
+pnpm --filter @agentdomain/shared build
+pnpm --filter @agentdomain/sdk build
+pnpm --filter @agentdomain/mcp-server build
+node packages/mcp-server/dist/index.js
+```
+
+## Run
+
+Once version 0.10.0 is available on npm:
+
+```bash
+npx -y @agentdomain/mcp-server@0.10.0
 ```
 
 For a persistent installation:
 
 ```bash
-npm install -g @agentdomain/mcp-server
+npm install -g @agentdomain/mcp-server@0.10.0
 agentdomain-mcp
 ```
 
 ## Default tools
 
-The server starts in read-only mode. It advertises only tools that inspect public
-or authorized account state:
+The server starts in read-only mode. It advertises tools that inspect public or
+authorized account state, or prepare a transaction without executing it:
 
+- `inspect_agent_identity`: custom AgentDomain registry ownership, lifecycle and
+  consistency at a canonical Base safe-block hash; no platform API credential.
+- `inspect_agent_renewal`: identity and RenewalVault state at the same hash,
+  including available/reserved USDC, pending reservations, timing and flags.
+- `prepare_auto_renew_change`: validate owner/state and produce an unsigned,
+  attributed setting plan. It never signs, broadcasts or spends.
 - `check_domain_availability` and `quote_registration`
 - `lookup_agent`, `get_agent`, and `search_agents`
 - `list_agent_email` and `get_agent_email_usage`
@@ -34,6 +57,62 @@ or authorized account state:
 
 An API key may authorize additional reads, but merely supplying one never enables
 mutation tools.
+
+## Inspect and prepare, without execution
+
+The two inspection tools accept exactly one `domain` or positive decimal-string
+`tokenId`, plus optional `expectedOwner`. A comparison is not authentication.
+Missing identities, failed RPC reads and inconsistent records remain distinct;
+these are RPC observations, not consensus, DNS-control, KYC or linked-name proofs.
+Metadata and CCIP callback URLs are not fetched.
+
+For example, call `inspect_agent_renewal` with `{"tokenId":"1"}`. To prepare a
+setting change, call `prepare_auto_renew_change` with:
+
+```json
+{
+  "tokenId": "1",
+  "expectedOwner": "0x1111111111111111111111111111111111111111",
+  "enabled": false,
+  "builderCode": "your_app"
+}
+```
+
+Replace the example token/owner with the intended identity. Do not send RPC
+URLs, contract overrides, chains, credentials or an `approved` boolean as tool
+arguments. `enabled` is a requested setting, not permission to execute. The
+JSON-safe plan includes observations, ID, warnings, `noChange`, and zero-value
+transaction fields. Forward it to a separate trusted owner UI, not a model's
+signer. These new tools do not expose `executeAutoRenewChange`; existing opt-in
+write tools such as `enable_auto_renew` remain separate.
+
+The minimum vault fee is not a registrar quote. If an owner later approves and
+executes an enable plan, authorized renewal operators may use funded balances
+without a new signature for each renewal. Disabling stops new reservations but
+does not cancel an existing one, which can still complete and charge. A setting
+change is not a completed domain renewal. See the
+[renewal guide](https://docs.agentdomain.app/guides/renewal/).
+
+## Framework examples
+
+- [CrewAI native Python MCP](examples/crewai/README.md): read-only inspection and
+  unsigned planning using official core-native APIs. Read its
+  [scoped security note](examples/crewai/README.md#security-note); functional
+  tests are not a clean dependency audit.
+- [Microsoft AutoGen Python McpWorkbench](examples/autogen/README.md): allowlisted
+  inspection/planning with separate owner review.
+- [LangChain TypeScript tools](https://docs.agentdomain.app/frameworks/langchain/):
+  separate `@agentdomain/langchain-plugin`; its examples target 0.1.0. Use its
+  reviewed source build until that version is available.
+
+Python dependencies are installed separately; npm supplies the Node MCP server,
+not the frameworks. The deterministic flows need no paid model and send no live
+wallet transaction. Use trusted fixed executable paths and keep the stdio child
+environment free of unrelated credentials. The exact CrewAI recipe uses no
+Chroma client, collections, embeddings, server or memory. Known Chroma advisories
+also concern Python-client use of poisoned collection configuration, not just
+servers; consult the linked security note before extending the recipe. No
+general dependency-safety claim is made.
 
 ## Read-only configuration
 
@@ -45,7 +124,7 @@ read-only operations. For example:
   "mcpServers": {
     "agentdomain": {
       "command": "npx",
-      "args": ["-y", "@agentdomain/mcp-server"],
+      "args": ["-y", "@agentdomain/mcp-server@0.10.0"],
       "env": {
         "AGENTDOMAIN_API_URL": "https://api.agentdomain.app/api/v1"
       }

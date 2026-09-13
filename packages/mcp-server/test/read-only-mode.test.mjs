@@ -19,9 +19,11 @@ const readOnlyTools = [
   'get_renewal_status',
   'get_service_plan',
   'inspect_agent_identity',
+  'inspect_agent_renewal',
   'list_agent_email',
   'list_dns_records',
   'lookup_agent',
+  'prepare_auto_renew_change',
   'quote_registration',
   'search_agents',
 ];
