@@ -10,18 +10,28 @@ plain objects that only resemble tool definitions.
 
 ## Native JavaScript tools
 
-`@agentdomain/langchain-plugin` remains a **0.11.0 release candidate**; its npm
-publication is not yet verified. SDK and MCP **0.11.0 are published on npm**.
-For the native LangChain plugin, build the reviewed workspace:
+`@agentdomain/langchain-plugin` **0.11.0 is published on npm**. Install the pinned
+release with its framework peer:
+
+```bash
+npm install @agentdomain/langchain-plugin@0.11.0 @langchain/core@^1.2.11
+```
+
+SDK and MCP **0.11.0 are published on npm** as well. LangChain's September 14,
+2026 local publication has no OIDC provenance; see the
+[publication follow-up](https://github.com/0xmdrakib/AgentDomain/blob/main/CHANGELOG.md#langchain-0110---2026-09-14-follow-up)
+for registry and artifact evidence.
+
+The generated machine-readable catalog records workspace versions separately;
+its source manifest does not query or establish registry publication.
+
+For source development, build from the reviewed public repository root:
 
 ```bash
 pnpm --filter @agentdomain/shared build
 pnpm --filter @agentdomain/sdk build
 pnpm --filter @agentdomain/langchain-plugin build
 ```
-
-After registry verification, install the matching release with
-`npm install @agentdomain/langchain-plugin@0.11.0 @langchain/core@^1.2.11`.
 
 ```ts
 import { createAgentDomainTools } from '@agentdomain/langchain-plugin';

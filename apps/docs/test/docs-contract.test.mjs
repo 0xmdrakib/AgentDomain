@@ -151,7 +151,7 @@ test('framework guides distinguish real language bridges and their publication s
   assert.match(docsConfig, /label: 'AutoGen'/);
 });
 
-test('framework guides distinguish unpublished native packages from the published MCP dependency', async () => {
+test('framework guides distinguish published npm releases from unpublished Python candidates', async () => {
   const framework = (name) =>
     readFile(join(DOCS_ROOT, 'src', 'content', 'docs', 'frameworks', `${name}.mdx`), 'utf8');
   for (const name of ['crewai', 'autogen']) {
@@ -169,11 +169,24 @@ test('framework guides distinguish unpublished native packages from the publishe
     assert.doesNotMatch(source, /source-build targets|until a matching npm release/i);
   }
   const langchain = await framework('langchain');
-  assert.match(langchain, /0\.11\.0 release candidate/);
-  assert.match(langchain, /publication is not yet verified/);
+  assert.match(langchain, /`@agentdomain\/langchain-plugin` \*\*0\.11\.0 is published on npm\*\*/);
+  assert.match(
+    langchain,
+    /```bash\s+npm install @agentdomain\/langchain-plugin@0\.11\.0 @langchain\/core@\^1\.2\.11\s+```/,
+  );
   assert.match(langchain, /0\.11\.0 are published on npm/);
+  assert.match(langchain, /September 14,\s+2026 local publication has no OIDC provenance/);
+  assert.match(langchain, /CHANGELOG\.md#langchain-0110---2026-09-14-follow-up/);
+  assert.match(langchain, /source manifest does not query or establish registry publication/);
+  assert.match(langchain, /For source development, build from the reviewed public repository root/);
+  assert.match(langchain, /pnpm --filter @agentdomain\/shared build/);
+  assert.match(langchain, /pnpm --filter @agentdomain\/sdk build/);
   assert.match(langchain, /pnpm --filter @agentdomain\/langchain-plugin build/);
-  assert.match(langchain, /After registry verification/);
+  assert.match(langchain, /does not add an execution tool/);
+  assert.doesNotMatch(
+    langchain,
+    /release candidate|publication is not yet verified|After registry verification/,
+  );
   const renewal = await readFile(
     join(DOCS_ROOT, 'src', 'content', 'docs', 'guides', 'renewal.mdx'),
     'utf8',

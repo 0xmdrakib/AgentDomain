@@ -7,13 +7,20 @@ renewal inspection, owner-approved auto-renew controls, three framework
 integrations and machine-readable documentation. [PREEXISTING.md](PREEXISTING.md)
 separates the pre-event platform, earlier event commits and final-day additions.
 
-The current **0.11.0 release candidate** coordinates eight distributions: six
+At the September 13 checkpoint, the **0.11.0 release candidate** coordinated eight distributions: six
 npm packages (shared, SDK, MCP, AgentKit, Eliza and LangChain) and standalone
 Python `agentdomain-crewai` and `agentdomain-autogen`. Their registry publication
-is not yet verified. Existing SDK/MCP 0.10.0 publication and the earlier
+was not yet verified. Existing SDK/MCP 0.10.0 publication and the earlier
 frontend/docs deployment remain historical evidence, not a claim that 0.11.0
 is published or deployed. The founder's hands-on
 review, original voice recording and final submission approval remain required.
+
+**Post-event update, September 14:** all six npm packages are now published at
+0.11.0. The two Python packages remain unpublished source candidates. See the
+[dated changelog](CHANGELOG.md#langchain-0110---2026-09-14-follow-up) for current
+registry evidence and the distinction between LangChain's first local publication
+and the five GitHub OIDC releases. This follow-up does not change the event-period
+implementation history or establish final demo/submission approval.
 
 The Python package directories now own their framework implementations; the
 retained MCP examples are thin entrypoints. They use the existing Node MCP

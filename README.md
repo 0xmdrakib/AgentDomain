@@ -12,20 +12,21 @@ management.
 
 ## Public packages
 
-All eight package sources use **0.11.0**. Shared, SDK, MCP, AgentKit and Eliza
-are published on npm. LangChain, CrewAI and AutoGen remain source candidates;
-use their reviewed source builds until their registry releases are confirmed.
+All eight package sources use **0.11.0**. The six npm packages (shared, SDK,
+MCP, AgentKit, Eliza and LangChain) are published. CrewAI and AutoGen remain the
+two unpublished Python source candidates; use their reviewed source builds
+until their PyPI releases are confirmed.
 
-| Package                                                                                      | Purpose                                               | Release status          |
-| -------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ----------------------- |
-| [`@agentdomain/sdk`](https://www.npmjs.com/package/@agentdomain/sdk)                         | TypeScript SDK for AgentDomain API and x402 workflows | Published 0.11.0        |
-| [`@agentdomain/shared`](https://www.npmjs.com/package/@agentdomain/shared)                   | Public schemas, types, constants, and utilities       | Published 0.11.0        |
-| [`@agentdomain/mcp-server`](https://www.npmjs.com/package/@agentdomain/mcp-server)           | MCP tools for agent runtimes                          | Published 0.11.0        |
-| [`@agentdomain/agentkit-plugin`](https://www.npmjs.com/package/@agentdomain/agentkit-plugin) | Coinbase AgentKit integration                         | Published 0.11.0        |
-| [`@agentdomain/eliza-plugin`](https://www.npmjs.com/package/@agentdomain/eliza-plugin)       | ElizaOS integration                                   | Published 0.11.0        |
-| [`@agentdomain/langchain-plugin`](packages/langchain-plugin)                                 | Native LangChain JavaScript tools                     | Source candidate 0.11.0 |
-| [`agentdomain-crewai`](packages/crewai-plugin)                                               | Standalone native CrewAI Python integration           | Source candidate 0.11.0 |
-| [`agentdomain-autogen`](packages/autogen-plugin)                                             | Standalone native AutoGen Python integration          | Source candidate 0.11.0 |
+| Package                                                                                        | Purpose                                               | Release status          |
+| ---------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ----------------------- |
+| [`@agentdomain/sdk`](https://www.npmjs.com/package/@agentdomain/sdk)                           | TypeScript SDK for AgentDomain API and x402 workflows | Published 0.11.0        |
+| [`@agentdomain/shared`](https://www.npmjs.com/package/@agentdomain/shared)                     | Public schemas, types, constants, and utilities       | Published 0.11.0        |
+| [`@agentdomain/mcp-server`](https://www.npmjs.com/package/@agentdomain/mcp-server)             | MCP tools for agent runtimes                          | Published 0.11.0        |
+| [`@agentdomain/agentkit-plugin`](https://www.npmjs.com/package/@agentdomain/agentkit-plugin)   | Coinbase AgentKit integration                         | Published 0.11.0        |
+| [`@agentdomain/eliza-plugin`](https://www.npmjs.com/package/@agentdomain/eliza-plugin)         | ElizaOS integration                                   | Published 0.11.0        |
+| [`@agentdomain/langchain-plugin`](https://www.npmjs.com/package/@agentdomain/langchain-plugin) | Native LangChain JavaScript tools                     | Published 0.11.0        |
+| [`agentdomain-crewai`](packages/crewai-plugin)                                                 | Standalone native CrewAI Python integration           | Source candidate 0.11.0 |
+| [`agentdomain-autogen`](packages/autogen-plugin)                                               | Standalone native AutoGen Python integration          | Source candidate 0.11.0 |
 
 CrewAI and Microsoft AutoGen have their own Python distributions. Both retain the native stdio MCP
 interface and require a separately installed Node MCP server.
@@ -37,7 +38,8 @@ npm install @agentdomain/sdk@0.11.0
 ```
 
 See the [changelog](CHANGELOG.md) for public package release notes and
-compatibility details.
+compatibility details. The five earlier npm 0.11.0 releases have verified GitHub
+Actions OIDC provenance; LangChain's local publication has no OIDC provenance.
 
 ## Lifecycle workflow
 
