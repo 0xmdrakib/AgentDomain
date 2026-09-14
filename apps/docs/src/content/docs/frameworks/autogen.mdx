@@ -11,20 +11,20 @@ server and manages its session through an asynchronous context manager. See
 ## Install the Python package
 
 `agentdomain-autogen` is a standalone Python distribution providing a guarded
-native AutoGen workbench. It and the Node MCP server target **0.11.0 release
-candidates**, not verified PyPI or npm releases. Use an isolated Python
-environment; the native qualification uses Python 3.12. Before publication,
-install from the reviewed repository root:
+native AutoGen workbench. Its **0.11.0 release candidate** is not yet published
+on PyPI. The Node MCP server **0.11.0 is published on npm**. Use an isolated Python
+environment; the native qualification uses Python 3.12. Install the Python
+package from the reviewed repository root:
 
 ```bash
 python -m pip install ./packages/autogen-plugin
+npm install --save-exact @agentdomain/mcp-server@0.11.0
 ```
 
-After both registry releases are verified, install the pinned packages:
+After the Python registry release is verified, install the pinned Python package:
 
 ```bash
 python -m pip install agentdomain-autogen==0.11.0
-npm install --save-exact @agentdomain/mcp-server@0.11.0
 ```
 
 The Python package does not install Node.js or the MCP server. See the
@@ -78,8 +78,8 @@ async def inspect_plan(node: Path, checkout: Path, owner: str):
         )
 ```
 
-The host selects absolute Node and built-checkout paths. After the npm release
-is verified, `installed_package=Path("/trusted/node_modules/@agentdomain/mcp-server")`
+The host selects absolute Node and built-checkout paths. For published MCP 0.11.0,
+`installed_package=Path("/trusted/node_modules/@agentdomain/mcp-server")`
 can replace `source_checkout`. `enabled=True` requests an unsigned plan, not
 permission to execute. The `agentdomain-autogen` CLI and `python -m
 agentdomain_autogen` use the same package; existing example entrypoints remain

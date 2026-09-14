@@ -151,12 +151,14 @@ test('framework guides distinguish real language bridges and their publication s
   assert.match(docsConfig, /label: 'AutoGen'/);
 });
 
-test('eight-package candidate guides retain native options and separate Python from npm installs', async () => {
+test('framework guides distinguish unpublished native packages from the published MCP dependency', async () => {
   const framework = (name) =>
     readFile(join(DOCS_ROOT, 'src', 'content', 'docs', 'frameworks', `${name}.mdx`), 'utf8');
   for (const name of ['crewai', 'autogen']) {
     const source = await framework(name);
-    assert.match(source, /0\.11\.0 release\s+candidates/);
+    assert.match(source, /0\.11\.0 release candidate/);
+    assert.match(source, /0\.11\.0 is published on npm/);
+    assert.match(source, /not yet published\s+on PyPI|not yet published on PyPI/);
     assert.match(source, /npm install --save-exact @agentdomain\/mcp-server@0\.11\.0/);
     assert.ok(source.includes(`python -m pip install agentdomain-${name}==0.11.0`));
     assert.ok(source.includes(`python -m pip install ./packages/${name}-plugin`));
@@ -167,15 +169,16 @@ test('eight-package candidate guides retain native options and separate Python f
     assert.doesNotMatch(source, /source-build targets|until a matching npm release/i);
   }
   const langchain = await framework('langchain');
-  assert.match(langchain, /0\.11\.0 release candidates/);
-  assert.match(langchain, /Publication of these versions is not yet verified/);
+  assert.match(langchain, /0\.11\.0 release candidate/);
+  assert.match(langchain, /publication is not yet verified/);
+  assert.match(langchain, /0\.11\.0 are published on npm/);
   assert.match(langchain, /pnpm --filter @agentdomain\/langchain-plugin build/);
   assert.match(langchain, /After registry verification/);
   const renewal = await readFile(
     join(DOCS_ROOT, 'src', 'content', 'docs', 'guides', 'renewal.mdx'),
     'utf8',
   );
-  assert.match(renewal, /0\.11\.0 release candidate/);
+  assert.match(renewal, /published SDK \*\*0\.11\.0\*\*/);
   assert.doesNotMatch(renewal, /source-build target/);
 });
 

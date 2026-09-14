@@ -12,25 +12,25 @@ management.
 
 ## Public packages
 
-All eight packages below target **0.11.0 release candidates**. Publication of
-this version has not yet been verified on npm or PyPI. Use reviewed source
-builds or local wheels until the matching registry release is confirmed.
+All eight package sources use **0.11.0**. Shared, SDK, MCP, AgentKit and Eliza
+are published on npm. LangChain, CrewAI and AutoGen remain source candidates;
+use their reviewed source builds until their registry releases are confirmed.
 
-| Package                                                                                      | Purpose                                               |
-| -------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| [`@agentdomain/sdk`](https://www.npmjs.com/package/@agentdomain/sdk)                         | TypeScript SDK for AgentDomain API and x402 workflows |
-| [`@agentdomain/shared`](https://www.npmjs.com/package/@agentdomain/shared)                   | Public schemas, types, constants, and utilities       |
-| [`@agentdomain/mcp-server`](https://www.npmjs.com/package/@agentdomain/mcp-server)           | MCP tools for agent runtimes                          |
-| [`@agentdomain/agentkit-plugin`](https://www.npmjs.com/package/@agentdomain/agentkit-plugin) | Coinbase AgentKit integration                         |
-| [`@agentdomain/eliza-plugin`](https://www.npmjs.com/package/@agentdomain/eliza-plugin)       | ElizaOS integration                                   |
-| [`@agentdomain/langchain-plugin`](packages/langchain-plugin)                                 | Native LangChain JavaScript tools                     |
-| [`agentdomain-crewai`](packages/crewai-plugin)                                               | Standalone native CrewAI Python integration           |
-| [`agentdomain-autogen`](packages/autogen-plugin)                                             | Standalone native AutoGen Python integration          |
+| Package                                                                                      | Purpose                                               | Release status          |
+| -------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ----------------------- |
+| [`@agentdomain/sdk`](https://www.npmjs.com/package/@agentdomain/sdk)                         | TypeScript SDK for AgentDomain API and x402 workflows | Published 0.11.0        |
+| [`@agentdomain/shared`](https://www.npmjs.com/package/@agentdomain/shared)                   | Public schemas, types, constants, and utilities       | Published 0.11.0        |
+| [`@agentdomain/mcp-server`](https://www.npmjs.com/package/@agentdomain/mcp-server)           | MCP tools for agent runtimes                          | Published 0.11.0        |
+| [`@agentdomain/agentkit-plugin`](https://www.npmjs.com/package/@agentdomain/agentkit-plugin) | Coinbase AgentKit integration                         | Published 0.11.0        |
+| [`@agentdomain/eliza-plugin`](https://www.npmjs.com/package/@agentdomain/eliza-plugin)       | ElizaOS integration                                   | Published 0.11.0        |
+| [`@agentdomain/langchain-plugin`](packages/langchain-plugin)                                 | Native LangChain JavaScript tools                     | Source candidate 0.11.0 |
+| [`agentdomain-crewai`](packages/crewai-plugin)                                               | Standalone native CrewAI Python integration           | Source candidate 0.11.0 |
+| [`agentdomain-autogen`](packages/autogen-plugin)                                             | Standalone native AutoGen Python integration          | Source candidate 0.11.0 |
 
 CrewAI and Microsoft AutoGen have their own Python distributions. Both retain the native stdio MCP
 interface and require a separately installed Node MCP server.
 
-After registry verification, install the pinned SDK:
+Install the published SDK:
 
 ```bash
 npm install @agentdomain/sdk@0.11.0
@@ -41,12 +41,13 @@ compatibility details.
 
 ## Lifecycle workflow
 
-The coordinated **0.11.0** candidate contains the six npm packages and two
-standalone Python integrations. Their current source versions do not establish
-registry publication or deployment. The earlier SDK/MCP 0.10.0 release and
-[Identity Check](https://agentdomain.app/verify) deployment are separate historical
-evidence, not proof that this candidate is live. See the
-[release evidence](BUILT_DURING_ETHONLINE.md#release-and-demo-evidence).
+The **0.11.0** SDK and MCP releases include independent identity inspection,
+renewal observations and unsigned planning. Their published tarballs were
+verified against the reviewed GitHub Actions artifacts on September 14.
+Publication after the event is recorded separately in the [changelog](CHANGELOG.md);
+it is not additional work claimed during the hackathon. See the
+[event evidence](BUILT_DURING_ETHONLINE.md#release-and-demo-evidence) for the
+original implementation and [Identity Check](https://agentdomain.app/verify) demo.
 
 - `inspectAgentIdentity` observes the AgentDomain registry on Base without
   platform credentials or a wallet. Missing identities, RPC errors, owner
