@@ -102,6 +102,12 @@
 
 /* Custom utilities */
 @layer utilities {
+  .agentdomain-wallet-backdrop {
+    background-color: hsl(var(--background) / 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
   .defer-offscreen {
     content-visibility: auto;
     contain-intrinsic-size: auto 900px;

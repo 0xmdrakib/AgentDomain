@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useAccount, useChainId, useSignMessage, useDisconnect } from 'wagmi';
+import { useAccount, useChainId, useSignMessage, useConfig } from 'wagmi';
 import { SiweMessage } from 'siwe';
 import { getAddress } from 'viem';
 import { clearWalletConnectionStorage } from '@/lib/wagmi';
+import { disconnectWalletConnections } from '@/lib/wallet-connections';
 import { formatWalletAuthError } from '@/lib/wallet-auth-errors';
 
 export interface SiweSession {
@@ -36,7 +37,7 @@ export function useSiwe(): UseSiweReturn {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { signMessageAsync } = useSignMessage();
-  const { disconnectAsync } = useDisconnect();
+  const config = useConfig();
 
   const [session, setSession] = useState<SiweSession>({ authenticated: false });
   const [loading, setLoading] = useState(false);
@@ -155,14 +156,14 @@ export function useSiwe(): UseSiweReturn {
       setSession({ authenticated: false });
       window.dispatchEvent(new Event('agentdomain:session-changed'));
       try {
-        await disconnectAsync();
+        await disconnectWalletConnections(config);
       } finally {
         clearWalletConnectionStorage();
       }
     } finally {
       setLoading(false);
     }
-  }, [disconnectAsync]);
+  }, [config]);
 
   return { session, loading, error, signIn, signOut };
 }

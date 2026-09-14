@@ -39,7 +39,7 @@ export function getWagmiConfig() {
         appName: 'AgentDomain',
         preference: { options: 'all' },
       }),
-      // Injected: MetaMask, Rabby, Base App, etc.
+      // Injected: MetaMask, Rabby, Coinbase Wallet, etc.
       injected({ shimDisconnect: true }),
       injected({
         shimDisconnect: true,
@@ -70,7 +70,7 @@ export function getWagmiConfig() {
         shimDisconnect: true,
         target: {
           id: 'baseApp',
-          name: 'Base App',
+          name: 'Coinbase Wallet',
           provider: (window) =>
             getInjectedProvider(window, (provider) =>
               Boolean(provider.isCoinbaseWallet || provider.isBaseWallet),
@@ -102,8 +102,13 @@ export function getWagmiConfig() {
 export function clearWalletConnectionStorage() {
   if (typeof window === 'undefined') return;
 
-  clearStorage(window.localStorage);
-  clearStorage(window.sessionStorage);
+  for (const name of ['localStorage', 'sessionStorage'] as const) {
+    try {
+      clearStorage(window[name]);
+    } catch {
+      // Access to storage itself can be denied in private or embedded browsers.
+    }
+  }
 }
 
 function clearStorage(storage: Storage) {
@@ -125,6 +130,9 @@ function clearStorage(storage: Storage) {
 
 function shouldClearWalletStorageKey(key: string) {
   const normalized = key.toLowerCase();
+  // Preserve wagmi's disconnect shim, including Coinbase-named provider IDs.
+  // Removing it allows legacy wallets without revokePermissions to reconnect.
+  if (normalized.startsWith('wagmi.') && normalized.endsWith('.disconnected')) return false;
   return (
     WALLET_STORAGE_KEYS.has(normalized) ||
     normalized.startsWith('wc@2:') ||

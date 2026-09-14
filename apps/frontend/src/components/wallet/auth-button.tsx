@@ -1,10 +1,20 @@
 'use client';
 
-import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
-import { useAccount, useDisconnect } from 'wagmi';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from 'react';
+import { createPortal } from 'react-dom';
+import { useAccount, useConfig } from 'wagmi';
 import { Check, ChevronDown, Copy, LogOut, Wallet } from 'lucide-react';
+import { toast } from 'sonner';
 import { ConnectWalletButton } from './connect-wallet-button';
 import { clearWalletConnectionStorage } from '@/lib/wagmi';
+import { disconnectWalletConnections } from '@/lib/wallet-connections';
 import { cn, shortAddress } from '@/lib/utils';
 
 /**
@@ -16,12 +26,13 @@ import { cn, shortAddress } from '@/lib/utils';
  */
 export function AuthButton({ className }: { className?: string }) {
   const { isConnected, address, status } = useAccount();
-  const { disconnectAsync } = useDisconnect();
+  const config = useConfig();
   const [ready, setReady] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [copied, setCopied] = useState(false);
   const disconnectingRef = useRef(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -62,22 +73,17 @@ export function AuthButton({ className }: { className?: string }) {
     setDisconnecting(true);
 
     try {
-      await disconnectAsync();
-    } catch {
-      // Still clear local connector state so the next mobile connect starts cleanly.
-    } finally {
+      await disconnectWalletConnections(config);
       clearWalletConnectionStorage();
       setShowMenu(false);
+    } catch {
+      toast.error('Could not disconnect wallet', {
+        description: 'The wallet is still connected. Please try again.',
+      });
+    } finally {
       setDisconnecting(false);
       disconnectingRef.current = false;
     }
-  }
-
-  function handleDisconnectPointerDown(event: PointerEvent<HTMLButtonElement>) {
-    event.stopPropagation();
-    if (event.pointerType === 'mouse') return;
-    event.preventDefault();
-    void handleDisconnect();
   }
 
   if (!ready || status === 'reconnecting') {
@@ -91,6 +97,7 @@ export function AuthButton({ className }: { className?: string }) {
   return (
     <div className={cn('relative inline-flex', className)}>
       <button
+        ref={triggerRef}
         type="button"
         className="premium-surface flex h-10 max-w-full items-center justify-center gap-2 rounded-full border px-3 text-sm transition-[border-color,box-shadow] hover:border-primary/40 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_18px_38px_-28px_rgba(20,21,18,0.5)]"
         onClick={() => setShowMenu(!showMenu)}
@@ -104,7 +111,7 @@ export function AuthButton({ className }: { className?: string }) {
       </button>
 
       {showMenu && (
-        <WalletMenu onClose={() => setShowMenu(false)}>
+        <WalletMenu anchorRef={triggerRef} onClose={() => setShowMenu(false)}>
           <div className="p-4">
             <div className="flex items-center gap-3">
               <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-[0_10px_24px_-16px_rgba(20,21,18,0.75)]">
@@ -151,7 +158,6 @@ export function AuthButton({ className }: { className?: string }) {
             <button
               type="button"
               className="flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-destructive/20 bg-card/55 px-3 py-2 text-sm font-medium text-destructive shadow-[inset_0_1px_0_rgba(255,255,255,0.68)] transition-[border-color,background-color] hover:border-destructive/35 hover:bg-destructive/10 disabled:pointer-events-none disabled:opacity-60"
-              onPointerDown={handleDisconnectPointerDown}
               onClick={(event) => {
                 event.stopPropagation();
                 void handleDisconnect();
@@ -169,19 +175,76 @@ export function AuthButton({ className }: { className?: string }) {
   );
 }
 
-function WalletMenu({ children, onClose }: { children: ReactNode; onClose: () => void }) {
-  return (
-    <>
-      <div className="fixed inset-0 z-40" onPointerDown={onClose} aria-hidden />
+function WalletMenu({
+  children,
+  anchorRef,
+  onClose,
+}: {
+  children: ReactNode;
+  anchorRef: RefObject<HTMLButtonElement | null>;
+  onClose: () => void;
+}) {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 324, maxHeight: 0 });
+
+  useLayoutEffect(() => {
+    function alignMenu() {
+      const anchor = anchorRef.current?.getBoundingClientRect();
+      if (!anchor) return;
+      const width = Math.min(324, window.innerWidth - 32);
+      const maxHeight = window.innerHeight - 32;
+      const height = Math.min(menuRef.current?.scrollHeight ?? 0, maxHeight);
+      const below = anchor.bottom + 8;
+      setPosition({
+        left: Math.max(16, Math.min(anchor.right - width, window.innerWidth - width - 16)),
+        top: Math.max(
+          16,
+          below + height <= window.innerHeight - 16 ? below : anchor.top - height - 8,
+        ),
+        width,
+        maxHeight,
+      });
+    }
+    alignMenu();
+    window.addEventListener('resize', alignMenu);
+    window.addEventListener('scroll', alignMenu, true);
+    return () => {
+      window.removeEventListener('resize', alignMenu);
+      window.removeEventListener('scroll', alignMenu, true);
+    };
+  }, [anchorRef]);
+
+  useEffect(() => {
+    const anchor = anchorRef.current;
+    menuRef.current
+      ?.querySelector<HTMLButtonElement>('[role="menuitem"]')
+      ?.focus({ preventScroll: true });
+    return () => {
+      if (anchor?.isConnected) anchor.focus({ preventScroll: true });
+    };
+  }, [anchorRef]);
+
+  return createPortal(
+    <div data-agentdomain-wallet-menu="true" className="fixed inset-0 z-[80]">
+      <div className="absolute inset-0" onClick={onClose} aria-hidden />
       <div
-        className="premium-surface premium-elevated absolute right-0 top-full z-50 mt-2 w-[min(92vw,324px)] overflow-hidden rounded-lg border"
+        ref={menuRef}
+        className="premium-surface premium-elevated fixed overflow-y-auto rounded-lg border"
+        style={position}
         role="menu"
         aria-label="Connected wallet menu"
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            event.stopPropagation();
+            onClose();
+          }
+        }}
         onPointerDown={(event) => event.stopPropagation()}
         onClick={(event) => event.stopPropagation()}
       >
         {children}
       </div>
-    </>
+    </div>,
+    document.body,
   );
 }
