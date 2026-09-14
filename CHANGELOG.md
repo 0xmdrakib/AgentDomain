@@ -3,6 +3,57 @@
 Notable changes to AgentDomain's public packages are recorded here. Published
 versions are immutable in their respective registries.
 
+## Python 0.11.0 - 2026-09-14 Follow-Up
+
+### CrewAI
+
+[`agentdomain-crewai` 0.11.0](https://pypi.org/project/agentdomain-crewai/0.11.0/)
+is now published on PyPI. This first publication used
+[GitHub Actions run 34873297689](https://github.com/0xmdrakib/AgentDomain/actions/runs/34873297689),
+attempt 1, from reviewed public commit `99232d692d736737100ed4dec5e1d75130c70c6e`.
+
+Registry metadata and comparison with the reviewed CI artifacts both passed:
+
+| Artifact            | Size         | SHA-256                                                            | Uploaded (UTC)      |
+| ------------------- | ------------ | ------------------------------------------------------------------ | ------------------- |
+| Wheel               | 14,556 bytes | `c93ec113a4acdfcd1821066d613e81f6ebe3589c755185c74b88357301063ed3` | 2026-09-14 17:14:44 |
+| Source distribution | 12,390 bytes | `f6a56b78ed9786f6e335fca2474bce6d7a31eb1f6adcaacdd823143c7fea5892` | 2026-09-14 17:14:45 |
+
+Cryptographic attestation verification passed for both CrewAI artifacts using official
+`pypi-attestations` 0.0.30 and Sigstore 4.5.0 with online production TUF. Checks
+verified signatures, the `publish/v1` predicate and signed artifact names/hashes,
+and bound the `0xmdrakib/AgentDomain` repository/workflow at `refs/heads/main` to
+the source commit and run/attempt above. The signed Fulcio deployment-environment
+claim also matches `pypi-production`.
+
+### AutoGen
+
+[`agentdomain-autogen` 0.11.0](https://pypi.org/project/agentdomain-autogen/0.11.0/)
+is now published on PyPI. This first publication used
+[GitHub Actions run 34874957140](https://github.com/0xmdrakib/AgentDomain/actions/runs/34874957140),
+attempt 1, from the same reviewed public commit `99232d692d736737100ed4dec5e1d75130c70c6e`.
+
+Registry metadata, sizes and SHA-256 hashes match the reviewed CI artifacts.
+Both release runs used identical copies of all four Python archives and the same manifest.
+
+| Artifact            | Size         | SHA-256                                                            | Uploaded (UTC)             |
+| ------------------- | ------------ | ------------------------------------------------------------------ | -------------------------- |
+| Wheel               | 17,174 bytes | `27b49abe4a43b93657b58d54d0fba6785b6a53c317313a8ccf7d930ca89bea00` | 2026-09-14 17:30:56.309991 |
+| Source distribution | 13,815 bytes | `6cd122cc58b5c144992d4f751f171896a036703b4a83f80ff9e2358c5e1d3a37` | 2026-09-14 17:30:57.443951 |
+
+Cryptographic attestation verification also passed for both AutoGen artifacts.
+The final verification of all four Python artifacts completed at 17:35:09 UTC,
+using official PyPA `Attestation.verify` with online production TUF to verify
+signatures and signed artifact names/hashes, repository/workflow, main ref,
+source commit and the respective run/attempt. The signed Fulcio
+deployment-environment claim matches `pypi-production`, consistent with the modern
+environment claim.
+
+The public catalog now has **eight published packages**: **six npm packages**
+and **two PyPI packages**, all at **0.11.0**. This is a post-event publication follow-up,
+not additional implementation claimed during ETHOnline. Earlier entries retain
+the status at their respective publication checkpoints.
+
 ## LangChain 0.11.0 - 2026-09-14 Follow-Up
 
 `@agentdomain/langchain-plugin@0.11.0` was published on npm on September 14 at

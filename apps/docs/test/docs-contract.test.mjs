@@ -15,6 +15,14 @@ import {
 } from '../scripts/validate-content.mjs';
 import { validateHtmlUrls } from '../scripts/validate-output.mjs';
 
+function markdownLinkTarget(source, label) {
+  const links = [...source.matchAll(/\[([^\]]+)\]\(([^)\s]+)\)/g)].filter(
+    ([, text]) => text === label,
+  );
+  assert.equal(links.length, 1, `Expected one Markdown link labeled ${label}`);
+  return links[0][2];
+}
+
 test('the complete public docs contract validates', async () => {
   const result = await validateDocs();
   assert.deepEqual(result, { files: 21, routes: 21, approvedAssets: 4 });
@@ -151,14 +159,12 @@ test('framework guides distinguish real language bridges and their publication s
   assert.match(docsConfig, /label: 'AutoGen'/);
 });
 
-test('framework guides distinguish published npm releases from unpublished Python candidates', async () => {
+test('framework guides pin the published npm and Python releases while retaining source development', async () => {
   const framework = (name) =>
     readFile(join(DOCS_ROOT, 'src', 'content', 'docs', 'frameworks', `${name}.mdx`), 'utf8');
   for (const name of ['crewai', 'autogen']) {
     const source = await framework(name);
-    assert.match(source, /0\.11\.0 release candidate/);
     assert.match(source, /0\.11\.0 is published on npm/);
-    assert.match(source, /not yet published\s+on PyPI|not yet published on PyPI/);
     assert.match(source, /npm install --save-exact @agentdomain\/mcp-server@0\.11\.0/);
     assert.ok(source.includes(`python -m pip install agentdomain-${name}==0.11.0`));
     assert.ok(source.includes(`python -m pip install ./packages/${name}-plugin`));
@@ -168,6 +174,48 @@ test('framework guides distinguish published npm releases from unpublished Pytho
     assert.match(source, /no paid model or live\s+transaction/);
     assert.doesNotMatch(source, /source-build targets|until a matching npm release/i);
   }
+  const crewai = await framework('crewai');
+  assert.match(crewai, /\*\*0\.11\.0 is published on PyPI\*\*/);
+  assert.equal(
+    markdownLinkTarget(crewai, '`agentdomain-crewai`'),
+    'https://pypi.org/project/agentdomain-crewai/0.11.0/',
+  );
+  assert.equal(
+    /```bash\r?\n([\s\S]*?)\r?\n```/.exec(crewai)?.[1].replaceAll('\r\n', '\n'),
+    'python -m pip install agentdomain-crewai==0.11.0\nnpm install --save-exact @agentdomain/mcp-server@0.11.0',
+  );
+  assert.match(crewai, /For source development, install from the reviewed public repository root/);
+  assert.equal(
+    markdownLinkTarget(crewai, 'dated release evidence'),
+    'https://github.com/0xmdrakib/AgentDomain/blob/main/CHANGELOG.md#python-0110---2026-09-14-follow-up',
+  );
+  assert.match(crewai, /records registry metadata and CI artifact comparison/);
+  assert.match(crewai, /verified cryptographic\s+attestations for both artifacts/);
+  assert.doesNotMatch(
+    crewai,
+    /release candidate|not yet published|After the Python registry release is verified/,
+  );
+  const autogen = await framework('autogen');
+  assert.match(autogen, /\*\*0\.11\.0 is published on PyPI\*\*/);
+  assert.equal(
+    markdownLinkTarget(autogen, '`agentdomain-autogen`'),
+    'https://pypi.org/project/agentdomain-autogen/0.11.0/',
+  );
+  assert.equal(
+    /```bash\r?\n([\s\S]*?)\r?\n```/.exec(autogen)?.[1].replaceAll('\r\n', '\n'),
+    'python -m pip install agentdomain-autogen==0.11.0\nnpm install --save-exact @agentdomain/mcp-server@0.11.0',
+  );
+  assert.match(autogen, /For source development, install from the reviewed public repository root/);
+  assert.equal(
+    markdownLinkTarget(autogen, 'dated release evidence'),
+    'https://github.com/0xmdrakib/AgentDomain/blob/main/CHANGELOG.md#python-0110---2026-09-14-follow-up',
+  );
+  assert.match(autogen, /records matching registry metadata and CI artifacts/);
+  assert.match(autogen, /verified cryptographic\s+attestations for both artifacts/);
+  assert.doesNotMatch(
+    autogen,
+    /release candidate|not yet published|After the Python registry release is verified|before publication|still pending/,
+  );
   const langchain = await framework('langchain');
   assert.match(langchain, /`@agentdomain\/langchain-plugin` \*\*0\.11\.0 is published on npm\*\*/);
   assert.match(
@@ -176,7 +224,10 @@ test('framework guides distinguish published npm releases from unpublished Pytho
   );
   assert.match(langchain, /0\.11\.0 are published on npm/);
   assert.match(langchain, /September 14,\s+2026 local publication has no OIDC provenance/);
-  assert.match(langchain, /CHANGELOG\.md#langchain-0110---2026-09-14-follow-up/);
+  assert.equal(
+    markdownLinkTarget(langchain, 'publication follow-up'),
+    'https://github.com/0xmdrakib/AgentDomain/blob/main/CHANGELOG.md#langchain-0110---2026-09-14-follow-up',
+  );
   assert.match(langchain, /source manifest does not query or establish registry publication/);
   assert.match(langchain, /For source development, build from the reviewed public repository root/);
   assert.match(langchain, /pnpm --filter @agentdomain\/shared build/);
@@ -216,11 +267,17 @@ test('CrewAI guide matches the native helper and discloses the pinned Python dep
     'CVE-2026-45830',
     'CVE-2026-45831',
     'CVE-2026-45833',
-    '/crewai/README.md#security-note',
-    'https://github.com/chroma-core/chroma/issues/6717',
   ]) {
     assert.ok(source.includes(term), `CrewAI: missing ${term}`);
   }
+  assert.equal(
+    markdownLinkTarget(source, "example's security note"),
+    'https://github.com/0xmdrakib/AgentDomain/blob/main/packages/mcp-server/examples/crewai/README.md#security-note',
+  );
+  assert.equal(
+    markdownLinkTarget(source, 'poisoned-collection configuration risk in the Python client'),
+    'https://github.com/chroma-core/chroma/issues/6717',
+  );
   assert.doesNotMatch(source, /MCPServerAdapter|from crewai_tools/);
   assert.match(source, /reject explicit `null`/);
   assert.match(source, /opens and closes a local stdio client for each invocation/);

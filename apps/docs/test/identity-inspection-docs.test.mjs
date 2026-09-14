@@ -1,15 +1,26 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const doc = (name) =>
   readFile(new URL(`../src/content/docs/sdk/${name}.mdx`, import.meta.url), 'utf8');
 
-test('the release catalog distinguishes six published npm packages from two Python source candidates', async () => {
+function markdownLinkTarget(source, label) {
+  const links = [...source.matchAll(/\[([^\]]+)\]\(([^)\s]+)\)/g)].filter(
+    ([, text]) => text === label,
+  );
+  assert.equal(links.length, 1, `Expected one Markdown link labeled ${label}`);
+  return links[0][2];
+}
+
+test('the release catalog records all eight published packages with exact registry links', async () => {
   const readme = await readFile(new URL('../../../README.md', import.meta.url), 'utf8');
   const rows = readme.split('\n').filter((line) => /^\| \[/.test(line));
-  assert.equal(rows.filter((line) => /\| Published 0\.11\.0\s*\|/.test(line)).length, 6);
-  assert.equal(rows.filter((line) => /\| Source candidate 0\.11\.0\s*\|/.test(line)).length, 2);
+  assert.equal(rows.filter((line) => /\| Published 0\.11\.0\s*\|/.test(line)).length, 8);
+  assert.equal(rows.filter((line) => /\| Source candidate 0\.11\.0\s*\|/.test(line)).length, 0);
+  assert.match(readme, /\*\*All eight packages are published at 0\.11\.0\*\*/);
+  assert.doesNotMatch(readme, /unpublished|source candidate/i);
   for (const name of [
     'shared',
     'sdk',
@@ -21,17 +32,25 @@ test('the release catalog distinguishes six published npm packages from two Pyth
     const row = rows.find((line) => line.startsWith(`| [\`@agentdomain/${name}\`](`));
     assert.ok(row, `${name}: missing npm catalog link`);
     assert.equal(
-      row.split('|')[1].trim(),
-      `[\`@agentdomain/${name}\`](https://www.npmjs.com/package/@agentdomain/${name})`,
+      markdownLinkTarget(row, `\`@agentdomain/${name}\``),
+      `https://www.npmjs.com/package/@agentdomain/${name}`,
     );
     assert.match(row, /\| Published 0\.11\.0\s*\|/);
   }
-  for (const name of ['crewai', 'autogen']) {
-    const row = rows.find((line) => line.includes(`agentdomain-${name}`));
-    assert.ok(row, `${name}: missing Python catalog entry`);
-    assert.ok(row.includes(`(packages/${name}-plugin)`));
-    assert.match(row, /\| Source candidate 0\.11\.0\s*\|/);
-  }
+  const crewai = rows.find((line) => line.startsWith('| [`agentdomain-crewai`]('));
+  assert.ok(crewai, 'Missing CrewAI catalog entry');
+  assert.equal(
+    markdownLinkTarget(crewai, '`agentdomain-crewai`'),
+    'https://pypi.org/project/agentdomain-crewai/0.11.0/',
+  );
+  assert.match(crewai, /\| Published 0\.11\.0\s*\|/);
+  const autogen = rows.find((line) => line.startsWith('| [`agentdomain-autogen`]('));
+  assert.ok(autogen, 'Missing AutoGen catalog entry');
+  assert.equal(
+    markdownLinkTarget(autogen, '`agentdomain-autogen`'),
+    'https://pypi.org/project/agentdomain-autogen/0.11.0/',
+  );
+  assert.match(autogen, /\| Published 0\.11\.0\s*\|/);
   assert.match(
     readme,
     /five earlier npm 0\.11\.0 releases have verified GitHub\s+Actions OIDC provenance/,
@@ -40,6 +59,111 @@ test('the release catalog distinguishes six published npm packages from two Pyth
   assert.match(
     readme,
     /do not invent REST endpoints for onchain functions,\s+authorize actions, or prove npm publication/,
+  );
+});
+
+test('the dated Python follow-up records both publications with verified artifact attestations', async () => {
+  const changelog = await readFile(new URL('../../../CHANGELOG.md', import.meta.url), 'utf8');
+  const followUp = changelog.match(
+    /^## Python 0\.11\.0 - 2026-09-14 Follow-Up\r?\n[\s\S]*?(?=^## )/m,
+  )?.[0];
+  assert.ok(followUp, 'Missing dated Python publication follow-up');
+  assert.equal(changelog.match(/^## .+/m)?.[0], '## Python 0.11.0 - 2026-09-14 Follow-Up');
+  assert.equal(
+    markdownLinkTarget(followUp, '`agentdomain-crewai` 0.11.0'),
+    'https://pypi.org/project/agentdomain-crewai/0.11.0/',
+  );
+  assert.match(followUp, /is now published on PyPI\. This first publication used/);
+  assert.equal(
+    markdownLinkTarget(followUp, 'GitHub Actions run 34873297689'),
+    'https://github.com/0xmdrakib/AgentDomain/actions/runs/34873297689',
+  );
+  assert.match(
+    followUp,
+    /attempt 1, from reviewed public commit `99232d692d736737100ed4dec5e1d75130c70c6e`/,
+  );
+  assert.match(
+    followUp,
+    /Registry metadata and comparison with the reviewed CI artifacts both passed/,
+  );
+  assert.equal(
+    markdownLinkTarget(followUp, '`agentdomain-autogen` 0.11.0'),
+    'https://pypi.org/project/agentdomain-autogen/0.11.0/',
+  );
+  assert.equal(
+    markdownLinkTarget(followUp, 'GitHub Actions run 34874957140'),
+    'https://github.com/0xmdrakib/AgentDomain/actions/runs/34874957140',
+  );
+  assert.match(
+    followUp,
+    /attempt 1, from the same reviewed public commit `99232d692d736737100ed4dec5e1d75130c70c6e`/,
+  );
+  assert.match(
+    followUp,
+    /Registry metadata, sizes and SHA-256 hashes match the reviewed CI artifacts/,
+  );
+  assert.match(followUp, /identical copies of all four Python archives and the same manifest/);
+  const artifacts = followUp
+    .split(/\r?\n/)
+    .filter((line) => /^\| (?:Wheel|Source distribution)\s*\|/.test(line))
+    .map((line) =>
+      line
+        .split('|')
+        .slice(1, -1)
+        .map((cell) => cell.trim()),
+    );
+  assert.deepEqual(artifacts, [
+    [
+      'Wheel',
+      '14,556 bytes',
+      '`c93ec113a4acdfcd1821066d613e81f6ebe3589c755185c74b88357301063ed3`',
+      '2026-09-14 17:14:44',
+    ],
+    [
+      'Source distribution',
+      '12,390 bytes',
+      '`f6a56b78ed9786f6e335fca2474bce6d7a31eb1f6adcaacdd823143c7fea5892`',
+      '2026-09-14 17:14:45',
+    ],
+    [
+      'Wheel',
+      '17,174 bytes',
+      '`27b49abe4a43b93657b58d54d0fba6785b6a53c317313a8ccf7d930ca89bea00`',
+      '2026-09-14 17:30:56.309991',
+    ],
+    [
+      'Source distribution',
+      '13,815 bytes',
+      '`6cd122cc58b5c144992d4f751f171896a036703b4a83f80ff9e2358c5e1d3a37`',
+      '2026-09-14 17:30:57.443951',
+    ],
+  ]);
+  assert.match(followUp, /Cryptographic attestation verification passed for both CrewAI artifacts/);
+  assert.match(
+    followUp,
+    /`pypi-attestations` 0\.0\.30 and Sigstore 4\.5\.0 with online production TUF/,
+  );
+  assert.match(
+    followUp,
+    /verified signatures, the `publish\/v1` predicate and signed artifact names\/hashes/,
+  );
+  assert.match(followUp, /`0xmdrakib\/AgentDomain` repository\/workflow at `refs\/heads\/main`/);
+  assert.match(
+    followUp,
+    /signed Fulcio deployment-environment\s+claim also matches `pypi-production`/,
+  );
+  assert.match(
+    followUp,
+    /Cryptographic attestation verification also passed for both AutoGen artifacts/,
+  );
+  assert.match(followUp, /all four Python artifacts completed at 17:35:09 UTC/);
+  assert.match(followUp, /official PyPA `Attestation\.verify` with online production TUF/);
+  assert.match(followUp, /\*\*eight published packages\*\*: \*\*six npm packages\*\*/);
+  assert.match(followUp, /\*\*two PyPI packages\*\*, all at \*\*0\.11\.0\*\*/);
+  assert.doesNotMatch(followUp, /unpublished|source candidate|still pending/i);
+  assert.match(
+    followUp,
+    /post-event publication follow-up,\s+not additional implementation claimed during ETHOnline/,
   );
 });
 
@@ -55,9 +179,9 @@ test('the dated LangChain follow-up separates registry signatures from OIDC and 
   assert.match(followUp, /12,032-byte registry tarball has SHA-256/);
   assert.ok(followUp.includes('83295a7f7398f52e08314562a2e900a145177cbd863d186b1f702f9d6bb7c355'));
   assert.match(followUp, /SHA-512 matches the exact reviewed GitHub Actions archive/);
-  assert.match(
-    followUp,
-    /\[run 34837830930\]\(https:\/\/github\.com\/0xmdrakib\/AgentDomain\/actions\/runs\/34837830930\)/,
+  assert.equal(
+    markdownLinkTarget(followUp, 'run 34837830930'),
+    'https://github.com/0xmdrakib/AgentDomain/actions/runs/34837830930',
   );
   assert.ok(followUp.includes('f975c685477d6602a12511701f36e429fb7fe1b1'));
   assert.match(
@@ -99,16 +223,53 @@ test('event and AI disclosures separate their original checkpoint from later pub
   for (const name of ['BUILT_DURING_ETHONLINE.md', 'AI_DISCLOSURE.md']) {
     const source = await readFile(new URL(`../../../${name}`, import.meta.url), 'utf8');
     assert.match(source, /At the September 13 checkpoint/);
-    assert.match(source, /Post-event update, September 14/);
+    const postEvent = source.match(
+      /^\*\*Post-event update, September 14:\*\*[\s\S]*?(?=\r?\n\r?\n)/m,
+    )?.[0];
+    assert.ok(postEvent, `${name}: missing current post-event summary`);
     assert.match(
-      source,
-      /six npm packages (?:are now published at\s+0\.11\.0|are published at 0\.11\.0)/,
+      postEvent,
+      /all eight packages are published at 0\.11\.0:\s+\*\*six npm packages and two PyPI packages\*\*/,
+    );
+    assert.match(postEvent, /`agentdomain-crewai` and\s+`agentdomain-autogen`/);
+    assert.equal(
+      markdownLinkTarget(postEvent, 'dated Python changelog'),
+      'CHANGELOG.md#python-0110---2026-09-14-follow-up',
     );
     assert.match(
-      source,
-      /two Python (?:packages|distributions) remain unpublished source candidates/,
+      postEvent,
+      /registry and CI artifact evidence and verified cryptographic attestations for\s+both Python releases/,
     );
-    assert.match(source, /CHANGELOG\.md#langchain-0110---2026-09-14-follow-up/);
+    assert.equal(
+      markdownLinkTarget(postEvent, "LangChain's first local publication"),
+      'CHANGELOG.md#langchain-0110---2026-09-14-follow-up',
+    );
+    assert.match(
+      postEvent,
+      /has no OIDC provenance; the five earlier npm releases have verified GitHub OIDC\s+provenance/,
+    );
+    assert.doesNotMatch(postEvent, /unpublished|source candidate|seven published|still pending/i);
+  }
+});
+
+test('publication follow-ups preserve historical releases and all disclosure text outside the current summary', async () => {
+  for (const [name, expectedHash] of [
+    ['CHANGELOG.md', 'b028ff760c650ca6833d067a364942229521c3eb704ac8c8c1a7df62ba17305b'],
+    [
+      'BUILT_DURING_ETHONLINE.md',
+      'ce07a2720ce62326645e9d1dc59dae2409e058d0ceae8cd826066999b42ec49b',
+    ],
+    ['AI_DISCLOSURE.md', '19a395defd8392b664f485f5d34796b687e535eae7368d13cd3b33d7d157c523'],
+  ]) {
+    const source = (
+      await readFile(new URL(`../../../${name}`, import.meta.url), 'utf8')
+    ).replaceAll('\r\n', '\n');
+    // Freeze the pre-Python-publication text, independent of checkout line endings.
+    const historical =
+      name === 'CHANGELOG.md'
+        ? source.slice(source.indexOf('## LangChain 0.11.0 - 2026-09-14 Follow-Up'))
+        : source.replace(/^\*\*Post-event update, September 14:\*\*[\s\S]*?\n\n/m, '');
+    assert.equal(createHash('sha256').update(historical).digest('hex'), expectedHash, name);
   }
 });
 

@@ -10,22 +10,26 @@ server and manages its session through an asynchronous context manager. See
 
 ## Install the Python package
 
-`agentdomain-autogen` is a standalone Python distribution providing a guarded
-native AutoGen workbench. Its **0.11.0 release candidate** is not yet published
-on PyPI. The Node MCP server **0.11.0 is published on npm**. Use an isolated Python
-environment; the native qualification uses Python 3.12. Install the Python
-package from the reviewed repository root:
-
-```bash
-python -m pip install ./packages/autogen-plugin
-npm install --save-exact @agentdomain/mcp-server@0.11.0
-```
-
-After the Python registry release is verified, install the pinned Python package:
+[`agentdomain-autogen`](https://pypi.org/project/agentdomain-autogen/0.11.0/) is a standalone
+Python distribution providing a guarded native AutoGen workbench.
+**0.11.0 is published on PyPI**.
+The Node MCP server **0.11.0 is published on npm**. Use an isolated Python
+environment; the native qualification uses Python 3.12. Install the pinned packages:
 
 ```bash
 python -m pip install agentdomain-autogen==0.11.0
+npm install --save-exact @agentdomain/mcp-server@0.11.0
 ```
+
+For source development, install from the reviewed public repository root:
+
+```bash
+python -m pip install ./packages/autogen-plugin
+```
+
+The [dated release evidence](https://github.com/0xmdrakib/AgentDomain/blob/main/CHANGELOG.md#python-0110---2026-09-14-follow-up)
+records matching registry metadata and CI artifacts, with verified cryptographic
+attestations for both artifacts.
 
 The Python package does not install Node.js or the MCP server. See the
 [Python package](https://github.com/0xmdrakib/AgentDomain/tree/main/packages/autogen-plugin)
@@ -51,8 +55,8 @@ upgrading the MCP Python major version.
 The underlying native AutoGen flow passed scoped Windows and Linux qualification with
 the real Node MCP server and SDK. Its deterministic replay and synthetic RPC
 fixtures require no paid model or live transaction; this is not qualification
-of arbitrary model providers or execution tools. The new package's wheel must
-also pass its release qualification before publication.
+of arbitrary model providers or execution tools. The release workflow's validation
+job also passed; this does not extend the scoped framework qualification.
 
 ## Use the standalone workbench
 
