@@ -50,6 +50,18 @@ export function observationJson(result: IdentityObservation): string {
 
 export function inspectionFailure(error: unknown): string {
   const code = error && typeof error === 'object' && 'code' in error ? error.code : null;
+  if (code === 'RATE_LIMITED') {
+    const seconds =
+      error && typeof error === 'object' && 'retryAfterSeconds' in error
+        ? error.retryAfterSeconds
+        : null;
+    return typeof seconds === 'number' &&
+      Number.isInteger(seconds) &&
+      seconds >= 1 &&
+      seconds <= 3_600
+      ? `Identity checks are rate-limited. Try again in ${seconds} seconds.`
+      : 'Identity checks are rate-limited. Please wait before trying again.';
+  }
   // Only documented SDK codes may become UI messages; never display RPC payloads.
   if (code === 'INVALID_INPUT') return 'Check the domain, token ID and expected wallet.';
   if (code === 'WRONG_CHAIN')

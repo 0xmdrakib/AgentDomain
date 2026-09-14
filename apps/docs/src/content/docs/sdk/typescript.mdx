@@ -143,6 +143,25 @@ untrusted tool arguments. Keep credential-bearing provider URLs out of browser
 bundles, Git and logs. The [MCP tool](/sdk/mcp/#independent-identity-inspection)
 does not expose a provider override.
 
+### Website Identity Check
+
+The [Identity Check page](https://agentdomain.app/verify) sends its identity and
+renewal lookups through the public read-only
+`POST /api/v1/public/identity-inspection` endpoint. No login or wallet signature is
+required. Both modes share server-enforced limits of 30 requests per minute and
+300 per hour per client network, with one check in progress at a time. Shared
+IPv4 connections and IPv6 addresses within the same /64 share this allowance;
+these are network limits, not proof of a distinct person. Changing the query or
+claimed wallet does not reset them.
+
+HTTP `429` includes `Retry-After`; respect that delay before another attempt.
+Aggregate service capacity is also bounded, so a `429` can occur before a
+network's own allowance is exhausted. Unavailable admission or RPC service
+returns `503`, not a missing-identity result. The page does not retry or fall
+back to direct RPC when throttled. These website controls do not change the
+standalone SDK/MCP inspectors: their direct RPC usage remains governed by the
+provider selected by the caller.
+
 ### What this does not prove
 
 The result is an RPC observation, not a consensus proof, SPV/light-client proof,
