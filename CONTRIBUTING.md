@@ -31,6 +31,43 @@ Before opening a pull request:
 Never put a secret in browser-delivered configuration or client-side code. Keep
 environment files untracked and committed examples value-free.
 
+## Public release completion
+
+Every authorized package version release includes the public tag and GitHub
+release. These are release deliverables, not optional follow-up work.
+
+1. Validate the reviewed public source with `pnpm ci:public`, secret scanning,
+   package checks and the successful release workflow for the exact source SHA.
+   For a coordinated release, check each publishable package version rather than
+   the private workspace manifest's version.
+2. Choose the release anchor before tagging. Require GitHub's
+   `verification.verified: true` on the signed tag or its target commit. Preserve
+   meaningful feature history with a signing-capable release or merge process.
+   GitHub's Rebase and Merge creates replacement commits without signature
+   verification; do not assume that a green merge result means a signed anchor.
+3. Publish through the approved registry workflow and independently verify each
+   package's version, archive checksum and available provenance. Record actual
+   publication source SHAs and workflow runs, including any separately approved
+   bootstrap exception. Do not imply that a later release tag was the publication
+   source when it was not; verify package-tree equivalence where needed.
+4. Create the matching public `npm-v<version>` tag for the coordinated release
+   and a non-draft GitHub release with changelog, package/install links, source
+   and verification evidence, and known limitations. Mark only the newest stable
+   release Latest; identify prereleases as prereleases.
+5. Read back the remote tag target and its GitHub signature status, the published
+   release and Latest designation, and the actual npm/PyPI versions. A missing
+   signature, tag, release or package remains an explicit incomplete step.
+
+GitHub's **Verified** badge authenticates a Git signature. It is separate from
+tests, a security review and registry artifact provenance. See GitHub's
+[commit signature verification documentation](https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification).
+
+Do not silently move/delete published tags, rewrite public history, backdate
+commits or republish immutable package versions to repair a missing badge. A
+published-tag/history change or new account/security grant needs explicit owner
+approval. Never commit signing keys or tokens, or bypass a verification gate when
+the required signer is unavailable; report the exact unfinished prerequisite.
+
 ## Security reports
 
 Do not disclose vulnerabilities in an issue or pull request. Follow
