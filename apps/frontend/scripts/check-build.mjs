@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { resolve, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import postcss from 'postcss';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 export function assertBuildBoundary(routes, files) {
@@ -34,6 +35,18 @@ function filesUnder(directory) {
   });
 }
 
+export function assertWalletBackdropCss(stylesheets) {
+  let standardBlur = false;
+  for (const css of stylesheets) {
+    postcss.parse(css).walkRules('.agentdomain-wallet-backdrop', (rule) => {
+      rule.walkDecls('backdrop-filter', (declaration) => {
+        if (declaration.value === 'blur(12px)') standardBlur = true;
+      });
+    });
+  }
+  if (!standardBlur) throw new Error('Compiled wallet backdrop lost standard blur support');
+}
+
 export function checkBuild() {
   const server = resolve(root, '.next/server');
   const paths = JSON.parse(readFileSync(resolve(server, 'app-paths-manifest.json'), 'utf8'));
@@ -43,6 +56,11 @@ export function checkBuild() {
     JSON.parse(readFileSync(file, 'utf8')).files.map((item) => resolve(dirname(file), item)),
   );
   assertBuildBoundary(Object.keys(paths), [...files, ...dependencies]);
+  assertWalletBackdropCss(
+    filesUnder(resolve(root, '.next/static'))
+      .filter((file) => file.endsWith('.css'))
+      .map((file) => readFileSync(file, 'utf8')),
+  );
   for (const file of files.filter((file) => /\.js$/.test(file))) {
     if (
       /agentsRepo|registrationsRepo|getServerEnv|verifySiweAndStartSession|processInboundEmail|withX402\(/.test(
