@@ -45,3 +45,7 @@
   deployment environments separate from pull-request validation.
 - Inspect the exact diff, do not revert unrelated user changes, and remove only
   task branches whose work is verified as preserved on `main`.
+- For every public UI change, validate affected pages and interactions in a real
+  browser on desktop and mobile, including 320px, 390px and 768px widths. Check
+  long titles, grids, code blocks, menus and dialogs for clipping or overflow;
+  exercise touch interactions and retain screenshots before reporting completion.

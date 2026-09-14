@@ -22,7 +22,7 @@ export function SolutionPage({ page }: { page: SolutionPageDefinition }) {
       <section className="border-b border-border/70">
         <div className="container max-w-6xl py-14 sm:py-20">
           <p className="text-sm font-semibold text-primary">{page.eyebrow}</p>
-          <h1 className="mt-4 max-w-4xl text-balance text-4xl font-bold sm:text-5xl md:text-6xl">
+          <h1 className="wrap-anywhere mt-4 max-w-4xl text-balance text-4xl font-bold sm:text-5xl md:text-6xl">
             {page.heading}
           </h1>
           <div className="mt-6 max-w-3xl space-y-3 text-base leading-7 text-muted-foreground sm:text-lg">
@@ -60,15 +60,15 @@ export function SolutionPage({ page }: { page: SolutionPageDefinition }) {
         </div>
       </section>
 
-      <section className="defer-offscreen container grid max-w-6xl gap-10 py-14 sm:py-20 lg:grid-cols-[1fr_0.8fr] lg:gap-16">
-        <div>
+      <section className="defer-offscreen container grid max-w-6xl grid-cols-1 gap-10 py-14 sm:py-20 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)] lg:gap-16">
+        <div className="min-w-0">
           <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">What this solves</h2>
           <div className="mt-8 divide-y divide-border border-y border-border">
             {page.sections.map((section) => (
               <article key={section.title} className="py-6">
                 <h3 className="flex items-start gap-3 text-lg font-semibold">
                   <CheckCircle2 className="mt-0.5 h-5 w-5 flex-none text-primary" />
-                  {section.title}
+                  <span className="min-w-0 wrap-anywhere">{section.title}</span>
                 </h3>
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground sm:text-base">
                   {section.body}
@@ -78,13 +78,18 @@ export function SolutionPage({ page }: { page: SolutionPageDefinition }) {
           </div>
         </div>
 
-        <aside className="self-start lg:sticky lg:top-24">
+        <aside className="min-w-0 self-start lg:sticky lg:top-24">
           <div className="overflow-hidden rounded-md border border-border bg-stone-950 text-stone-100 shadow-xl">
             <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3 text-xs text-stone-300">
-              <Terminal className="h-4 w-4" />
-              {page.codeTitle}
+              <Terminal className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 wrap-anywhere">{page.codeTitle}</span>
             </div>
-            <pre className="mobile-scroll p-4 text-xs leading-6 sm:p-5">
+            <pre
+              className="mobile-scroll max-w-full p-4 text-xs leading-6 sm:p-5"
+              role="region"
+              aria-label={page.codeTitle}
+              tabIndex={0}
+            >
               <code>{page.code}</code>
             </pre>
           </div>
@@ -103,12 +108,12 @@ export function SolutionPage({ page }: { page: SolutionPageDefinition }) {
 
       <section className="defer-offscreen container max-w-6xl py-14 sm:py-20">
         <h2 className="text-2xl font-bold tracking-tight">Continue exploring</h2>
-        <div className="mt-7 grid gap-4 md:grid-cols-3">
+        <div className="mt-7 grid grid-cols-1 gap-4 md:grid-cols-3">
           {page.related.map((item) => (
             <a
               key={item.href}
               href={item.href}
-              className="interactive-surface rounded-md border border-border bg-card p-5"
+              className="interactive-surface min-w-0 wrap-anywhere rounded-md border border-border bg-card p-5"
             >
               <h3 className="font-semibold">{item.title}</h3>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.description}</p>

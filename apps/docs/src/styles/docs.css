@@ -1,5 +1,6 @@
 :root {
-  --sl-font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --sl-font:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --sl-color-accent-low: #123d3a;
   --sl-color-accent: #63d7cd;
   --sl-color-accent-high: #c5f4ef;
@@ -39,6 +40,7 @@ body {
 .site-title img {
   max-height: 2rem;
   width: auto;
+  border-radius: 6px;
 }
 
 .card {

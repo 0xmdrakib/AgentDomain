@@ -28,6 +28,15 @@ test('the complete public docs contract validates', async () => {
   assert.deepEqual(result, { files: 21, routes: 21, approvedAssets: 4 });
 });
 
+test('docs header logo uses display-only corners without changing its dimensions', async () => {
+  const css = await readFile(join(DOCS_ROOT, 'src', 'styles', 'docs.css'), 'utf8');
+  const logoRule = /\.site-title img\s*\{([^}]+)\}/.exec(css)?.[1];
+  assert.ok(logoRule, 'Expected the existing docs header logo rule');
+  assert.match(logoRule, /\bborder-radius:\s*6px\s*;/);
+  assert.match(logoRule, /\bmax-height:\s*2rem\s*;/);
+  assert.match(logoRule, /\bwidth:\s*auto\s*;/);
+});
+
 test('forbidden infrastructure and operator details are detected', () => {
   assert.deepEqual(findForbiddenMatches('DynamoDB and /api/v1/admin/agents'), [
     'private admin route',

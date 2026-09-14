@@ -84,7 +84,7 @@ export function Pricing() {
       <div className="container">
         <div className="mx-auto mb-12 max-w-2xl text-center sm:mb-16">
           <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
-            Live pricing for every domain
+            Live pricing for <span className="gradient-text">every domain</span>
           </h2>
           <p className="mt-4 text-sm text-muted-foreground sm:text-base">
             The checkout calculates the real total from the selected TLD, live registrar data,
