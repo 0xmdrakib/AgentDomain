@@ -141,10 +141,22 @@ test('public and connected navigation expose the tool without adding wallet code
   assert.match(read('components/landing/nav.tsx'), /href="\/verify"/);
   assert.match(read('lib/seo.ts'), /'\/verify'/);
   const component = read('components/verify/identity-verifier.tsx');
-  assert.match(component, /await inspectAgentIdentity\(input\)/);
+  assert.match(component, /await requestIdentityCheck\(input, controller.signal\)/);
   assert.doesNotMatch(
     component,
     /\bfetch\s*\(|setInterval|walletClient|writeContract|signTypedData|localStorage|sessionStorage/,
   );
   assert.doesNotMatch(component, /href=\{result\.(?:identity\.)?(?:metadataUri|basename|ensName)/);
+});
+
+test('rate limits have a bounded retry message and never echo upstream text', () => {
+  assert.equal(
+    inspectionFailure({ code: 'RATE_LIMITED', retryAfterSeconds: 60 }),
+    'Identity checks are rate-limited. Try again in 60 seconds.',
+  );
+  for (const retryAfterSeconds of [-1, 0, 3601, 'secret', NaN])
+    assert.equal(
+      inspectionFailure({ code: 'RATE_LIMITED', retryAfterSeconds }),
+      'Identity checks are rate-limited. Please wait before trying again.',
+    );
 });

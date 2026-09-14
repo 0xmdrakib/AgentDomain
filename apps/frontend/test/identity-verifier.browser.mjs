@@ -14,7 +14,11 @@ const {
   encodeErrorResult,
   parseAbi,
   multicall3Abi,
-} = require('viem');
+  createPublicClient,
+  custom,
+} = await import('viem');
+const { base } = await import('viem/chains');
+const { inspectAgentIdentity, inspectAgentRenewal } = await import('@agentdomain/sdk');
 const postcss = require('postcss');
 const tailwind = require('tailwindcss');
 const loadConfig = require('tailwindcss/loadConfig');
@@ -78,7 +82,7 @@ const block = {
   uncles: [],
 };
 
-// Only Next's image wrapper is replaced. The SDK and all RPC decoding/checks are real.
+// The API fixture runs the real SDK with synthetic RPC. Browser requests must stay same-origin.
 const bundle = await build({
   stdin: {
     contents: `import React from 'react'; import {createRoot} from 'react-dom/client';
@@ -147,7 +151,7 @@ try {
       hold: false,
       release: null,
     };
-    await context.route('**/*', async (route) => {
+    async function handleRoute(route, syntheticRpc = false) {
       const request = route.request(),
         url = new URL(request.url());
       if (url.origin === origin && url.pathname === '/verify')
@@ -163,7 +167,58 @@ try {
           body: await readFile(file),
         });
       }
-      if (url.href !== rpc) {
+      if (url.origin === origin && url.pathname === '/api/v1/public/identity-inspection') {
+        const { kind, ...input } = request.postDataJSON();
+        assert.equal(request.method(), 'POST');
+        assert.ok(['identity', 'renewal'].includes(kind));
+        if (fixture.scenario === 'rate-limited')
+          return route.fulfill({
+            status: 429,
+            headers: { 'Retry-After': '60' },
+            json: { code: 'RATE_LIMITED' },
+          });
+        const publicClient = createPublicClient({
+          chain: base,
+          ccipRead: false,
+          transport: custom(
+            {
+              async request(data) {
+                let envelope;
+                await handleRoute(
+                  {
+                    request: () => ({
+                      url: () => rpc,
+                      method: () => 'POST',
+                      postDataJSON: () => data,
+                    }),
+                    fulfill: ({ json }) => {
+                      envelope = json;
+                    },
+                  },
+                  true,
+                );
+                if (envelope.error)
+                  throw Object.assign(new Error(envelope.error.message), envelope.error);
+                return envelope.result;
+              },
+            },
+            { retryCount: 0 },
+          ),
+        });
+        try {
+          const result = await (kind === 'renewal' ? inspectAgentRenewal : inspectAgentIdentity)(
+            input,
+            { publicClient },
+          );
+          return route.fulfill({ json: result });
+        } catch (error) {
+          return route.fulfill({
+            status: error.code === 'INVALID_INPUT' ? 400 : 503,
+            json: { code: error.code ?? 'UNAVAILABLE' },
+          });
+        }
+      }
+      if (url.href !== rpc || !syntheticRpc) {
         fixture.unexpected.push(url.href);
         return route.abort();
       }
@@ -356,7 +411,8 @@ try {
         }
       }
       return route.fulfill({ json: { jsonrpc: '2.0', id: data.id, result } });
-    });
+    }
+    await context.route('**/*', (route) => handleRoute(route));
     const page = await context.newPage(),
       errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
@@ -505,6 +561,17 @@ try {
       await page.waitForTimeout(300);
       assert.equal(fixture.requests.length, count);
     }
+    fixture.scenario = 'rate-limited';
+    const beforeThrottle = fixture.requests.length;
+    await page.getByRole('button', { name: 'Check identity', exact: true }).click();
+    await page.getByRole('alert').waitFor();
+    assert.match(await page.getByRole('alert').innerText(), /rate-limited.*60 seconds/);
+    await page.waitForTimeout(250);
+    assert.equal(
+      fixture.requests.length,
+      beforeThrottle,
+      'A throttle response never falls back to direct RPC',
+    );
     fixture.scenario = 'found';
     await page.getByRole('button', { name: 'Token ID', exact: true }).click();
     await input.fill('01');
@@ -661,17 +728,21 @@ try {
     await readiness.getByRole('button', { name: 'Check renewal', exact: true }).click();
     await readiness.getByText('Reading renewal state', { exact: true }).waitFor();
     await page.waitForTimeout(100);
-    await input.fill('2');
+    assert.equal(await input.isDisabled(), true);
     assert.equal(
-      await readiness.count(),
-      0,
-      'Query editing discards renewal result and in-flight completion',
+      await page.getByRole('button', { name: 'Check identity', exact: true }).isDisabled(),
+      true,
     );
     fixture.release();
-    await page.waitForTimeout(700);
+    await readiness.getByText('Vault records consistent', { exact: true }).waitFor();
+    await input.fill('2');
     assert.equal(await readiness.count(), 0);
     assert.deepEqual(errors, []);
-    assert.deepEqual(fixture.unexpected, [], 'No metadata, wallet, API or other network requests');
+    assert.deepEqual(
+      fixture.unexpected,
+      [],
+      'No direct RPC, metadata, wallet or other network requests',
+    );
     completed.push({
       width,
       cases: [

@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-html-link-for-pages -- Match public navigation without prefetching the owner dashboard. */
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { inspectAgentRenewal } from '@agentdomain/sdk';
+import { requestRenewalCheck } from '@/lib/identity-check-client';
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -25,9 +25,11 @@ import {
 export function RenewalReadiness({
   tokenId,
   expectedOwner,
+  onRunningChange,
 }: {
   tokenId: string;
   expectedOwner?: string;
+  onRunningChange(running: boolean): void;
 }) {
   const [result, setResult] = useState<RenewalObservation | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -35,33 +37,41 @@ export function RenewalReadiness({
   const [feedback, setFeedback] = useState('');
   const inFlight = useRef(false);
   const sequence = useRef(0);
+  const activeRequest = useRef<AbortController | null>(null);
   useEffect(
     () => () => {
       sequence.current++;
+      activeRequest.current?.abort();
+      onRunningChange(false);
     },
-    [],
+    [onRunningChange],
   );
 
   async function inspect() {
     if (inFlight.current) return;
     inFlight.current = true;
     const request = ++sequence.current;
+    const controller = new AbortController();
+    activeRequest.current = controller;
     setRunning(true);
+    onRunningChange(true);
     setResult(null);
     setError(null);
     setFeedback('');
     try {
-      const observed = await inspectAgentRenewal({
-        tokenId,
-        ...(expectedOwner ? { expectedOwner } : {}),
-      });
+      const observed = await requestRenewalCheck(
+        { tokenId, ...(expectedOwner ? { expectedOwner } : {}) },
+        controller.signal,
+      );
       if (request === sequence.current) setResult(observed);
     } catch (failure) {
       if (request === sequence.current) setError(inspectionFailure(failure));
     } finally {
       if (request === sequence.current) {
         inFlight.current = false;
+        activeRequest.current = null;
         setRunning(false);
+        onRunningChange(false);
       }
     }
   }

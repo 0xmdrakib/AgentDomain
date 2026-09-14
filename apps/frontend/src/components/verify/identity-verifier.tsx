@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { inspectAgentIdentity } from '@agentdomain/sdk';
+import { requestIdentityCheck } from '@/lib/identity-check-client';
 import {
   AlertTriangle,
   Check,
@@ -44,15 +44,18 @@ export function IdentityVerifier() {
   const [query, setQuery] = useState('');
   const [expectedOwner, setExpectedOwner] = useState('');
   const [running, setRunning] = useState(false);
+  const [renewalRunning, setRenewalRunning] = useState(false);
   const [result, setResult] = useState<IdentityObservation | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState('');
   const inFlight = useRef(false);
   const sequence = useRef(0);
+  const activeRequest = useRef<AbortController | null>(null);
 
   useEffect(
     () => () => {
       sequence.current++;
+      activeRequest.current?.abort();
     },
     [],
   );
@@ -65,9 +68,11 @@ export function IdentityVerifier() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (inFlight.current || !query.trim()) return;
+    if (inFlight.current || renewalRunning || !query.trim()) return;
     inFlight.current = true;
     const request = ++sequence.current;
+    const controller = new AbortController();
+    activeRequest.current = controller;
     const input: IdentityInspectionInput = {
       ...(mode === 'domain' ? { domain: query.trim() } : { tokenId: query.trim() }),
       ...(expectedOwner.trim() ? { expectedOwner: expectedOwner.trim() } : {}),
@@ -75,13 +80,14 @@ export function IdentityVerifier() {
     clearObservation();
     setRunning(true);
     try {
-      const observation = await inspectAgentIdentity(input);
+      const observation = await requestIdentityCheck(input, controller.signal);
       if (request === sequence.current) setResult(observation);
     } catch (failure) {
       if (request === sequence.current) setError(inspectionFailure(failure));
     } finally {
       if (request === sequence.current) {
         inFlight.current = false;
+        activeRequest.current = null;
         setRunning(false);
       }
     }
@@ -113,7 +119,7 @@ export function IdentityVerifier() {
   return (
     <div className="min-w-0">
       <form onSubmit={submit} className="border-b border-border pb-8">
-        <fieldset disabled={running} className="min-w-0">
+        <fieldset disabled={running || renewalRunning} className="min-w-0">
           <legend className="sr-only">Identity lookup</legend>
           <div
             className="mb-5 inline-grid w-64 max-w-full grid-cols-2 rounded-md border border-input p-1"
@@ -180,7 +186,11 @@ export function IdentityVerifier() {
                 }}
               />
             </div>
-            <Button type="submit" disabled={running || !query.trim()} className="h-12 min-w-44">
+            <Button
+              type="submit"
+              disabled={running || renewalRunning || !query.trim()}
+              className="h-12 min-w-44"
+            >
               {running ? (
                 <LoaderCircle
                   className="h-4 w-4 animate-spin motion-reduce:animate-none"
@@ -242,6 +252,7 @@ export function IdentityVerifier() {
           key={`${result.tokenId}:${result.block.hash}:${result.input.expectedOwner ?? ''}`}
           tokenId={result.tokenId}
           expectedOwner={result.input.expectedOwner}
+          onRunningChange={setRenewalRunning}
         />
       )}
     </div>

@@ -47,7 +47,10 @@ test('readiness exposes a single explicit read and keeps owner execution in the 
     new URL('../src/components/verify/renewal-readiness.tsx', import.meta.url),
     'utf8',
   );
-  assert.equal(source.match(/await inspectAgentRenewal\(/g)?.length, 1);
+  assert.equal(source.match(/await requestRenewalCheck\(/g)?.length, 1);
+  assert.match(source, /controller.signal/);
+  assert.match(source, /onRunningChange\(true\)/);
+  assert.doesNotMatch(source, /from '@agentdomain\/sdk'/);
   assert.doesNotMatch(
     source,
     /setInterval|localStorage|sessionStorage|useAccount|useWallet|executeAutoRenewChange|prepareAutoRenewChange|sendTransaction|signTypedData/,
