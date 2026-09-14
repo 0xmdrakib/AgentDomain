@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import re
+import shutil
 import stat
 import subprocess
 import sys
@@ -152,13 +153,44 @@ def verify_python(root):
     manifest = json.loads((root / "release.json").read_bytes())
     require(manifest == {"schema": 1, "repository": "0xmdrakib/AgentDomain", "sha": os.environ.get("GITHUB_SHA"), "version": VERSION, "files": python_inventory(root)})
     require(os.environ.get("GITHUB_REPOSITORY") == manifest["repository"] and os.environ.get("GITHUB_REF") == "refs/heads/main")
+    return manifest
+
+
+def stage_python(root, project):
+    require(project in ("all", *PYTHON_PACKAGES))
+    require(root.is_dir() and not root.is_symlink())
+    # Selection never narrows the sealed input inventory or its validation.
+    manifest = verify_python(root)
+    selected = [row for row in manifest["files"] if project == "all" or row["project"] == project]
+    directory = root / "publish-dist"
+    directory.mkdir(exist_ok=False)
+    for row in selected:
+        require(directory.is_dir() and not directory.is_symlink())
+        source = root / "dist" / row["filename"]
+        require(source.is_file() and not source.is_symlink() and source.stat().st_size == row["bytes"])
+        with source.open("rb") as original, (directory / row["filename"]).open("xb") as staged:
+            shutil.copyfileobj(original, staged)
+    require(directory.is_dir() and not directory.is_symlink())
+    require({path.name for path in directory.iterdir()} == {row["filename"] for row in selected})
+    require([inspect_python(directory / row["filename"], row["project"]) for row in selected] == selected)
+    require(verify_python(root) == manifest)
+    return selected
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=("build-python", "verify-python", "verify-npm"))
+    parser = argparse.ArgumentParser(allow_abbrev=False)
+    parser.add_argument("command", choices=("build-python", "verify-python", "stage-python", "verify-npm"))
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--project", choices=("all", *PYTHON_PACKAGES))
     args = parser.parse_args()
+    if args.command == "stage-python":
+        if args.project is None:
+            parser.error("stage-python requires --project")
+        selected = stage_python(args.output.absolute(), args.project)
+        print(f"Staged {len(selected)} verified Python artifacts for {args.project}.")
+        return
+    if args.project is not None:
+        parser.error("--project is only valid with stage-python")
     root = args.output.resolve()
     {"build-python": build_python, "verify-python": verify_python, "verify-npm": inspect_npm}[args.command](root)
 
