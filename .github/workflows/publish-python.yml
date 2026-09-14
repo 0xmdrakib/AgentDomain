@@ -2,6 +2,16 @@ name: Publish Python packages
 
 on:
   workflow_dispatch:
+    inputs:
+      project:
+        description: Python project to publish after validating all four distributions
+        required: true
+        type: choice
+        default: all
+        options:
+          - all
+          - agentdomain-crewai
+          - agentdomain-autogen
 
 permissions:
   contents: read
@@ -113,22 +123,24 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12'
-      - name: Verify immutable artifacts and exact source before requesting PyPI credentials
+      - name: Verify all immutable artifacts and stage selection before requesting PyPI credentials
         shell: bash
         env:
           EXPECTED_RELEASE_MANIFEST_SHA256: ${{ needs.validate.outputs.release-manifest-sha256 }}
           EXPECTED_VERIFIER_SHA256: ${{ needs.validate.outputs.verifier-sha256 }}
+          PROJECT_TO_PUBLISH: ${{ inputs.project }}
         run: |
           set -euo pipefail
           [[ "$EXPECTED_VERIFIER_SHA256" =~ ^[0-9a-f]{64}$ ]]
           printf '%s  release-inputs/verifier.py\n' "$EXPECTED_VERIFIER_SHA256" | sha256sum --check --status
-          python -B release-inputs/verifier.py verify-python --output release-inputs
-      # Configure pending publishers for both exact project names against this
-      # workflow and pypi-production. No password/token fallback is accepted.
-      - name: Publish four verified distributions and OIDC attestations
+          python -B release-inputs/verifier.py stage-python --output release-inputs --project "$PROJECT_TO_PUBLISH"
+      # Bootstrap CrewAI first, then register AutoGen's pending publisher after
+      # CrewAI converts. Keep this workflow/pypi-production tuple for both;
+      # use all for future new versions. No password/token fallback is accepted.
+      - name: Publish selected verified distributions and OIDC attestations
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
         with:
-          packages-dir: release-inputs/dist/
+          packages-dir: release-inputs/publish-dist/
           attestations: true
           skip-existing: false
           print-hash: true
