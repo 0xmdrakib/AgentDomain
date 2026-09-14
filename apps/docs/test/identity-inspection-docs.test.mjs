@@ -5,17 +5,28 @@ import test from 'node:test';
 const doc = (name) =>
   readFile(new URL(`../src/content/docs/sdk/${name}.mdx`, import.meta.url), 'utf8');
 
-test('inspection docs pin 0.11.0 release candidates without claiming registry publication', async () => {
+test('the release catalog distinguishes five verified npm releases from three source candidates', async () => {
+  const readme = await readFile(new URL('../../../README.md', import.meta.url), 'utf8');
+  const rows = readme.split('\n').filter((line) => /^\| \[/.test(line));
+  assert.equal(rows.filter((line) => /\| Published 0\.11\.0\s*\|/.test(line)).length, 5);
+  assert.equal(rows.filter((line) => /\| Source candidate 0\.11\.0\s*\|/.test(line)).length, 3);
+  const changelog = await readFile(new URL('../../../CHANGELOG.md', import.meta.url), 'utf8');
+  assert.match(changelog, /## npm 0\.11\.0 - 2026-09-14/);
+  assert.match(changelog, /five packages before stopping at the first LangChain/);
+  assert.match(changelog, /post-event publication update/);
+});
+
+test('inspection docs pin verified 0.11.0 releases without treating the source catalog as registry proof', async () => {
   const sdk = await doc('typescript');
   const mcp = await doc('mcp');
   assert.match(sdk, /npm install @agentdomain\/sdk@0\.11\.0 viem@2\.56\.3/);
   assert.match(mcp, /npm install --global @agentdomain\/mcp-server@0\.11\.0/);
-  assert.match(sdk, /0\.11\.0 is a release candidate/);
-  assert.match(mcp, /0\.11\.0 is a release candidate/);
+  assert.match(sdk, /0\.11\.0 is published on npm/);
+  assert.match(mcp, /0\.11\.0 is published on npm/);
   assert.match(sdk, /source manifest does not query or establish registry publication/);
   assert.match(mcp, /source metadata, not a\s+registry availability check/);
   for (const source of [sdk, mcp]) {
-    assert.doesNotMatch(source, /0\.11\.0 is published|published (?:SDK|MCP) 0\.11\.0/);
+    assert.doesNotMatch(source, /0\.11\.0 is a release candidate/);
     assert.doesNotMatch(source, /source-build target|new source-checkout (?:feature|export)/);
     assert.doesNotMatch(source, /independent-identity-inspection-source-checkout/);
   }

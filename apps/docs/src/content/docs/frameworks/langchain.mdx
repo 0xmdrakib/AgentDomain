@@ -10,9 +10,9 @@ plain objects that only resemble tool definitions.
 
 ## Native JavaScript tools
 
-`@agentdomain/langchain-plugin`, SDK and MCP target **0.11.0 release candidates**.
-Publication of these versions is not yet verified. For the native plugin,
-build the reviewed workspace:
+`@agentdomain/langchain-plugin` remains a **0.11.0 release candidate**; its npm
+publication is not yet verified. SDK and MCP **0.11.0 are published on npm**.
+For the native LangChain plugin, build the reviewed workspace:
 
 ```bash
 pnpm --filter @agentdomain/shared build
@@ -75,8 +75,8 @@ An explicit session keeps related calls in the same subprocess and closes it
 when the context exits. The adapter dependency must be qualified independently
 of the JavaScript plugin; it is not bundled into an npm Python runtime.
 
-This Python bridge can use the MCP 0.11.0 source build without the JavaScript
-plugin. After publication is verified it can also use the installed package.
+This Python bridge can use the published MCP 0.11.0 without the JavaScript
+plugin. Source builds remain available for development.
 Point `server_path` below to its reviewed local
 `node_modules/@agentdomain/mcp-server/dist/index.js` entry or a source build.
 

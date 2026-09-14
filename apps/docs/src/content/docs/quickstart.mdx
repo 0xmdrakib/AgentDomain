@@ -3,19 +3,22 @@ title: Quickstart
 description: Quote and register an AgentDomain identity with the TypeScript SDK and a connected wallet.
 ---
 
-This example targets the `@agentdomain/sdk` 0.11.0 release candidate on Base mainnet. Supply a wallet account from your
+This example uses the published `@agentdomain/sdk` 0.11.0 on Base mainnet. Supply a wallet account from your
 application's secure wallet integration; never commit wallet material to source control.
 
 ## Install
 
 ```bash
+npm install @agentdomain/sdk@0.11.0 viem@2.56.3
+```
+
+For workspace development, build the shared and SDK packages from the reviewed
+repository root instead:
+
+```bash
 pnpm --filter @agentdomain/shared build
 pnpm --filter @agentdomain/sdk build
 ```
-
-Those commands build the reviewed source checkout before publication. Once the
-0.11.0 npm release is verified, applications can instead run
-`npm install @agentdomain/sdk@0.11.0 viem@2.56.3`.
 
 ## Quote and register
 

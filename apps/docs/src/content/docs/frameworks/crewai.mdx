@@ -12,19 +12,19 @@ opens and closes a local stdio client for each invocation. See
 ## Install the Python package
 
 `agentdomain-crewai` is a standalone Python distribution using CrewAI's native
-tools. It and the Node MCP server target **0.11.0 release candidates**, not
-verified PyPI or npm releases. Use an isolated Python 3.12 environment. Before
-publication, install the reviewed package from the repository root:
+tools. Its **0.11.0 release candidate** is not yet published on PyPI. The Node
+MCP server **0.11.0 is published on npm**. Use an isolated Python 3.12 environment
+and install the reviewed Python package from the repository root:
 
 ```bash
 python -m pip install ./packages/crewai-plugin
+npm install --save-exact @agentdomain/mcp-server@0.11.0
 ```
 
-After both registry releases are verified, the normal pinned installs are:
+After the Python registry release is verified, the pinned Python install is:
 
 ```bash
 python -m pip install agentdomain-crewai==0.11.0
-npm install --save-exact @agentdomain/mcp-server@0.11.0
 ```
 
 The Python package does not download Node.js or install the MCP server. Those
