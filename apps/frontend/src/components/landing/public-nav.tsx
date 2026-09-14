@@ -50,7 +50,7 @@ export function PublicNav() {
         </div>
 
         <details className="group static xl:hidden">
-          <summary className="touch-target flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-md border border-border/80 bg-card/70 text-muted-foreground shadow-sm transition hover:border-primary/45 hover:bg-accent hover:text-foreground marker:content-none">
+          <summary className="flex h-10 w-10 shrink-0 cursor-pointer list-none items-center justify-center rounded-md border border-border/80 bg-card/70 text-muted-foreground shadow-sm transition hover:border-primary/45 hover:bg-accent hover:text-foreground marker:content-none">
             <Menu className="h-5 w-5 group-open:hidden" aria-hidden />
             <X className="hidden h-5 w-5 group-open:block" aria-hidden />
             <span className="sr-only group-open:hidden">Open navigation</span>

@@ -64,4 +64,45 @@ for (const filename of ['nav.tsx', 'public-nav.tsx']) {
     assert.match(source, /<Menu\b/);
     assert.match(source, /<X\b/);
   });
+
+  test(`${filename} keeps the mobile menu toggle square without the taller touch-target override`, async () => {
+    const source = await readFile(
+      new URL(`../src/components/landing/${filename}`, import.meta.url),
+      'utf8',
+    );
+    const tree = ts.createSourceFile(
+      filename,
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TSX,
+    );
+    const toggles = [];
+    function collect(node) {
+      if (
+        ts.isJsxOpeningElement(node) &&
+        ['summary', 'button'].includes(node.tagName.getText(tree))
+      ) {
+        const attributes = new Map(
+          node.attributes.properties
+            .filter(ts.isJsxAttribute)
+            .map((attribute) => [attribute.name.getText(tree), attribute.initializer]),
+        );
+        const label = attributes.get('aria-label');
+        if (
+          node.tagName.getText(tree) === 'summary' ||
+          (label && ts.isStringLiteral(label) && label.text === 'Toggle navigation')
+        ) {
+          const className = attributes.get('className');
+          assert.ok(className && ts.isStringLiteral(className));
+          toggles.push(className.text.split(/\s+/));
+        }
+      }
+      ts.forEachChild(node, collect);
+    }
+    collect(tree);
+    assert.equal(toggles.length, 1);
+    for (const token of ['h-10', 'w-10', 'shrink-0']) assert.ok(toggles[0].includes(token));
+    assert.ok(!toggles[0].includes('touch-target'));
+  });
 }

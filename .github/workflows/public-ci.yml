@@ -144,3 +144,24 @@ jobs:
 
       - name: Build and dry-run Cloudflare artifacts on Linux
         run: pnpm ci:cloudflare
+
+      - name: Exercise generated footer routes in the Cloudflare runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm --dir apps/frontend exec opennextjs-cloudflare preview --env preview --ip 127.0.0.1 --port 8790 >"$RUNNER_TEMP/frontend-worker.log" 2>&1 &
+          worker_pid=$!
+          trap 'kill "$worker_pid" 2>/dev/null || true' EXIT
+          ready=false
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --max-time 2 --output /dev/null http://127.0.0.1:8790/terms; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then
+            cat "$RUNNER_TEMP/frontend-worker.log"
+            exit 1
+          fi
+          node apps/frontend/test/footer-routes.smoke.mjs http://127.0.0.1:8790
