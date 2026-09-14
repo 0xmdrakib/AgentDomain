@@ -72,11 +72,16 @@ At the September 13 checkpoint, their registry publication was not yet verified.
 publication and UI/docs deployment are historical evidence only, linked in
 [BUILT_DURING_ETHONLINE.md](BUILT_DURING_ETHONLINE.md#release-and-demo-evidence).
 
-**Post-event update, September 14:** six npm packages are published at 0.11.0;
-the two Python distributions remain unpublished source candidates. The
-[dated changelog](CHANGELOG.md#langchain-0110---2026-09-14-follow-up) records the
-publication and provenance evidence. This later release work does not extend
-the event contribution window or substitute for the founder's final approval.
+**Post-event update, September 14:** all eight packages are published at 0.11.0:
+**six npm packages and two PyPI packages**, `agentdomain-crewai` and
+`agentdomain-autogen`. The
+[dated Python changelog](CHANGELOG.md#python-0110---2026-09-14-follow-up) records the
+registry and CI artifact evidence and verified cryptographic attestations for
+both Python releases.
+[LangChain's first local publication](CHANGELOG.md#langchain-0110---2026-09-14-follow-up)
+has no OIDC provenance; the five earlier npm releases have verified GitHub OIDC
+provenance. This later release work does not extend the event contribution
+window or substitute for the founder's final approval.
 
 These are feature-specific public specifications, not copies of operational
 planning or production configuration. No credentials, customer information,

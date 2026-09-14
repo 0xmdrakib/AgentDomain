@@ -15,12 +15,16 @@ frontend/docs deployment remain historical evidence, not a claim that 0.11.0
 is published or deployed. The founder's hands-on
 review, original voice recording and final submission approval remain required.
 
-**Post-event update, September 14:** all six npm packages are now published at
-0.11.0. The two Python packages remain unpublished source candidates. See the
-[dated changelog](CHANGELOG.md#langchain-0110---2026-09-14-follow-up) for current
-registry evidence and the distinction between LangChain's first local publication
-and the five GitHub OIDC releases. This follow-up does not change the event-period
-implementation history or establish final demo/submission approval.
+**Post-event update, September 14:** all eight packages are published at 0.11.0:
+**six npm packages and two PyPI packages**, `agentdomain-crewai` and
+`agentdomain-autogen`. The
+[dated Python changelog](CHANGELOG.md#python-0110---2026-09-14-follow-up) records the
+registry and CI artifact evidence and verified cryptographic attestations for
+both Python releases.
+[LangChain's first local publication](CHANGELOG.md#langchain-0110---2026-09-14-follow-up)
+has no OIDC provenance; the five earlier npm releases have verified GitHub OIDC
+provenance. This follow-up does not change the event-period implementation
+history or establish final demo/submission approval.
 
 The Python package directories now own their framework implementations; the
 retained MCP examples are thin entrypoints. They use the existing Node MCP
