@@ -96,7 +96,10 @@ export function Footer() {
                 </a>
               </li>
               <li>
-                <a href="/integrations/coinbase-agentkit" className="hover:text-foreground">
+                <a
+                  href="https://docs.agentdomain.app/frameworks/agentkit/"
+                  className="hover:text-foreground"
+                >
                   Coinbase AgentKit
                 </a>
               </li>
@@ -128,6 +131,11 @@ export function Footer() {
                   Privacy Policy
                 </a>
               </li>
+              <li>
+                <a href="https://x.com/AgentDomainApp" className="hover:text-foreground">
+                  X (Twitter)
+                </a>
+              </li>
             </ul>
           </div>
         </div>
@@ -137,7 +145,7 @@ export function Footer() {
             <span className="text-sm font-semibold">AgentDomain</span>
           </a>
           <p className="text-xs text-muted-foreground mt-4 md:mt-0">
-            © {new Date().getFullYear()} AgentDomain. Built on Base.
+            © {new Date().getFullYear()} AgentDomain. All rights reserved.
           </p>
         </div>
       </div>

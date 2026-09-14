@@ -6,7 +6,7 @@ import ts from 'typescript';
 const expectedMcpLink = 'https://docs.agentdomain.app/sdk/mcp/';
 const footerUrl = new URL('../src/components/landing/footer.tsx', import.meta.url);
 
-function mcpFooterLinks(source) {
+function footerLinks(source) {
   const tree = ts.createSourceFile(
     'footer.tsx',
     source,
@@ -27,12 +27,12 @@ function mcpFooterLinks(source) {
         .join('')
         .replace(/\s+/g, ' ')
         .trim();
-      if (label === 'MCP integration') {
+      if (label) {
         const href = node.openingElement.attributes.properties.find(
           (attribute) => ts.isJsxAttribute(attribute) && attribute.name.getText(tree) === 'href',
         );
         assert.ok(href?.initializer && ts.isStringLiteral(href.initializer));
-        links.push(href.initializer.text);
+        links.push({ label, href: href.initializer.text });
       }
     }
     ts.forEachChild(node, collect);
@@ -40,6 +40,40 @@ function mcpFooterLinks(source) {
   collect(scopes[0]);
   return links;
 }
+
+function mcpFooterLinks(source) {
+  return footerLinks(source)
+    .filter((link) => link.label === 'MCP integration')
+    .map((link) => link.href);
+}
+
+test('footer publishes the exact product, identity, infrastructure, developer and company destinations', async () => {
+  const source = await readFile(footerUrl, 'utf8');
+  assert.deepEqual(footerLinks(source), [
+    { label: 'Register', href: '/register' },
+    { label: 'Registry', href: '/registry' },
+    { label: 'Dashboard', href: '/dashboard' },
+    { label: 'Pricing', href: '/#pricing' },
+    { label: 'AI agent identity', href: '/ai-agent-identity' },
+    { label: 'Agent domains', href: '/domains-for-ai-agents' },
+    { label: 'Onchain identity', href: '/onchain-agent-identity' },
+    { label: 'Autonomous renewals', href: '/autonomous-agent-renewals' },
+    { label: 'Agent email', href: '/email-for-ai-agents' },
+    { label: 'Programmable DNS', href: '/dns-for-ai-agents' },
+    { label: 'Registration API', href: '/domain-registration-api' },
+    { label: 'x402 payments', href: '/x402-agent-payments' },
+    { label: 'Documentation', href: 'https://docs.agentdomain.app' },
+    { label: 'MCP integration', href: expectedMcpLink },
+    { label: 'Coinbase AgentKit', href: 'https://docs.agentdomain.app/frameworks/agentkit/' },
+    { label: 'GitHub', href: 'https://github.com/0xmdrakib/AgentDomain' },
+    { label: 'Home', href: '/' },
+    { label: 'Terms of Service', href: '/terms' },
+    { label: 'Privacy Policy', href: '/privacy' },
+    { label: 'X (Twitter)', href: 'https://x.com/AgentDomainApp' },
+  ]);
+  assert.match(source, /AgentDomain\. All rights reserved\./);
+  assert.doesNotMatch(source, /Built on Base\./);
+});
 
 test('shared responsive footer links MCP integration to the exact published docs target', async () => {
   const source = await readFile(footerUrl, 'utf8');

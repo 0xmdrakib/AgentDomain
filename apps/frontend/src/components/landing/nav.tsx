@@ -61,7 +61,7 @@ export function LandingNav() {
         </div>
         <button
           type="button"
-          className="touch-target inline-flex h-10 w-10 items-center justify-center rounded-md border border-border/80 bg-card/70 text-muted-foreground shadow-sm transition hover:border-primary/45 hover:bg-accent hover:text-foreground xl:hidden"
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border/80 bg-card/70 text-muted-foreground shadow-sm transition hover:border-primary/45 hover:bg-accent hover:text-foreground xl:hidden"
           onClick={() => setOpen((next) => !next)}
           aria-expanded={open}
           aria-label="Toggle navigation"
