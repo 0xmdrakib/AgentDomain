@@ -91,7 +91,7 @@ export function Footer() {
                 </a>
               </li>
               <li>
-                <a href="/integrations/mcp" className="hover:text-foreground">
+                <a href="https://docs.agentdomain.app/sdk/mcp/" className="hover:text-foreground">
                   MCP integration
                 </a>
               </li>
