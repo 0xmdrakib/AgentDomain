@@ -8,7 +8,8 @@ import { Menu, X } from 'lucide-react';
 import { BrandMark } from '@/components/brand/brand-mark';
 
 const WALLET_DIALOG_OPEN_ATTR = 'data-agentdomain-wallet-dialog-open';
-const WALLET_DIALOG_SELECTOR = '[data-agentdomain-wallet-dialog="true"]';
+const WALLET_DIALOG_SELECTOR =
+  '[data-agentdomain-wallet-dialog="true"], [data-agentdomain-wallet-menu="true"]';
 
 export function LandingNav() {
   const [open, setOpen] = useState(false);
