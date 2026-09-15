@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readEip6963ProviderDetail, walletIconSource } from '../src/lib/wallet-discovery';
+import {
+  compareWalletProviders,
+  isVisibleWalletProvider,
+  readEip6963ProviderDetail,
+  walletIconSource,
+} from '../src/lib/wallet-discovery';
 
 const provider = { request: async () => [] };
 const icon = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>';
@@ -84,4 +89,59 @@ test('markup-like names remain plain display data, not HTML or trusted wallet id
   const detail = readEip6963ProviderDetail({ info: { ...info, name }, provider });
   assert.equal(detail?.info.name, name);
   assert.equal(detail?.provider, provider);
+});
+
+test('accepts Phantom-style outer whitespace without modifying image data or admitting other URLs', () => {
+  const png = 'data:image/png;base64,iVBORw0KGgo=';
+  assert.equal(walletIconSource(`\n${png}`), png);
+  assert.equal(walletIconSource(` \t${png}\r\n`), png);
+  assert.equal(walletIconSource(`\n${icon}\n`), icon);
+  assert.equal(walletIconSource(' \nhttps://tracker.invalid/icon.png\n'), undefined);
+  assert.equal(walletIconSource(' \njavascript:alert(1)\n'), undefined);
+  assert.equal(walletIconSource(`data:image/\npng;base64,eA==`), undefined);
+  assert.equal(walletIconSource(`${' '.repeat(256 * 1024)}${png}`), undefined);
+  const detail = readEip6963ProviderDetail({
+    info: { ...info, name: 'Phantom', rdns: 'app.phantom', icon: `\n${png}` },
+    provider,
+  });
+  assert.equal(detail?.info.icon, png);
+  assert.equal(detail?.info.name, 'Phantom');
+});
+
+test('prioritizes familiar EVM wallets, retains Backpack and excludes only Keplr', () => {
+  const entries = [
+    ['Keplr', 'app.keplr'],
+    ['Phantom', 'app.phantom'],
+    ['Backpack', 'app.backpack'],
+    ['Coinbase Wallet', 'com.coinbase.wallet'],
+    ['Rabby Wallet', 'io.rabby'],
+    ['MetaMask', 'io.metamask'],
+    ['Other Wallet', 'org.other'],
+  ].map(([name, rdns]) => ({ info: { ...info, name, rdns }, provider }));
+  const sorted = entries.filter(isVisibleWalletProvider).sort(compareWalletProviders);
+  assert.deepEqual(
+    sorted.map((item) => item.info.name),
+    ['MetaMask', 'Rabby Wallet', 'Coinbase Wallet', 'Phantom', 'Backpack', 'Other Wallet'],
+  );
+  assert.equal(sorted.length, entries.length - 1);
+  assert.ok(sorted.every((item) => entries.includes(item)));
+  assert.equal(isVisibleWalletProvider({ info: { ...info, rdns: 'APP.KEPLR' }, provider }), false);
+});
+
+test('accepts the installed Backpack UUIDv5 without treating metadata as authentication', () => {
+  const backpack = {
+    ...info,
+    uuid: '4194b504-b5f1-5a4c-8732-0e1a34475ad0',
+    name: 'Backpack',
+    rdns: 'app.backpack',
+  };
+  const detail = readEip6963ProviderDetail({ info: backpack, provider });
+  assert.deepEqual(detail?.info, backpack);
+  assert.equal(detail?.provider, provider);
+  for (const uuid of [
+    '4194b504-b5f1-0a4c-8732-0e1a34475ad0',
+    '4194b504-b5f1-9a4c-8732-0e1a34475ad0',
+    '4194b504-b5f1-5a4c-1732-0e1a34475ad0',
+  ])
+    assert.equal(readEip6963ProviderDetail({ info: { ...backpack, uuid }, provider }), null);
 });

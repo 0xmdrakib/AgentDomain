@@ -12,7 +12,10 @@ import { Button, type ButtonProps } from '@/components/ui/button';
 import { getBaseChainSwitchCopy } from '@/lib/base-chain';
 import { clearWalletConnectionStorage } from '@/lib/wagmi';
 import {
+  compareWalletProviders,
+  isVisibleWalletProvider,
   readEip6963ProviderDetail,
+  walletIconSource,
   type Eip6963ProviderDetail,
   type InjectedProvider,
 } from '@/lib/wallet-discovery';
@@ -128,7 +131,7 @@ export function ConnectWalletButton({
             provider.info.uuid === detail.info.uuid || provider.provider === detail.provider,
         );
         if (exists) return current;
-        return [...current, detail].sort((a, b) => a.info.name.localeCompare(b.info.name));
+        return [...current, detail].sort(compareWalletProviders);
       });
     }
 
@@ -225,7 +228,7 @@ export function ConnectWalletButton({
   const injectedOptions = useMemo(() => {
     if (typeof window === 'undefined') return [];
 
-    const eip6963Options = eip6963Providers.map((detail) => {
+    const eip6963Options = eip6963Providers.filter(isVisibleWalletProvider).map((detail) => {
       return {
         id: detail.info.uuid,
         name: detail.info.name,
@@ -244,7 +247,8 @@ export function ConnectWalletButton({
       } satisfies InjectedWalletOption;
     });
 
-    if (eip6963Options.length > 0) return eip6963Options;
+    // Do not expose an excluded discovered wallet again through legacy fallback.
+    if (eip6963Providers.length > 0) return eip6963Options;
 
     const knownOptions = INJECTED_WALLET_ORDER.map((id) => {
       const connector = connectors.find((item) => item.id === id);
@@ -252,6 +256,7 @@ export function ConnectWalletButton({
       if (!connector || !meta || !isInjectedWalletAvailable(id)) return null;
       return {
         ...meta,
+        iconUrl: walletIconSource(connector.icon),
         connector,
         pendingId: connector.uid,
       } satisfies InjectedWalletOption;
@@ -267,6 +272,7 @@ export function ConnectWalletButton({
           name: 'Browser Wallet',
           connector: browserConnector,
           pendingId: browserConnector.uid,
+          iconUrl: walletIconSource(browserConnector.icon),
           fallback: 'W',
         },
       ] satisfies InjectedWalletOption[];
