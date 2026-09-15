@@ -310,6 +310,39 @@ try {
     );
     await activate(page.getByRole('button', { name: /^Injected Wallet/ }));
     assert.equal(await overlay.getByRole('button', { name: malicious, exact: true }).count(), 1);
+    await page.evaluate(
+      ({ icon }) => {
+        const wallets = [
+          ['Keplr', 'app.keplr', 'a50670db-19fa-4704-a166-e52e178b59d2'],
+          ['Backpack', 'app.backpack', '4194b504-b5f1-5a4c-8732-0e1a34475ad0'],
+          ['Phantom', 'app.phantom', 'fae43c5a-52fe-4998-b254-974f531df424'],
+          ['Rabby Wallet', 'io.rabby', 'b50670db-19fa-4704-a166-e52e178b59d2'],
+          ['MetaMask', 'io.metamask', 'c50670db-19fa-4704-a166-e52e178b59d2'],
+        ];
+        for (const [name, rdns, uuid] of wallets)
+          window.fixture.announce({
+            info: { name, rdns, uuid, icon: name === 'Phantom' ? '\n' + icon : icon },
+            provider: { ...window.fixture.provider, isCoinbaseWallet: undefined },
+          });
+      },
+      { icon },
+    );
+    await overlay.getByRole('button', { name: 'Backpack', exact: true }).waitFor();
+    assert.deepEqual((await overlay.locator('button bdi').allTextContents()).slice(0, 5), [
+      'MetaMask',
+      'Rabby Wallet',
+      'Coinbase Wallet',
+      'Phantom',
+      'Backpack',
+    ]);
+    assert.equal(await overlay.getByRole('button', { name: 'Keplr', exact: true }).count(), 0);
+    assert.equal(
+      await overlay
+        .getByRole('button', { name: 'Phantom', exact: true })
+        .locator('img')
+        .getAttribute('src'),
+      icon,
+    );
     assert.equal(
       await overlay.getByRole('button', { name: malicious, exact: true }).locator('img').count(),
       0,

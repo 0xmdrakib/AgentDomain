@@ -14,20 +14,41 @@ export type Eip6963ProviderDetail = {
 
 const MAX_WALLET_NAME_LENGTH = 128;
 const MAX_WALLET_ICON_LENGTH = 256 * 1024;
+const WALLET_PRIORITY = [
+  'io.metamask',
+  'io.rabby',
+  'com.coinbase.wallet',
+  'app.phantom',
+  'app.backpack',
+];
+
+export function isVisibleWalletProvider(detail: Eip6963ProviderDetail): boolean {
+  return detail.info.rdns.toLowerCase() !== 'app.keplr';
+}
+
+export function compareWalletProviders(a: Eip6963ProviderDetail, b: Eip6963ProviderDetail): number {
+  const priority = (rdns: string) => {
+    const index = WALLET_PRIORITY.indexOf(rdns.toLowerCase());
+    return index < 0 ? WALLET_PRIORITY.length : index;
+  };
+  return priority(a.info.rdns) - priority(b.info.rdns) || a.info.name.localeCompare(b.info.name);
+}
 
 export function walletIconSource(value: unknown): string | undefined {
   if (typeof value !== 'string' || value.length > MAX_WALLET_ICON_LENGTH) return;
+  // Phantom announces its PNG with leading whitespace; normalize the URL, not the image.
+  const source = value.trim();
   // EIP-6963 icons are data images. Never fetch a provider-controlled tracking URL,
   // and render SVG only as an <img>, never as inline markup or an embedded document.
-  const comma = value.indexOf(',');
-  if (comma < 0 || comma === value.length - 1) return;
-  const header = value.slice(0, comma).toLowerCase();
+  const comma = source.indexOf(',');
+  if (comma < 0 || comma === source.length - 1) return;
+  const header = source.slice(0, comma).toLowerCase();
   if (
     /^data:image\/(?:png|webp|svg\+xml|jpeg|gif)(?:;charset=(?:utf-8|us-ascii))?(?:;base64)?$/.test(
       header,
     )
   )
-    return value;
+    return source;
 }
 
 export function readEip6963ProviderDetail(value: unknown): Eip6963ProviderDetail | null {
@@ -36,9 +57,10 @@ export function readEip6963ProviderDetail(value: unknown): Eip6963ProviderDetail
     const { info, provider } = value as Eip6963ProviderDetail;
     if (!info || !provider || typeof provider.request !== 'function') return null;
     const { uuid, name, rdns } = info;
+    // Backpack supplies a UUIDv5. This display/deduplication key is not authentication.
     if (
       typeof uuid !== 'string' ||
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uuid) ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uuid) ||
       typeof name !== 'string' ||
       !name.trim() ||
       name.length > MAX_WALLET_NAME_LENGTH ||
