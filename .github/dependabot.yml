@@ -21,3 +21,14 @@ updates:
       time: '04:30'
       timezone: Etc/UTC
     open-pull-requests-limit: 5
+    groups:
+      # CodeQL subactions share a configuration format and must use the same release.
+      codeql-actions:
+        patterns:
+          - github/codeql-action
+          - github/codeql-action/*
+      codeql-security-updates:
+        applies-to: security-updates
+        patterns:
+          - github/codeql-action
+          - github/codeql-action/*
