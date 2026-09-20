@@ -32,9 +32,9 @@ const expected = [
   ['get', '/api/v1/agents/{id}/dns/export', 'exportDnsZone', ['200'], 'agent'],
   ['get', '/api/v1/agents/{id}/email', 'listEmail', ['200'], 'agent'],
   ['delete', '/api/v1/agents/{id}/email/{messageId}', 'deleteEmail', ['200'], 'agent'],
-  ['patch', '/api/v1/agents/{id}/email', 'replacePrimaryEmail', ['200'], 'agent'],
-  ['post', '/api/v1/agents/{id}/email/aliases', 'createEmailAlias', ['201'], 'agent'],
-  ['delete', '/api/v1/agents/{id}/email/aliases', 'deleteEmailAlias', ['200'], 'agent'],
+  ['patch', '/api/v1/agents/{id}/email', 'replacePrimaryEmail', ['200', '202'], 'agent'],
+  ['post', '/api/v1/agents/{id}/email/aliases', 'createEmailAlias', ['200', '201', '202'], 'agent'],
+  ['delete', '/api/v1/agents/{id}/email/aliases', 'deleteEmailAlias', ['200', '202'], 'agent'],
   ['post', '/api/v1/agents/{id}/email/send', 'sendEmail', ['201', '202'], 'agent'],
   ['post', '/api/v1/agents/{id}/email/batch', 'sendEmailBatch', ['202'], 'agent'],
   ['get', '/api/v1/agents/{id}/email/usage', 'getEmailUsage', ['200'], 'agent'],
@@ -84,6 +84,30 @@ function assertMatrix(operations) {
 
 test('all 34 documented HTTP operations have exact reviewed success and authentication contracts', () => {
   assertMatrix(publicOperations());
+});
+
+test('asynchronous address acceptance cannot be confused with completed mutation', () => {
+  const schemas = publicSchemas();
+  const accepted = schemas.EmailAddressChangeAcceptedResponse.properties.change;
+  const completed = schemas.EmailAddressChangeCompletedResponse.properties.change;
+  assert.equal(accepted.properties.phase.enum.includes('completed'), false);
+  assert.equal(accepted.properties.phase.enum.includes('projected'), true);
+  assert.deepEqual(completed.properties.phase.enum, ['completed']);
+  assert.ok(schemas.EmailListResponse.properties.addressChange);
+  assert.ok(schemas.EmailListResponse.properties.mailStatus);
+  for (const name of ['replacePrimaryEmail', 'createEmailAlias', 'deleteEmailAlias']) {
+    const operation = publicOperations().find(
+      (entry) => entry.operation.operationId === name,
+    ).operation;
+    assert.ok(
+      operation.parameters.some(
+        (value) =>
+          value.in === 'header' &&
+          value.name === 'Idempotency-Key' &&
+          value.schema.format === 'uuid',
+      ),
+    );
+  }
 });
 
 test('the regression matrix rejects the former universal 200 and public-wallet assumptions', () => {

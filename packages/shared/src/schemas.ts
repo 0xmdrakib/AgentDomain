@@ -174,6 +174,83 @@ export const emailUsernameSchema = z
   )
   .refine((value) => !value.includes('..'), 'Email username cannot contain consecutive dots');
 
+export const emailAddressChangeSchema = z
+  .object({
+    requestId: z.string().uuid(),
+    action: z.enum(['alias-create', 'alias-delete', 'primary-rename']),
+    target: z.string().email().max(254),
+    phase: z.enum([
+      'pending',
+      'fenced',
+      'applying',
+      'uncertain',
+      'rejected',
+      'native_applied',
+      'projected',
+      'completed',
+      'cancelled',
+    ]),
+  })
+  .strict();
+
+export const emailAddressChangeResultSchema = z
+  .object({
+    change: emailAddressChangeSchema,
+  })
+  .strict();
+
+export const emailAddressChangeStatusSchema = z.union([
+  emailAddressChangeSchema,
+  z.object({ phase: z.literal('unavailable') }).strict(),
+]);
+
+export const emailServiceStatusSchema = z.union([
+  z.object({ state: z.literal('provider-managed') }).strict(),
+  z.object({ state: z.literal('unchecked') }).strict(),
+  z
+    .object({
+      state: z.enum(['ready', 'pending']),
+      checkedAt: z.string().datetime(),
+      reason: z.string().optional(),
+    })
+    .strict(),
+]);
+
+export const emailAddressSummarySchema = z.object({
+  id: z.string().min(1),
+  agentId: z.string().min(1),
+  emailAddress: z.string().email(),
+  kind: z.enum(['primary', 'alias']),
+  status: z.enum(['active', 'deleted']),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const primaryEmailUpdatedSchema = z.object({
+  inbox: z.unknown(),
+  addresses: z.array(emailAddressSummarySchema),
+  message: z.string(),
+});
+export const emailAliasCreatedSchema = z.object({
+  address: emailAddressSummarySchema,
+  addresses: z.array(emailAddressSummarySchema),
+});
+export const emailAliasDeletedSchema = z.object({
+  deleted: z.literal(true),
+  addresses: z.array(emailAddressSummarySchema),
+});
+
+export type EmailAddressChange = z.infer<typeof emailAddressChangeSchema>;
+export type EmailAddressChangeResult = z.infer<typeof emailAddressChangeResultSchema>;
+export type EmailAddressChangeStatus = z.infer<typeof emailAddressChangeStatusSchema>;
+export type EmailServiceStatus = z.infer<typeof emailServiceStatusSchema>;
+export type PrimaryEmailUpdateResult =
+  z.infer<typeof primaryEmailUpdatedSchema> | EmailAddressChangeResult;
+export type EmailAliasCreateResult =
+  z.infer<typeof emailAliasCreatedSchema> | EmailAddressChangeResult;
+export type EmailAliasDeleteResult =
+  z.infer<typeof emailAliasDeletedSchema> | EmailAddressChangeResult;
+
 export const tldSchema = z.enum(['xyz', 'com', 'ai', 'org', 'io', 'net', 'co', 'app']);
 
 export const registrationParamsSchema = z

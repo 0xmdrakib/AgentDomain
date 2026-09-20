@@ -455,7 +455,7 @@ export const sendEmailBatchAction = {
 export const updatePrimaryEmailAction = {
   name: 'UPDATE_PRIMARY_EMAIL',
   description:
-    'Change an AgentDomain primary email username. The old primary address stops receiving new mail.',
+    'Request a primary email username change. Inspect the returned phase; pending is not completion. The old primary stops receiving after completion.',
   similes: ['CHANGE_PRIMARY_EMAIL', 'RENAME_EMAIL'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
@@ -466,14 +466,20 @@ export const updatePrimaryEmailAction = {
     const username = parseEmailUsername(message.content.text);
     if (!username) throw new Error('New email username is required');
     const result = await ad.updatePrimaryEmail(agentId, username);
-    return { text: result.message, data: result };
+    return {
+      text:
+        'change' in result
+          ? `Email address change ${result.change.phase}: ${result.change.target}. Request: ${result.change.requestId}.`
+          : result.message,
+      data: result,
+    };
   },
 };
 
 export const createEmailAliasAction = {
   name: 'CREATE_EMAIL_ALIAS',
   description:
-    'Create a receive-and-send email alias for an AgentDomain identity. Requires available paid-plan alias capacity.',
+    'Request a receive-and-send alias. Requires paid-plan capacity. Inspect the returned phase before using a pending alias.',
   similes: ['ADD_EMAIL_ALIAS', 'CREATE_ALIAS'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
@@ -484,13 +490,20 @@ export const createEmailAliasAction = {
     const username = parseEmailUsername(message.content.text);
     if (!username) throw new Error('Alias username is required');
     const result = await ad.createEmailAlias(agentId, username);
-    return { text: `Created email alias ${result.address.emailAddress}.`, data: result };
+    return {
+      text:
+        'change' in result
+          ? `Email address change ${result.change.phase}: ${result.change.target}. Request: ${result.change.requestId}.`
+          : `Created email alias ${result.address.emailAddress}.`,
+      data: result,
+    };
   },
 };
 
 export const deleteEmailAliasAction = {
   name: 'DELETE_EMAIL_ALIAS',
-  description: 'Delete an active AgentDomain email alias.',
+  description:
+    'Request deletion of an active email alias. Inspect the returned phase; pending is not completion.',
   similes: ['REMOVE_EMAIL_ALIAS', 'DELETE_ALIAS'],
   examples: [],
   validate: async (runtime: IAgentRuntime) =>
@@ -501,7 +514,13 @@ export const deleteEmailAliasAction = {
     const emailAddress = extractEmailAddresses(message.content.text)[0];
     if (!emailAddress) throw new Error('Full alias email address is required');
     const result = await ad.deleteEmailAlias(agentId, emailAddress);
-    return { text: `Deleted email alias ${emailAddress}.`, data: result };
+    return {
+      text:
+        'change' in result
+          ? `Email address change ${result.change.phase}: ${result.change.target}. Request: ${result.change.requestId}.`
+          : `Deleted email alias ${emailAddress}.`,
+      data: result,
+    };
   },
 };
 

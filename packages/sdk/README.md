@@ -446,10 +446,25 @@ Every agent gets one editable primary email address. Starter agents can create 5
 aliases, Pro agents 10, and Enterprise agents 20.
 
 ```ts
-await ad.updatePrimaryEmail(agentId, 'support');
-await ad.createEmailAlias(agentId, 'billing');
-await ad.deleteEmailAlias(agentId, 'billing@research-agent.xyz');
+const requestId = crypto.randomUUID(); // Persist for this operation, including retries.
+const result = await ad.createEmailAlias(agentId, 'billing', { idempotencyKey: requestId });
+if ('change' in result) {
+  console.log(result.change.requestId, result.change.phase);
+} else {
+  console.log(result.address.emailAddress);
+}
 ```
+
+Address mutations can be asynchronous. `updatePrimaryEmail`, `createEmailAlias`, and
+`deleteEmailAlias` return either the completed legacy result or `{ change }` with a request UUID,
+target and phase. Only `completed` confirms the change; `native_applied` and `projected` do not.
+Refresh with `ad.listEmail(agentId, { sync: true })` and inspect `addressChange` and `mailStatus`.
+An `unchecked` status is not verified readiness. Resolve a pending, uncertain or rejected request
+before issuing another change, and refresh active addresses before using a new sender.
+
+All three methods accept optional `{ idempotencyKey }` as their third argument. Reuse the same UUID
+for an explicit retry of identical content after a lost response. The SDK does not retry these
+mutations automatically. A `cancelled` request is not a completed address change.
 
 ## Links
 

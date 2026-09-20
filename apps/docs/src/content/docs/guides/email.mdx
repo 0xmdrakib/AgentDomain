@@ -32,13 +32,28 @@ Usage can change concurrently, so still handle quota responses from the send cal
 ## Manage addresses
 
 ```ts
-await agentDomain.updatePrimaryEmail(agentId, 'support');
-await agentDomain.createEmailAlias(agentId, 'billing');
-await agentDomain.deleteEmailAlias(agentId, 'billing@example.com');
+const requestId = crypto.randomUUID(); // Persist with this logical operation.
+const result = await agentDomain.createEmailAlias(agentId, 'billing', {
+  idempotencyKey: requestId,
+});
+if ('change' in result) {
+  console.log(result.change.requestId, result.change.phase);
+} else {
+  console.log(result.address.emailAddress);
+}
 ```
 
-Changing the primary address stops new delivery to the old primary. Deleting an alias does not
-delete historical messages. Always display the resulting active address list returned by the API.
+Some inboxes complete address changes asynchronously. An accepted request is not a completed
+change. Read `listEmail(agentId, { sync: true })` to refresh `addressChange` and `mailStatus`.
+Only `addressChange.phase === 'completed'` confirms completion; `native_applied` and `projected`
+are still in progress. `uncertain` or `rejected` needs review, not an automatic new request.
+`cancelled` means the request did not complete. Wait for a resolved outcome before another change.
+
+`updatePrimaryEmail()` and `deleteEmailAlias()` accept the same optional UUID `idempotencyKey`.
+Reuse the original UUID and identical target when explicitly retrying a lost response. Do not
+silently generate another key. Changing the primary address stops new delivery to the old primary
+after completion. Deleting an alias does not delete historical messages. Refresh the authoritative
+active-address list after completion; never switch the sender to a requested-but-pending address.
 
 ## Receive through a webhook
 

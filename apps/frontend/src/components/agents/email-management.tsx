@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Ban,
   AtSign,
+  AlertCircle,
   CheckCircle2,
   Inbox,
   Loader2,
@@ -24,10 +25,24 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useSiwe } from '@/hooks/use-siwe';
 import { cn, formatDate } from '@/lib/utils';
-import type {
-  EmailAddressView as EmailAddressRow,
-  EmailInboxView as EmailInboxRow,
-} from '@/lib/backend-contracts';
+import type { EmailInboxView as EmailInboxRow } from '@/lib/backend-contracts';
+import {
+  activeEmailAddresses,
+  addressChangeLabel,
+  addressControlsBlocked,
+  addressMutationRequest,
+  emailFromCanReconcile,
+  emailSendAllowed,
+  initialEmailAddressState,
+  invalidateEmailObservation,
+  isAddressChangeTerminal,
+  observeEmailAddresses,
+  readAddressMutation,
+  reconcileEmailFrom,
+  type AddressRequest,
+  type EmailAddressState,
+} from '@/lib/email-address-lifecycle';
+import { API_TIMEOUT_MS } from '@/lib/transport-policy';
 
 type EmailDirection = 'all' | 'inbound' | 'outbound' | 'unread';
 
@@ -69,7 +84,12 @@ export function EmailManagement({
 }) {
   const { session, signIn, loading: authLoading } = useSiwe();
   const [inboxStatus, setInboxStatus] = useState<EmailInboxRow | null>(inbox);
-  const [addresses, setAddresses] = useState<EmailAddressRow[]>([]);
+  const [addressState, setAddressState] = useState(initialEmailAddressState);
+  const addressStateRef = useRef(addressState);
+  const loadRevision = useRef(0);
+  const viewScope = `${agentId}:${session.address?.toLowerCase() ?? ''}`;
+  const viewScopeRef = useRef(viewScope);
+  viewScopeRef.current = viewScope;
   const [limitInfo, setLimitInfo] = useState<EmailLimitInfo | null>(null);
   const [filter, setFilter] = useState<EmailDirection>('all');
   const [messages, setMessages] = useState<EmailMessage[]>([]);
@@ -93,28 +113,11 @@ export function EmailManagement({
     [messages, selectedId],
   );
   const activeAddresses = useMemo(
-    () =>
-      addresses.length > 0
-        ? addresses.filter((address) => address.status === 'active')
-        : inboxStatus
-          ? [
-              {
-                id: inboxStatus.id,
-                agentId: inboxStatus.agentId,
-                emailAddress: inboxStatus.emailAddress,
-                kind: 'primary' as const,
-                status: 'active' as const,
-                createdAt: inboxStatus.createdAt,
-                updatedAt: inboxStatus.createdAt,
-              },
-            ]
-          : [],
-    [addresses, inboxStatus],
+    () => activeEmailAddresses(addressState.addresses, inboxStatus),
+    [addressState.addresses, inboxStatus],
   );
   const primaryAddress =
-    activeAddresses.find((address) => address.kind === 'primary')?.emailAddress ??
-    inboxStatus?.emailAddress ??
-    '';
+    activeAddresses.find((address) => address.kind === 'primary')?.emailAddress ?? '';
   const primaryDomain = readDomainPart(primaryAddress || inboxStatus?.emailAddress || '');
   const primaryDraftAddress = primaryDomain
     ? `${primaryDraft || 'agent'}@${primaryDomain}`.toLowerCase()
@@ -122,17 +125,40 @@ export function EmailManagement({
   const aliasAddresses = activeAddresses.filter((address) => address.kind === 'alias');
   const aliasLimit = limitInfo?.emailAliases ?? 0;
   const aliasSlotsLeft = Math.max(0, aliasLimit - aliasAddresses.length);
+  const addressBlocked = addressControlsBlocked(addressState) || aliasLoading || sendLoading;
+  const sendAllowed = emailSendAllowed(addressState, form.fromAddress, activeAddresses);
+  const unknownRequest = addressState.outcome === 'unknown' && addressState.request;
+
+  function updateAddressState(next: EmailAddressState) {
+    addressStateRef.current = next;
+    setAddressState(next);
+  }
+
+  const invalidateMessageReads = useCallback(() => {
+    loadRevision.current++;
+  }, []);
+
+  useEffect(() => {
+    invalidateMessageReads();
+    updateAddressState(initialEmailAddressState());
+    setAliasLoading(false);
+    return invalidateMessageReads;
+  }, [viewScope, invalidateMessageReads]);
 
   useEffect(() => {
     setInboxStatus(inbox);
     if (inbox?.emailAddress) {
       setPrimaryDraft(readLocalPart(inbox.emailAddress));
-      setForm((current) => ({
-        ...current,
-        fromAddress: current.fromAddress || inbox.emailAddress,
-      }));
     }
   }, [inbox]);
+
+  useEffect(() => {
+    if (!emailFromCanReconcile(addressState)) return;
+    setForm((current) => ({
+      ...current,
+      fromAddress: reconcileEmailFrom(current.fromAddress, activeAddresses),
+    }));
+  }, [activeAddresses, addressState]);
 
   useEffect(() => {
     if (!inboxStatus || !session.authenticated) return;
@@ -152,37 +178,34 @@ export function EmailManagement({
     return ok;
   }
 
-  async function loadMessages(nextFilter = filter) {
+  async function loadMessages(nextFilter = filter, sync = false) {
     if (!inboxStatus) return;
     if (!session.authenticated) return;
     setLoading(true);
+    const revision = ++loadRevision.current;
+    const scope = viewScopeRef.current;
+    const currentLoad = () => revision === loadRevision.current && scope === viewScopeRef.current;
     try {
-      const params = new URLSearchParams({ limit: '50', sync: 'false' });
+      const params = new URLSearchParams({ limit: '50', sync: String(sync) });
       if (nextFilter === 'inbound' || nextFilter === 'outbound') {
         params.set('direction', nextFilter);
       }
       if (nextFilter === 'unread') params.set('unreadOnly', 'true');
       const res = await fetch(`/api/v1/agents/${agentId}/email?${params}`, {
         credentials: 'include',
+        cache: 'no-store',
+        signal: AbortSignal.timeout(API_TIMEOUT_MS),
       });
       const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.message ?? `HTTP ${res.status}`);
-      if (data?.inbox) {
-        setInboxStatus(data.inbox as EmailInboxRow);
-      }
-      if (Array.isArray(data?.addresses)) {
-        setAddresses(data.addresses as EmailAddressRow[]);
-        const primary = (data.addresses as EmailAddressRow[]).find(
-          (entry) => entry.kind === 'primary',
-        );
-        if (primary) {
-          setPrimaryDraft(readLocalPart(primary.emailAddress));
-          setForm((current) => ({
-            ...current,
-            fromAddress: current.fromAddress || primary.emailAddress,
-          }));
-        }
-      }
+      if (!currentLoad()) return;
+      if (!res.ok) throw new Error('Email observation unavailable');
+      const observation = observeEmailAddresses(addressStateRef.current, data, agentId, sync);
+      updateAddressState(observation.state);
+      if (observation.value.inbox !== undefined) setInboxStatus(observation.value.inbox);
+      const primary = observation.state.addresses?.find(
+        (entry) => entry.kind === 'primary' && entry.status === 'active',
+      );
+      if (primary) setPrimaryDraft(readLocalPart(primary.emailAddress));
       if (data?.limits) {
         setLimitInfo(data.limits as EmailLimitInfo);
       }
@@ -190,12 +213,14 @@ export function EmailManagement({
       setMessages(nextMessages);
       setSelectedId((current) => current ?? nextMessages[0]?.id ?? null);
       setUsageRevision((current) => current + 1);
-    } catch (err) {
+    } catch {
+      if (!currentLoad()) return;
+      updateAddressState(invalidateEmailObservation(addressStateRef.current));
       toast.error('Could not load email', {
-        description: err instanceof Error ? err.message : 'Please try again.',
+        description: 'Email status could not be confirmed. Your draft is unchanged.',
       });
     } finally {
-      setLoading(false);
+      if (currentLoad()) setLoading(false);
     }
   }
 
@@ -218,7 +243,8 @@ export function EmailManagement({
 
   async function sendEmail(event: React.FormEvent) {
     event.preventDefault();
-    if (!inboxStatus || !(await ensureSignedIn())) return;
+    if (!inboxStatus || !sendAllowed || !(await ensureSignedIn())) return;
+    if (!emailSendAllowed(addressStateRef.current, form.fromAddress, activeAddresses)) return;
     setSendLoading(true);
     try {
       const res = await fetch(`/api/v1/agents/${agentId}/email/send`, {
@@ -230,7 +256,7 @@ export function EmailManagement({
             .split(',')
             .map((item) => item.trim())
             .filter(Boolean),
-          fromAddress: form.fromAddress.trim() || primaryAddress || undefined,
+          fromAddress: form.fromAddress,
           subject: form.subject,
           text: form.text,
         }),
@@ -339,9 +365,83 @@ export function EmailManagement({
     }
   }
 
+  async function mutateAddress(request: AddressRequest, retry = false) {
+    if (aliasLoading || !(await ensureSignedIn())) return;
+    const current = addressStateRef.current;
+    if (
+      retry
+        ? current.outcome !== 'unknown' || current.request?.requestId !== request.requestId
+        : addressControlsBlocked(current)
+    )
+      return;
+    const scope = viewScopeRef.current;
+    loadRevision.current++;
+    setLoading(false);
+    updateAddressState({
+      ...invalidateEmailObservation(current),
+      request,
+      outcome: 'sending',
+      change: retry ? current.change : null,
+    });
+    setAliasLoading(true);
+    try {
+      const transport = addressMutationRequest(agentId, request);
+      const res = await fetch(transport.url, {
+        ...transport.init,
+        signal: AbortSignal.timeout(API_TIMEOUT_MS),
+      });
+      const data: unknown = await res.json().catch(() => null);
+      if (scope !== viewScopeRef.current) return;
+      const result = readAddressMutation(
+        res.status,
+        data,
+        request,
+        agentId,
+        !current.service || current.service.state === 'provider-managed',
+      );
+      if (result.kind === 'async') {
+        updateAddressState({
+          ...addressStateRef.current,
+          change: result.change,
+          service: { state: 'unchecked' },
+          request: isAddressChangeTerminal(result.change) ? null : request,
+          outcome: isAddressChangeTerminal(result.change) ? null : 'accepted',
+        });
+      } else {
+        updateAddressState({
+          ...addressStateRef.current,
+          addresses: result.addresses,
+          observed: true,
+          request: null,
+          outcome: null,
+          change: null,
+        });
+        if (result.inbox) setInboxStatus(result.inbox);
+        toast.success(
+          request.action === 'primary-rename'
+            ? 'Primary email updated'
+            : request.action === 'alias-create'
+              ? 'Alias created'
+              : 'Alias removed',
+        );
+      }
+      if (request.action === 'alias-create') setAliasDraft('');
+      await loadMessages(filter);
+    } catch {
+      if (scope !== viewScopeRef.current) return;
+      updateAddressState({
+        ...invalidateEmailObservation(addressStateRef.current),
+        request,
+        outcome: 'unknown',
+      });
+    } finally {
+      if (scope === viewScopeRef.current) setAliasLoading(false);
+    }
+  }
+
   async function updatePrimaryEmail(event: React.FormEvent) {
     event.preventDefault();
-    if (!primaryDraft.trim() || !(await ensureSignedIn())) return;
+    if (addressBlocked || !primaryDraft.trim()) return;
     const username = sanitizeEmailUsername(primaryDraft);
     const nextAddress = primaryDomain ? `${username}@${primaryDomain}`.toLowerCase() : username;
     if (
@@ -353,79 +453,30 @@ export function EmailManagement({
     ) {
       return;
     }
-    setAliasLoading(true);
-    try {
-      const res = await fetch(`/api/v1/agents/${agentId}/email`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, confirmReplace: true }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.message ?? `HTTP ${res.status}`);
-      if (data?.inbox) setInboxStatus(data.inbox as EmailInboxRow);
-      if (Array.isArray(data?.addresses)) setAddresses(data.addresses as EmailAddressRow[]);
-      setForm((current) => ({ ...current, fromAddress: data?.inbox?.emailAddress ?? nextAddress }));
-      toast.success('Primary email updated', {
-        description: data?.message ?? `${nextAddress} is now the primary address.`,
-      });
-    } catch (err) {
-      toast.error('Primary update failed', {
-        description: err instanceof Error ? err.message : 'Please try again.',
-      });
-    } finally {
-      setAliasLoading(false);
-    }
+    await mutateAddress({
+      requestId: crypto.randomUUID(),
+      action: 'primary-rename',
+      target: nextAddress,
+    });
   }
 
   async function createAlias(event: React.FormEvent) {
     event.preventDefault();
-    if (!aliasDraft.trim() || !(await ensureSignedIn())) return;
-    setAliasLoading(true);
-    try {
-      const res = await fetch(`/api/v1/agents/${agentId}/email/aliases`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: sanitizeEmailUsername(aliasDraft) }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.message ?? `HTTP ${res.status}`);
-      if (Array.isArray(data?.addresses)) setAddresses(data.addresses as EmailAddressRow[]);
-      setAliasDraft('');
-      toast.success('Alias created');
-    } catch (err) {
-      toast.error('Alias create failed', {
-        description: err instanceof Error ? err.message : 'Please try again.',
-      });
-    } finally {
-      setAliasLoading(false);
-    }
+    if (addressBlocked || !aliasDraft.trim() || !primaryDomain) return;
+    await mutateAddress({
+      requestId: crypto.randomUUID(),
+      action: 'alias-create',
+      target: `${sanitizeEmailUsername(aliasDraft)}@${primaryDomain}`.toLowerCase(),
+    });
   }
 
   async function deleteAlias(emailAddress: string) {
-    if (!(await ensureSignedIn())) return;
-    setAliasLoading(true);
-    try {
-      const params = new URLSearchParams({ emailAddress });
-      const res = await fetch(`/api/v1/agents/${agentId}/email/aliases?${params}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.message ?? `HTTP ${res.status}`);
-      if (Array.isArray(data?.addresses)) setAddresses(data.addresses as EmailAddressRow[]);
-      if (form.fromAddress.toLowerCase() === emailAddress.toLowerCase()) {
-        setForm((current) => ({ ...current, fromAddress: primaryAddress }));
-      }
-      toast.success('Alias removed');
-    } catch (err) {
-      toast.error('Alias remove failed', {
-        description: err instanceof Error ? err.message : 'Please try again.',
-      });
-    } finally {
-      setAliasLoading(false);
-    }
+    if (addressBlocked) return;
+    await mutateAddress({
+      requestId: crypto.randomUUID(),
+      action: 'alias-delete',
+      target: emailAddress,
+    });
   }
 
   if (!inboxStatus) {
@@ -449,14 +500,33 @@ export function EmailManagement({
   }
 
   return (
-    <Card className="premium-surface mb-6 overflow-hidden">
+    <Card className="premium-surface mb-6 min-w-0" aria-label="Email management">
       <CardHeader className="p-4 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <CardTitle className="text-lg sm:text-xl">Email</CardTitle>
-              <Badge variant={inboxStatus.verificationStatus === 'Success' ? 'success' : 'warning'}>
-                {inboxStatus.verificationStatus}
+              <Badge
+                variant={
+                  !addressControlsBlocked(addressState) &&
+                  (addressState.service && addressState.service.state !== 'provider-managed'
+                    ? addressState.service.state === 'ready'
+                    : inboxStatus.verificationStatus === 'Success')
+                    ? 'success'
+                    : 'warning'
+                }
+              >
+                {addressState.changeUnavailable
+                  ? 'Address status unavailable'
+                  : addressState.request || !isAddressChangeTerminal(addressState.change)
+                    ? 'Address update pending'
+                    : addressState.service && addressState.service.state !== 'provider-managed'
+                      ? addressState.service.state === 'ready'
+                        ? 'Email ready'
+                        : addressState.service.state === 'unchecked'
+                          ? 'Email not checked'
+                          : 'Email pending'
+                      : inboxStatus.verificationStatus}
               </Badge>
               {unreadCount > 0 && <Badge variant="secondary">{unreadCount} unread</Badge>}
             </div>
@@ -469,8 +539,8 @@ export function EmailManagement({
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => (session.authenticated ? loadMessages(filter) : signIn())}
-              disabled={loading || authLoading}
+              onClick={() => (session.authenticated ? loadMessages(filter, true) : signIn())}
+              disabled={loading || authLoading || aliasLoading}
               className="w-full sm:w-auto"
             >
               {loading || authLoading ? (
@@ -494,6 +564,57 @@ export function EmailManagement({
       </CardHeader>
 
       <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+        {(addressState.changeUnavailable || addressState.request || addressState.change) && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="mb-4 flex min-w-0 flex-col gap-2 border-y border-border/60 py-3 text-sm"
+          >
+            <div className="flex items-start gap-2">
+              {addressState.changeUnavailable ||
+              unknownRequest ||
+              ['uncertain', 'rejected'].includes(addressState.change?.phase ?? '') ? (
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+              ) : (
+                <Mail className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              )}
+              <div className="min-w-0">
+                <p className="font-medium">
+                  {addressState.changeUnavailable
+                    ? 'Address status unavailable'
+                    : unknownRequest
+                      ? 'Request status unknown'
+                      : addressState.outcome === 'sending'
+                        ? 'Submitting address change'
+                        : addressState.change
+                          ? addressChangeLabel(addressState.change)
+                          : 'Address change awaiting confirmation'}
+                </p>
+                <p className="wrap-anywhere font-mono text-xs text-muted-foreground">
+                  {addressState.request?.target ?? addressState.change?.target}
+                </p>
+                {unknownRequest && (
+                  <p className="mt-1 text-muted-foreground">
+                    No completion has been confirmed. Your draft is unchanged.
+                  </p>
+                )}
+              </div>
+            </div>
+            {unknownRequest && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="self-start"
+                disabled={aliasLoading || loading || authLoading}
+                onClick={() => mutateAddress(unknownRequest, true)}
+              >
+                <RefreshCw className="h-4 w-4" />
+                Retry request
+              </Button>
+            )}
+          </div>
+        )}
         <div className="mb-4 grid gap-3 sm:grid-cols-3">
           <EmailHealth label="DKIM" enabled={inboxStatus.dkimConfigured} />
           <EmailHealth label="SPF" enabled={inboxStatus.spfConfigured} />
@@ -508,15 +629,17 @@ export function EmailManagement({
             </div>
             <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
               <Input
+                aria-label="Primary email username"
                 value={primaryDraft}
                 onChange={(event) => setPrimaryDraft(sanitizeEmailUsername(event.target.value))}
                 placeholder="agent"
+                disabled={addressBlocked}
               />
               <Button
                 type="submit"
                 variant="outline"
                 disabled={
-                  aliasLoading ||
+                  addressBlocked ||
                   !primaryDraft.trim() ||
                   !primaryDraftAddress ||
                   primaryDraftAddress === primaryAddress.toLowerCase()
@@ -547,16 +670,17 @@ export function EmailManagement({
             </div>
             <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
               <Input
+                aria-label="Alias username"
                 value={aliasDraft}
                 onChange={(event) => setAliasDraft(sanitizeEmailUsername(event.target.value))}
                 placeholder={aliasLimit > 0 ? 'billing' : 'Upgrade for aliases'}
-                disabled={aliasLimit === 0}
+                disabled={addressBlocked || aliasLimit === 0}
               />
               <Button
                 type="submit"
                 variant="outline"
                 disabled={
-                  aliasLoading || aliasLimit === 0 || aliasSlotsLeft === 0 || !aliasDraft.trim()
+                  addressBlocked || aliasLimit === 0 || aliasSlotsLeft === 0 || !aliasDraft.trim()
                 }
               >
                 {aliasLoading ? (
@@ -585,6 +709,7 @@ export function EmailManagement({
                     <button
                       type="button"
                       onClick={() => deleteAlias(address.emailAddress)}
+                      disabled={addressBlocked}
                       className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                       aria-label={`Remove ${address.emailAddress}`}
                     >
@@ -607,12 +732,25 @@ export function EmailManagement({
           >
             <div className="grid gap-3 md:grid-cols-3">
               <select
-                value={form.fromAddress || primaryAddress}
+                aria-label="From address"
+                value={form.fromAddress}
+                disabled={!emailFromCanReconcile(addressState) || sendLoading}
                 onChange={(event) =>
                   setForm((current) => ({ ...current, fromAddress: event.target.value }))
                 }
-                className="min-h-10 rounded-md border border-input bg-background/70 px-3 py-2 font-mono text-sm shadow-[inset_0_1px_3px_rgba(20,21,18,0.08),inset_0_1px_0_rgba(255,255,255,0.72)] focus-visible:border-primary/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2"
+                className="min-h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background/70 px-3 py-2 font-mono text-sm shadow-[inset_0_1px_3px_rgba(20,21,18,0.08),inset_0_1px_0_rgba(255,255,255,0.72)] focus-visible:border-primary/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2"
               >
+                {!form.fromAddress && (
+                  <option value="">
+                    {activeAddresses.length ? 'Address awaiting verification' : 'No active address'}
+                  </option>
+                )}
+                {form.fromAddress &&
+                  !activeAddresses.some((entry) => entry.emailAddress === form.fromAddress) && (
+                    <option value={form.fromAddress} disabled>
+                      {form.fromAddress} (unavailable)
+                    </option>
+                  )}
                 {activeAddresses.map((address) => (
                   <option key={address.emailAddress} value={address.emailAddress}>
                     From {address.emailAddress}
@@ -648,7 +786,10 @@ export function EmailManagement({
               <Button type="button" variant="outline" onClick={() => setComposeOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={sendLoading || authLoading}>
+              <Button
+                type="submit"
+                disabled={sendLoading || authLoading || !sendAllowed || aliasLoading}
+              >
                 {sendLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
@@ -660,7 +801,7 @@ export function EmailManagement({
           </form>
         )}
 
-        <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
+        <div className="mb-4 flex flex-wrap gap-2 pb-1">
           {(['all', 'inbound', 'outbound', 'unread'] as EmailDirection[]).map((item) => (
             <button
               key={item}
@@ -947,7 +1088,7 @@ function WebhookSettings({ agentId }: { agentId: string }) {
         <select
           value={mode}
           onChange={(e) => setMode(e.target.value as typeof mode)}
-          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+          className="h-10 min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-sm"
         >
           <option value="metadata">Metadata + content URL</option>
           <option value="inline_text">Include plain text up to 256KB</option>

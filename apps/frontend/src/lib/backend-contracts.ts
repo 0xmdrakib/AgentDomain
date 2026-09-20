@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { dnsRecordObjectSchema, type DnsRecordData } from '@agentdomain/shared';
+import {
+  dnsRecordObjectSchema,
+  emailAddressChangeStatusSchema,
+  emailAddressSummarySchema,
+  emailServiceStatusSchema,
+  type DnsRecordData,
+} from '@agentdomain/shared';
 
 const nullableText = z.string().nullable();
 const isoDate = z.string().datetime({ offset: true });
@@ -81,15 +87,14 @@ export const emailInboxViewSchema = z
   })
   .strict();
 
-export interface EmailAddressView {
-  id: string;
-  agentId: string;
-  emailAddress: string;
-  kind: 'primary' | 'alias';
-  status: 'active' | 'deleted';
-  createdAt: string;
-  updatedAt: string;
-}
+export type EmailAddressView = z.infer<typeof emailAddressSummarySchema>;
+
+export const emailAddressObservationSchema = z.object({
+  inbox: emailInboxViewSchema.strip().nullable(),
+  addresses: z.array(emailAddressSummarySchema).optional(),
+  addressChange: emailAddressChangeStatusSchema.nullable().optional(),
+  mailStatus: emailServiceStatusSchema.optional(),
+});
 
 const dnsDataSchema: z.ZodType<DnsRecordData> = z.union([
   z.object({ address: z.string() }).strict(),
