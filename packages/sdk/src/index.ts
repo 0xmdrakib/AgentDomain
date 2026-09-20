@@ -49,6 +49,30 @@ export {
   type AutoRenewChangeConfirmation,
 } from './renewal-workflow.js';
 import { z } from 'zod';
+import {
+  emailAddressChangeResultSchema,
+  emailAddressChangeStatusSchema,
+  emailServiceStatusSchema,
+  primaryEmailUpdatedSchema,
+  emailAliasCreatedSchema,
+  emailAliasDeletedSchema,
+  type EmailAddressChange,
+  type EmailAddressChangeResult,
+  type EmailAddressChangeStatus,
+  type EmailServiceStatus,
+  type PrimaryEmailUpdateResult,
+  type EmailAliasCreateResult,
+  type EmailAliasDeleteResult,
+} from '@agentdomain/shared/schemas';
+export type {
+  EmailAddressChange,
+  EmailAddressChangeResult,
+  EmailAddressChangeStatus,
+  EmailServiceStatus,
+  PrimaryEmailUpdateResult,
+  EmailAliasCreateResult,
+  EmailAliasDeleteResult,
+} from '@agentdomain/shared/schemas';
 import { x402Client, x402HTTPClient } from '@x402/core/client';
 import type { PaymentPayloadResult, PaymentRequirements } from '@x402/core/types';
 import { ExactEvmScheme } from '@x402/evm/exact/client';
@@ -285,6 +309,41 @@ export interface EmailListResult {
   addresses?: EmailAddressSummary[];
   limits?: { plan: ServicePlanKey; planLabel: string; emailAliases: number };
   messages: EmailMessage[];
+  addressChange?: EmailAddressChangeStatus | null;
+  mailStatus?: EmailServiceStatus;
+}
+
+export interface EmailAddressMutationOptions {
+  /** Reuse the same UUID when explicitly retrying an unconfirmed request. */
+  idempotencyKey?: string;
+}
+
+function emailAddressHeaders(options: EmailAddressMutationOptions) {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (options.idempotencyKey !== undefined)
+    headers['Idempotency-Key'] = z.string().uuid().parse(options.idempotencyKey).toLowerCase();
+  return headers;
+}
+
+async function emailAddressResult<T>(
+  response: Response,
+  legacy: z.ZodType<T>,
+  action: EmailAddressChange['action'],
+  options: EmailAddressMutationOptions,
+): Promise<T | EmailAddressChangeResult> {
+  const value: unknown = await response.json();
+  if (response.status === 202 || (value && typeof value === 'object' && 'change' in value)) {
+    const result = emailAddressChangeResultSchema.parse(value);
+    if (
+      result.change.action !== action ||
+      (options.idempotencyKey &&
+        result.change.requestId.toLowerCase() !== options.idempotencyKey.toLowerCase()) ||
+      (response.status === 200) !== (result.change.phase === 'completed')
+    )
+      throw new Error('Invalid email address change response');
+    return result;
+  }
+  return legacy.parse(value);
 }
 
 export interface VaultFundResult {
@@ -905,53 +964,62 @@ export class AgentDomain {
   async updatePrimaryEmail(
     agentId: string,
     username: string,
-  ): Promise<{ inbox: unknown; addresses: EmailAddressSummary[]; message: string }> {
+    options: EmailAddressMutationOptions = {},
+  ): Promise<PrimaryEmailUpdateResult> {
     const res = await fetch(`${this.apiUrl}/agents/${agentId}/email`, {
       method: 'PATCH',
-      headers: await this.authHeaders({ 'Content-Type': 'application/json' }),
+      headers: await this.authHeaders(emailAddressHeaders(options)),
       body: JSON.stringify({ username, confirmReplace: true }),
     });
     if (!res.ok) throw new Error(await responseError(res));
-    return res.json();
+    return emailAddressResult(res, primaryEmailUpdatedSchema, 'primary-rename', options);
   }
 
   async createEmailAlias(
     agentId: string,
     username: string,
-  ): Promise<{ address: EmailAddressSummary; addresses: EmailAddressSummary[] }> {
+    options: EmailAddressMutationOptions = {},
+  ): Promise<EmailAliasCreateResult> {
     const res = await fetch(`${this.apiUrl}/agents/${agentId}/email/aliases`, {
       method: 'POST',
-      headers: await this.authHeaders({ 'Content-Type': 'application/json' }),
+      headers: await this.authHeaders(emailAddressHeaders(options)),
       body: JSON.stringify({ username }),
     });
     if (!res.ok) throw new Error(await responseError(res));
-    return res.json();
+    return emailAddressResult(res, emailAliasCreatedSchema, 'alias-create', options);
   }
 
   async deleteEmailAlias(
     agentId: string,
     emailAddress: string,
-  ): Promise<{ deleted: true; addresses: EmailAddressSummary[] }> {
+    options: EmailAddressMutationOptions = {},
+  ): Promise<EmailAliasDeleteResult> {
     const params = new URLSearchParams({ emailAddress });
     const res = await fetch(`${this.apiUrl}/agents/${agentId}/email/aliases?${params}`, {
       method: 'DELETE',
-      headers: await this.authHeaders(),
+      headers: await this.authHeaders(emailAddressHeaders(options)),
     });
     if (!res.ok) throw new Error(await responseError(res));
-    return res.json();
+    return emailAddressResult(res, emailAliasDeletedSchema, 'alias-delete', options);
   }
 
   async listEmail(
     agentId: string,
-    args: { limit?: number; unreadOnly?: boolean } = {},
+    args: { limit?: number; unreadOnly?: boolean; sync?: boolean } = {},
   ): Promise<EmailListResult> {
     const params = new URLSearchParams();
     if (args.limit) params.set('limit', String(args.limit));
     if (args.unreadOnly) params.set('unreadOnly', 'true');
+    if (args.sync !== undefined) params.set('sync', String(args.sync));
     const url = `${this.apiUrl}/agents/${agentId}/email?${params.toString()}`;
     const res = await fetch(url, { headers: await this.authHeaders() });
     if (!res.ok) throw new Error(await responseError(res));
-    return res.json();
+    const result: EmailListResult = await res.json();
+    if (result.addressChange !== undefined && result.addressChange !== null)
+      result.addressChange = emailAddressChangeStatusSchema.parse(result.addressChange);
+    if (result.mailStatus !== undefined)
+      result.mailStatus = emailServiceStatusSchema.parse(result.mailStatus);
+    return result;
   }
 
   async deleteEmailMessage(

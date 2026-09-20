@@ -329,7 +329,9 @@ test('browser APIs stay same-origin while server reads use the reviewed public A
   assert.match(dashboard, /docs\.agentdomain\.app\/api-reference\/overview\//);
   assert.match(dashboard, /docs\.agentdomain\.app\/sdk\/typescript\//);
   const email = read('src/components/agents/email-management.tsx');
-  assert.match(email, /sync: 'false'/);
+  assert.match(email, /async function loadMessages\(nextFilter = filter, sync = false\)/);
+  assert.match(email, /sync: String\(sync\)/);
+  assert.match(email, /loadMessages\(filter, true\)/);
   assert.match(email, /inboxStatus\.verificationStatus/);
   assert.doesNotMatch(
     `${transport}\n${read('src/lib/backend-contracts.ts')}\n${email}`,

@@ -191,6 +191,7 @@ const ScheduleServicePlanRenewalSchema = z.object({
 
 const UpdatePrimaryEmailSchema = z.object({
   agentId: z.string().min(1),
+  idempotencyKey: z.string().uuid().optional(),
   username: z
     .string()
     .trim()
@@ -202,6 +203,7 @@ const CreateEmailAliasSchema = UpdatePrimaryEmailSchema;
 
 const DeleteEmailAliasSchema = z.object({
   agentId: z.string().min(1),
+  idempotencyKey: z.string().uuid().optional(),
   emailAddress: z.string().email(),
 });
 
@@ -444,20 +446,21 @@ export class AgentDomainActionProvider {
       {
         name: 'update_primary_email',
         description:
-          'Change one agent primary email username. The old primary address stops receiving new mail.',
+          'Request a primary email username change. Inspect the returned phase; pending is not completion. The old primary stops receiving after completion.',
         schema: UpdatePrimaryEmailSchema,
         invoke: this.updatePrimaryEmail.bind(this),
       },
       {
         name: 'create_email_alias',
         description:
-          'Create an extra receive-and-send alias for one agent. Requires available paid-plan alias capacity.',
+          'Request a receive-and-send alias. Requires paid-plan capacity. Inspect the returned phase before using a pending alias.',
         schema: CreateEmailAliasSchema,
         invoke: this.createEmailAlias.bind(this),
       },
       {
         name: 'delete_email_alias',
-        description: 'Delete one active email alias from an agent.',
+        description:
+          'Request deletion of an active email alias. Inspect the returned phase; pending is not completion.',
         schema: DeleteEmailAliasSchema,
         invoke: this.deleteEmailAlias.bind(this),
       },
@@ -776,8 +779,10 @@ export class AgentDomainActionProvider {
     args: z.infer<typeof UpdatePrimaryEmailSchema>,
   ) {
     const { ad } = this.createAgentDomain(walletProvider);
-    const result = await ad.updatePrimaryEmail(args.agentId, args.username);
-    return result.message;
+    const result = await ad.updatePrimaryEmail(args.agentId, args.username, {
+      idempotencyKey: args.idempotencyKey,
+    });
+    return 'change' in result ? JSON.stringify(result, null, 2) : result.message;
   }
 
   private async createEmailAlias(
@@ -785,8 +790,12 @@ export class AgentDomainActionProvider {
     args: z.infer<typeof CreateEmailAliasSchema>,
   ) {
     const { ad } = this.createAgentDomain(walletProvider);
-    const result = await ad.createEmailAlias(args.agentId, args.username);
-    return `Created email alias ${result.address.emailAddress}.`;
+    const result = await ad.createEmailAlias(args.agentId, args.username, {
+      idempotencyKey: args.idempotencyKey,
+    });
+    return 'change' in result
+      ? JSON.stringify(result, null, 2)
+      : `Created email alias ${result.address.emailAddress}.`;
   }
 
   private async deleteEmailAlias(
@@ -794,8 +803,12 @@ export class AgentDomainActionProvider {
     args: z.infer<typeof DeleteEmailAliasSchema>,
   ) {
     const { ad } = this.createAgentDomain(walletProvider);
-    await ad.deleteEmailAlias(args.agentId, args.emailAddress);
-    return `Deleted email alias ${args.emailAddress}.`;
+    const result = await ad.deleteEmailAlias(args.agentId, args.emailAddress, {
+      idempotencyKey: args.idempotencyKey,
+    });
+    return 'change' in result
+      ? JSON.stringify(result, null, 2)
+      : `Deleted email alias ${args.emailAddress}.`;
   }
 }
 

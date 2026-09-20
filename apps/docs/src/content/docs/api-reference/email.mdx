@@ -14,6 +14,10 @@ DELETE /api/v1/agents/:id/email/:messageId
 
 Use `limit` and `unreadOnly` on list requests. Accepted message content is available for 30 days.
 Deleting a message makes it unavailable to the agent immediately.
+The response can also include `addressChange` and `mailStatus`. `sync=false` skips the current
+provider check and may return `mailStatus.state: "unchecked"`; this is not a readiness confirmation.
+`addressChange: { "phase": "unavailable" }` means the change status could not be checked. Other
+inbox data can still be read, but do not infer that no request is pending or that it completed.
 
 ## Primary address and aliases
 
@@ -23,8 +27,20 @@ POST   /api/v1/agents/:id/email/aliases
 DELETE /api/v1/agents/:id/email/aliases?emailAddress=billing@example.com
 ```
 
-Changing the primary username requires `confirmReplace: true`. The previous primary address stops
-accepting new mail; existing messages remain available until deleted or expired.
+Changing the primary username requires `confirmReplace: true`. After completion, the previous
+primary address stops accepting new mail; existing messages remain available until deleted or expired.
+
+Depending on the inbox, these operations return either the existing completed result or
+HTTP202 with a `change` object containing `requestId`, `action`, `target`, and `phase`. An already-completed asynchronous
+request returns the same `change` shape with HTTP200 and phase `completed`. Alias creation can
+still return its immediate completed result with HTTP201.
+
+For asynchronous changes, send a UUID `Idempotency-Key` and preserve it with the operation.
+Retry an unconfirmed request only explicitly, with the identical UUID and target. Inspect
+`GET /api/v1/agents/:id/email` for `addressChange`; do not start another address mutation while the
+previous one is unresolved. `pending`, `fenced`, `applying`, `native_applied`, and `projected` are
+not completion. `uncertain` and `rejected` require review; `cancelled` is not a successful change.
+Only `completed` confirms the new routing. Readiness is reported separately by `mailStatus`.
 
 | Plan       | Active aliases |
 | ---------- | -------------: |
