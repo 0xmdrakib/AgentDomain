@@ -27,9 +27,9 @@
     "format:check": "prettier --check \"**/*.{js,mjs,cjs,ts,tsx,md,mdx,json,yml,yaml}\""
   },
   "devDependencies": {
-    "prettier": "^3.9.5",
-    "turbo": "^2.10.12",
-    "typescript": "^5.7.2"
+    "prettier": "^3.9.8",
+    "turbo": "^2.10.13",
+    "typescript": "^7.0.2"
   },
   "pnpm": {
     "overrides": {

@@ -53,14 +53,14 @@
   },
   "dependencies": {
     "@agentdomain/sdk": "workspace:^",
-    "zod": "3.25.76"
+    "zod": "4.6.5"
   },
   "peerDependencies": {
     "@langchain/core": "^1.2.11"
   },
   "devDependencies": {
     "@langchain/core": "1.2.11",
-    "typescript": "^5.7.2",
-    "viem": "^2.56.3"
+    "typescript": "^7.0.2",
+    "viem": "^2.56.7"
   }
 }
