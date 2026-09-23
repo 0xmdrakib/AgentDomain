@@ -18,7 +18,6 @@ const allowedRootFiles = new Set([
   '.prettierrc',
   '.prettierrc.json',
   'AI_DISCLOSURE.md',
-  'BUILT_DURING_ETHONLINE.md',
   'CHANGELOG.md',
   'CODE_OF_CONDUCT.md',
   'CONTRIBUTING.md',
@@ -381,7 +380,7 @@ function runSelfTest() {
   assert.equal(repositoryScopeViolation('AGENTS.md'), 'unapproved root file');
   assert.equal(repositoryScopeViolation('AGENTS-private.md'), 'unapproved root file');
   assert.equal(repositoryScopeViolation('AI_DISCLOSURE.md'), null);
-  assert.equal(repositoryScopeViolation('BUILT_DURING_ETHONLINE.md'), null);
+  assert.equal(repositoryScopeViolation('BUILT_DURING_ETHONLINE.md'), 'unapproved root file');
   assert.equal(repositoryScopeViolation('PREEXISTING.md'), null);
   assert.equal(repositoryScopeViolation('private-pitch.md'), 'unapproved root file');
   assert.equal(repositoryScopeViolation('README.md'), null);

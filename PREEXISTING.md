@@ -28,8 +28,8 @@ contracts, x402 protocol, SDK or documentation site as newly created during ETHO
    to the whole entry or count it again as newly written final-day code.
 
 Times above are UTC commit times. See the
-[pre-event-to-September-12 diff](https://github.com/0xmdrakib/AgentDomain/compare/f1bac8f44830cd8e57cfa148ad876ef6933966a0...4ac0d284e603a2289c248a981821ee975899e699)
-and [new-work record](BUILT_DURING_ETHONLINE.md). Final-day source must be assessed
+[pre-event-to-September-12 diff](https://github.com/0xmdrakib/AgentDomain/compare/f1bac8f44830cd8e57cfa148ad876ef6933966a0...4ac0d284e603a2289c248a981821ee975899e699).
+Final-day source must be assessed
 from its own subsequent diff, not the repository's total size. No commit dates
 or history have been rewritten to imply earlier progress.
 
@@ -62,5 +62,5 @@ backend, provisioning implementation and customer information are not claimed
 to be open source. The independent inspection path uses public RPC without
 access to those systems. Reused libraries retain their licenses and notices.
 
-See [the new-work record](BUILT_DURING_ETHONLINE.md) and
-[AI disclosure](AI_DISCLOSURE.md) for the feature-specific scope and evidence.
+See [AI disclosure](AI_DISCLOSURE.md) for AI-assisted development and
+[the changelog](CHANGELOG.md) for release evidence.

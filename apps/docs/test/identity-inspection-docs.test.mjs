@@ -219,56 +219,25 @@ test('the dated LangChain follow-up separates registry signatures from OIDC and 
   assert.doesNotMatch(eventRelease, /0\.11\.0|September 14|2026-09-14/);
 });
 
-test('event and AI disclosures separate their original checkpoint from later publication', async () => {
-  for (const name of ['BUILT_DURING_ETHONLINE.md', 'AI_DISCLOSURE.md']) {
-    const source = await readFile(new URL(`../../../${name}`, import.meta.url), 'utf8');
-    assert.match(source, /At the September 13 checkpoint/);
-    const postEvent = source.match(
-      /^\*\*Post-event update, September 14:\*\*[\s\S]*?(?=\r?\n\r?\n)/m,
-    )?.[0];
-    assert.ok(postEvent, `${name}: missing current post-event summary`);
-    assert.match(
-      postEvent,
-      /all eight packages are published at 0\.11\.0:\s+\*\*six npm packages and two PyPI packages\*\*/,
-    );
-    assert.match(postEvent, /`agentdomain-crewai` and\s+`agentdomain-autogen`/);
-    assert.equal(
-      markdownLinkTarget(postEvent, 'dated Python changelog'),
-      'CHANGELOG.md#python-0110---2026-09-14-follow-up',
-    );
-    assert.match(
-      postEvent,
-      /registry and CI artifact evidence and verified cryptographic attestations for\s+both Python releases/,
-    );
-    assert.equal(
-      markdownLinkTarget(postEvent, "LangChain's first local publication"),
-      'CHANGELOG.md#langchain-0110---2026-09-14-follow-up',
-    );
-    assert.match(
-      postEvent,
-      /has no OIDC provenance; the five earlier npm releases have verified GitHub OIDC\s+provenance/,
-    );
-    assert.doesNotMatch(postEvent, /unpublished|source candidate|seven published|still pending/i);
-  }
+test('AI disclosure states human control without event-submission claims', async () => {
+  const source = await readFile(new URL('../../../AI_DISCLOSURE.md', import.meta.url), 'utf8');
+  assert.match(source, /agent-native identity and communications infrastructure/);
+  assert.match(source, /OpenAI Codex has assisted its development/);
+  assert.match(source, /not permission to sign a transaction, spend funds/);
+  assert.match(source, /human approval callback/);
+  assert.equal(markdownLinkTarget(source, 'changelog'), 'CHANGELOG.md');
+  assert.doesNotMatch(source, /ETHOnline|ETHGlobal|hackathon|submission|post-event|demo/i);
 });
 
-test('publication follow-ups preserve historical releases and all disclosure text outside the current summary', async () => {
+test('publication follow-ups preserve historical changelog entries', async () => {
   for (const [name, expectedHash] of [
     ['CHANGELOG.md', 'b028ff760c650ca6833d067a364942229521c3eb704ac8c8c1a7df62ba17305b'],
-    [
-      'BUILT_DURING_ETHONLINE.md',
-      'ce07a2720ce62326645e9d1dc59dae2409e058d0ceae8cd826066999b42ec49b',
-    ],
-    ['AI_DISCLOSURE.md', '19a395defd8392b664f485f5d34796b687e535eae7368d13cd3b33d7d157c523'],
   ]) {
     const source = (
       await readFile(new URL(`../../../${name}`, import.meta.url), 'utf8')
     ).replaceAll('\r\n', '\n');
     // Freeze the pre-Python-publication text, independent of checkout line endings.
-    const historical =
-      name === 'CHANGELOG.md'
-        ? source.slice(source.indexOf('## LangChain 0.11.0 - 2026-09-14 Follow-Up'))
-        : source.replace(/^\*\*Post-event update, September 14:\*\*[\s\S]*?\n\n/m, '');
+    const historical = source.slice(source.indexOf('## LangChain 0.11.0 - 2026-09-14 Follow-Up'));
     assert.equal(createHash('sha256').update(historical).digest('hex'), expectedHash, name);
   }
 });
@@ -364,12 +333,8 @@ test('renewal docs separate unsigned plans, future spending authority and actual
   assert.match(source, /network gas/);
 });
 
-test('public disclosures distinguish the pre-event baseline from both event contributions', async () => {
+test('public records preserve the event baseline and general AI disclosure', async () => {
   const preexisting = await readFile(new URL('../../../PREEXISTING.md', import.meta.url), 'utf8');
-  const built = await readFile(
-    new URL('../../../BUILT_DURING_ETHONLINE.md', import.meta.url),
-    'utf8',
-  );
   const ai = await readFile(new URL('../../../AI_DISCLOSURE.md', import.meta.url), 'utf8');
   for (const value of [
     'f1bac8f44830cd8e57cfa148ad876ef6933966a0',
@@ -381,11 +346,9 @@ test('public disclosures distinguish the pre-event baseline from both event cont
     assert.ok(preexisting.includes(value), `Missing baseline evidence: ${value}`);
   }
   assert.match(preexisting, /new event work in this entry, not pre-event code/);
-  assert.match(built, /## 1\. Resumable, Wallet-Safe Registration/);
-  assert.match(built, /## 2\. Independent Agent Identity Inspection/);
-  assert.match(built, /do not create x402, the registry contract or a new registration contract/);
-  assert.match(ai, /Founder testing and the final voice recording are not asserted complete/);
-  for (const source of [preexisting, built, ai]) {
+  assert.match(ai, /Resumable registration, payment-state handling and recovery/);
+  assert.match(ai, /Read-only identity and renewal inspection/);
+  for (const source of [preexisting, ai]) {
     assert.doesNotMatch(
       source,
       /coordinating implementation|frontend owner|parent handles|\bFermat\b/i,
