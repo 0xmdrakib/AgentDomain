@@ -9,9 +9,16 @@ updates:
       timezone: Etc/UTC
     open-pull-requests-limit: 5
     groups:
-      public-javascript-dependencies:
+      public-compatible-updates:
         patterns:
           - '*'
+        update-types:
+          - minor
+          - patch
+        # Wallet libraries need separate license and integration review.
+        exclude-patterns:
+          - '@walletconnect/*'
+          - '@reown/*'
 
   - package-ecosystem: github-actions
     directory: /
