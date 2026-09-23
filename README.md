@@ -47,8 +47,8 @@ renewal observations and unsigned planning. Their published tarballs were
 verified against the reviewed GitHub Actions artifacts on September 14.
 Publication after the event is recorded separately in the [changelog](CHANGELOG.md);
 it is not additional work claimed during the hackathon. See the
-[event evidence](BUILT_DURING_ETHONLINE.md#release-and-demo-evidence) for the
-original implementation and [Identity Check](https://agentdomain.app/verify) demo.
+[pre-existing work record](PREEXISTING.md) for the event baseline and the
+[Identity Check](https://agentdomain.app/verify) demo.
 
 - `inspectAgentIdentity` observes the AgentDomain registry on Base without
   platform credentials or a wallet. Missing identities, RPC errors, owner
@@ -95,8 +95,8 @@ authorize actions, or prove npm publication. Published outputs:
 [discovery](https://docs.agentdomain.app/.well-known/agentdomain.json).
 
 For the ETHOnline contribution and reused-work distinction, see
-[PREEXISTING.md](PREEXISTING.md), [BUILT_DURING_ETHONLINE.md](BUILT_DURING_ETHONLINE.md)
-and [AI_DISCLOSURE.md](AI_DISCLOSURE.md).
+[PREEXISTING.md](PREEXISTING.md). For AI assistance in development, see
+[AI_DISCLOSURE.md](AI_DISCLOSURE.md).
 
 ## Tech stack
 

@@ -1,89 +1,34 @@
 # AI Assistance Disclosure
 
-AgentDomain used OpenAI Codex to assist ETHOnline 2026 work on resumable
-registration, identity/renewal inspection, owner-approved auto-renew controls,
-LangChain/CrewAI/AutoGen integrations and machine-readable documentation.
-This is not represented as unaided human coding.
+AgentDomain is the agent-native identity and communications infrastructure.
+OpenAI Codex has assisted its development. We do not represent AI-assisted work
+as unaided human coding.
 
 ## Human Direction
 
-The founder defines the product and its user problems, approves scope and product
-decisions, and directs the requirements for reliable registration recovery and
-useful, independently inspectable lifecycle information. Inspection and framework
-planning are read-only; registration and owner-wallet execution are separate
-authorized workflows. The founder owns final approval, hands-on testing and the
-human-narrated demo. An agent's tool output is not permission to sign or spend.
-
-Founder testing and the final voice recording are not asserted complete here.
-Before submission, the founder must exercise the actual implemented flow,
-understand its trust limitations, approve the final claims, and record their own
-spoken demo using their original voice and actual product footage. AI-generated
-video or narration must not substitute for that contribution.
+The founder defines the product, user problems, scope and acceptance criteria,
+reviews the resulting work, and makes final product and release decisions.
+An agent's output is not permission to sign a transaction, spend funds, change
+production services or publish a release. Those actions follow their own
+authorization and verification requirements.
 
 ## Assisted Work
 
-- Repository inspection and implementation planning for the public registration
-  and inspection interfaces.
-- Code generation, editing and review under the approved scope.
-- Automated test cases, local validation and failure-path analysis.
-- Usage documentation, the pre-existing/new-work distinction and this disclosure.
+Codex has assisted with repository inspection, implementation planning, code
+editing, tests, failure-path analysis, documentation and release preparation.
+The assisted public areas include:
 
-Assisted areas include registration SDK/recovery code, shared public response
-contracts, frontend progress/payment/notification handling and tests in commits
-`f14392b` and `c4f477c`. The final-day work includes the standalone inspection SDK,
-renewal SDK, the `/verify` observations, MCP inspection/unsigned planning tools,
-the three executable framework integrations, generated documentation and their
-tests. Exact
-source and commit boundaries are listed in
-[BUILT_DURING_ETHONLINE.md](BUILT_DURING_ETHONLINE.md); final release evidence is
-not assumed complete from these descriptions.
+- Resumable registration, payment-state handling and recovery without automatic
+  repeat payment after an uncertain outcome.
+- Read-only identity and renewal inspection, plus unsigned auto-renew planning.
+  Wallet execution requires a separate host-provided human approval callback.
+- SDK, MCP, LangChain, CrewAI and AutoGen interfaces and their tests.
+- Machine-readable documentation generated from reviewed public sources.
 
-## Public Task Specifications
+The registration changes include commits `f14392b` and `c4f477c`. The
+[changelog](CHANGELOG.md) records package releases and their verified evidence.
+Code review, automated tests and release artifacts are separate from proof that
+a live user workflow has been manually exercised or deployed successfully.
 
-For registration, the instructions were to make progress resumable, isolate it
-to the correct payer, distinguish explicit payment rejection from uncertain
-outcomes, and recover through authenticated reads without automatically paying
-again. Tests and UI states must expose those distinctions.
-
-For inspection, the instructions were to expose `inspectAgentIdentity` through
-a read-only, idempotent MCP tool and a verification view; accept a domain or token
-ID and optional expected owner; use Base mainnet without platform authentication;
-never accept model-selected RPC endpoints, sign, write or fetch metadata; and
-accurately explain the limits of RPC observations. Tests must verify those
-boundaries, including missing identities and failed or inconsistent reads.
-
-For renewal, the task was to read the existing vault at the identity's canonical
-block hash, distinguish minimum fee from registrar quote, and prepare exact
-unsigned setting changes. Wallet execution requires a host human-approval
-callback and fresh checks. A confirmed flag transaction is not a completed
-domain renewal, and disabling does not cancel a pending reservation.
-
-For frameworks and documentation, the task was to use real framework APIs,
-restrict the new agent flows to inspection/unsigned planning, and generate
-machine-readable references from reviewed public sources. Tests use controlled
-RPC data and fake wallets where needed, not live paid execution. CrewAI's native
-MCP path passed Windows and Linux native fixture tests; its optional Python
-recipe retains known Chroma advisories, and no full security audit is claimed.
-The owner requested a coordinated 0.11.0 release candidate for all six npm
-packages and two standalone Python distributions, `agentdomain-crewai` and
-`agentdomain-autogen`. AI-assisted work includes their packaging, typed public
-interfaces, retained native MCP entrypoints and source-derived documentation.
-At the September 13 checkpoint, their registry publication was not yet verified. Earlier SDK/MCP 0.10.0
-publication and UI/docs deployment are historical evidence only, linked in
-[BUILT_DURING_ETHONLINE.md](BUILT_DURING_ETHONLINE.md#release-and-demo-evidence).
-
-**Post-event update, September 14:** all eight packages are published at 0.11.0:
-**six npm packages and two PyPI packages**, `agentdomain-crewai` and
-`agentdomain-autogen`. The
-[dated Python changelog](CHANGELOG.md#python-0110---2026-09-14-follow-up) records the
-registry and CI artifact evidence and verified cryptographic attestations for
-both Python releases.
-[LangChain's first local publication](CHANGELOG.md#langchain-0110---2026-09-14-follow-up)
-has no OIDC provenance; the five earlier npm releases have verified GitHub OIDC
-provenance. This later release work does not extend the event contribution
-window or substitute for the founder's final approval.
-
-These are feature-specific public specifications, not copies of operational
-planning or production configuration. No credentials, customer information,
-private code or unrelated development history are included. Only the reviewed
-event extensions and their actual evidence should be represented as the new contribution.
+These descriptions cover public features, not private operational plans,
+credentials, customer data or backend implementation.
