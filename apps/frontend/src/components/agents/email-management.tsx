@@ -392,9 +392,10 @@ export function EmailManagement({
       });
       const data: unknown = await res.json().catch(() => null);
       if (scope !== viewScopeRef.current) return;
-      if ([400, 401, 402, 403, 404, 409, 422].includes(res.status)) {
+      if (!retry && [400, 401, 402, 403, 404, 409, 422].includes(res.status)) {
         updateAddressState({
           ...invalidateEmailObservation(addressStateRef.current),
+          change: null,
           request: null,
           outcome: null,
         });
