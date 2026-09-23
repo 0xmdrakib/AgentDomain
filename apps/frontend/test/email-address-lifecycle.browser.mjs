@@ -117,6 +117,7 @@ try {
       change: null,
       unavailable: false,
       dropNext: false,
+      rejectNext: false,
       mutations: [],
       syncReads: [],
       omitAddresses: false,
@@ -202,6 +203,13 @@ try {
           /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/,
         );
         state.mutations.push({ requestId, action, target, body: request.postData() });
+        if (state.rejectNext) {
+          state.rejectNext = false;
+          return route.fulfill({
+            status: 409,
+            json: { code: 'EMAIL_ADDRESS_TAKEN', message: 'Address already assigned.' },
+          });
+        }
         if (state.dropNext) {
           state.dropNext = false;
           return route.abort('failed');
@@ -411,6 +419,17 @@ try {
         'Preserved draft subject',
       );
       await capture('cancelled');
+      state.rejectNext = true;
+      await panel.getByLabel('Alias username').fill('billing');
+      await activate(panel.getByRole('button', { name: 'Add', exact: true }));
+      await page.getByText('Address change rejected', { exact: true }).waitFor();
+      assert.equal(await panel.getByText('Request status unknown', { exact: true }).count(), 0);
+      assert.equal(await panel.getByRole('button', { name: 'Retry request' }).count(), 0);
+      assert.equal(await panel.getByLabel('Alias username').isDisabled(), false);
+      assert.equal(
+        await panel.getByPlaceholder('Subject', { exact: true }).inputValue(),
+        'Preserved draft subject',
+      );
       state.addresses = [];
       state.change = null;
       await refresh();

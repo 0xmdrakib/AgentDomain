@@ -392,6 +392,20 @@ export function EmailManagement({
       });
       const data: unknown = await res.json().catch(() => null);
       if (scope !== viewScopeRef.current) return;
+      if ([400, 401, 402, 403, 404, 409, 422].includes(res.status)) {
+        updateAddressState({
+          ...invalidateEmailObservation(addressStateRef.current),
+          request: null,
+          outcome: null,
+        });
+        const message =
+          data && typeof data === 'object' && 'message' in data && typeof data.message === 'string'
+            ? data.message
+            : 'The address change was rejected. Reload the inbox before trying again.';
+        toast.error('Address change rejected', { description: message });
+        await loadMessages(filter, true);
+        return;
+      }
       const result = readAddressMutation(
         res.status,
         data,
