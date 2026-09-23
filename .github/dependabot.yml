@@ -7,11 +7,20 @@ updates:
       day: monday
       time: '04:00'
       timezone: Etc/UTC
-    open-pull-requests-limit: 5
+    # Pause routine version PRs until grouped lockfile formatting and majors are reviewed.
+    # Security update PRs are not subject to this version-update limit.
+    open-pull-requests-limit: 0
     groups:
-      public-javascript-dependencies:
+      public-compatible-updates:
         patterns:
           - '*'
+        update-types:
+          - minor
+          - patch
+        # Wallet libraries need separate license and integration review.
+        exclude-patterns:
+          - '@walletconnect/*'
+          - '@reown/*'
 
   - package-ecosystem: github-actions
     directory: /
