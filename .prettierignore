@@ -1,4 +1,6 @@
 node_modules/
+local-tools/
+output/
 dist/
 build/
 .next/
