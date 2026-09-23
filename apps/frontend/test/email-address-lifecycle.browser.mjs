@@ -399,6 +399,15 @@ try {
       await panel.getByText('Request status unknown', { exact: true }).waitFor();
       assert.equal(await send.isDisabled(), true);
       await capture('unknown');
+      state.rejectNext = true;
+      const retryCount = state.mutations.length;
+      await activate(panel.getByRole('button', { name: 'Retry request', exact: true }));
+      for (let attempt = 0; attempt < 20 && state.mutations.length === retryCount; attempt++)
+        await delay(50);
+      assert.equal(state.mutations.length, retryCount + 1);
+      await panel.getByText('Request status unknown', { exact: true }).waitFor();
+      assert.equal(await panel.getByRole('button', { name: 'Retry request' }).count(), 1);
+      assert.deepEqual(state.mutations.at(-1), unknown);
       await activate(panel.getByRole('button', { name: 'Retry request', exact: true }));
       await panel.getByText('Address change queued', { exact: true }).waitFor();
       assert.deepEqual(
