@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { parsers } from 'prettier/plugins/yaml';
 import {
   REVIEWED_PACKAGE_LICENSE_EXCEPTIONS,
   REVIEWED_PRODUCTION_LICENSES,
@@ -95,9 +96,9 @@ test('repository pins reviewed production dependencies and excludes unsafe graph
   assert.equal(rootPackage.pnpm.overrides['qs@<6.16.0'], '6.16.0');
   assert.match(lockfile, /qs@6\.16\.0:/);
   assert.doesNotMatch(lockfile, /qs@6\.15\.3:/);
-  assert.equal(rootPackage.pnpm.overrides['fast-uri@>=3.0.0 <3.1.6'], '3.1.6');
-  assert.match(lockfile, /fast-uri@3\.1\.6:/);
-  assert.doesNotMatch(lockfile, /fast-uri@3\.1\.5:/);
+  assert.equal(rootPackage.pnpm.overrides['fast-uri@>=3.0.0 <3.1.8'], '3.1.8');
+  assert.equal(frontendPackage.dependencies.next, '16.3.6');
+  assert.equal(frontendPackage.devDependencies['eslint-config-next'], '16.3.6');
   assert.equal(frontendPackage.dependencies.wagmi, '3.7.7');
   assert.equal(frontendPackage.dependencies['@coinbase/wallet-sdk'], '4.3.7');
   assert.equal(frontendPackage.dependencies['@walletconnect/ethereum-provider'], '2.21.8');
@@ -108,4 +109,61 @@ test('repository pins reviewed production dependencies and excludes unsafe graph
   assert.match(`${wagmiSource}\n${walletButtonSource}`, /wagmi\/connectors\/injected/);
   assert.match(workflow, /allow-licenses:/);
   assert.doesNotMatch(workflow, /deny-licenses:/);
+});
+
+test('security overrides patch every locked resolution while preserving dependency majors', async () => {
+  const manifest = JSON.parse(await readFile(path.join(repoRoot, 'package.json'), 'utf8'));
+  const lockfile = await readFile(path.join(repoRoot, 'pnpm-lock.yaml'), 'utf8');
+  const { children } = parsers.yaml.parse(lockfile);
+  assert.equal(children.length, 1);
+  const root = children[0].children.find(({ type }) => type === 'documentBody').children[0];
+  const mappingEntries = (node) => {
+    assert.equal(node.type, 'mapping');
+    return node.children.map(({ children: [key, value] }) => [
+      key.children[0].value,
+      value.children[0],
+    ]);
+  };
+  const sections = Object.fromEntries(mappingEntries(root));
+  const expectedOverrides = {
+    'brace-expansion@>=1.0.0 <1.1.21': '1.1.21',
+    'brace-expansion@>=2.0.0 <2.1.7': '2.1.7',
+    'brace-expansion@>=4.0.0 <5.0.12': '5.0.12',
+    'devalue@>=5.0.0 <5.9.3': '5.9.3',
+    'fast-uri@>=3.0.0 <3.1.8': '3.1.8',
+    'hono@<4.13.7': '4.13.7',
+    'ip-address@<=10.7.0': '10.7.1',
+    'undici@>=7.0.0 <7.29.1': '7.29.1',
+    'undici@>=8.0.0 <8.10.2': '8.10.2',
+  };
+  const lockedOverrides = Object.fromEntries(
+    mappingEntries(sections.overrides).map(([key, value]) => [key, value.value]),
+  );
+  for (const [selector, version] of Object.entries(expectedOverrides)) {
+    assert.equal(manifest.pnpm.overrides[selector], version);
+    assert.equal(lockedOverrides[selector], version);
+  }
+  for (const section of ['packages', 'snapshots']) {
+    const keys = mappingEntries(sections[section]).map(([key]) => key);
+    for (const [name, versions] of Object.entries({
+      'brace-expansion': ['1.1.21', '2.1.7', '5.0.12'],
+      devalue: ['5.9.3'],
+      'fast-uri': ['3.1.8'],
+      hono: ['4.13.7'],
+      'ip-address': ['10.7.1'],
+      next: ['16.3.6'],
+      'eslint-config-next': ['16.3.6'],
+      undici: ['7.29.1', '8.10.2'],
+    })) {
+      assert.deepEqual(
+        [
+          ...new Set(
+            keys.filter((key) => key.startsWith(`${name}@`)).map((key) => key.split('(')[0]),
+          ),
+        ].sort(),
+        versions.map((version) => `${name}@${version}`).sort(),
+        `${section}: ${name} must contain only the reviewed patched resolutions`,
+      );
+    }
+  }
 });

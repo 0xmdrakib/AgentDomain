@@ -26,9 +26,10 @@ The assisted public areas include:
 - Machine-readable documentation generated from reviewed public sources.
 
 The registration changes include commits `f14392b` and `c4f477c`. The
-[changelog](CHANGELOG.md) records package releases and their verified evidence.
+[release notes](https://github.com/0xmdrakib/AgentDomain/releases/tag/npm-v0.11.0)
+record package publications and their verified evidence.
 Code review, automated tests and release artifacts are separate from proof that
 a live user workflow has been manually exercised or deployed successfully.
 
-These descriptions cover public features, not private operational plans,
-credentials, customer data or backend implementation.
+This disclosure describes AI assistance in the publicly available product,
+developer tools and documentation.

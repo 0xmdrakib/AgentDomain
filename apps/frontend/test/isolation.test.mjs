@@ -65,8 +65,8 @@ test('package is private Apache-2.0 source with pinned Cloudflare adapter versio
   const manifest = JSON.parse(read('package.json'));
   assert.equal(manifest.private, true);
   assert.equal(manifest.license, 'Apache-2.0');
-  assert.equal(manifest.dependencies.next, '16.3.4');
-  assert.equal(manifest.devDependencies['eslint-config-next'], '16.3.4');
+  assert.equal(manifest.dependencies.next, '16.3.6');
+  assert.equal(manifest.devDependencies['eslint-config-next'], '16.3.6');
   assert.equal(manifest.devDependencies['@opennextjs/cloudflare'], '1.20.6');
   assert.equal(manifest.devDependencies.wrangler, '4.129.0');
   assert.match(manifest.scripts['build:cloudflare'], /opennextjs-cloudflare build/);

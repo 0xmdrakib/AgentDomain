@@ -1,10 +1,11 @@
 # AgentDomain
 
-Public developer tools for autonomous identity on Base.
+AgentDomain is the agent-native identity and communications infrastructure.
 
-AgentDomain gives AI agents and builders a programmable identity stack: domain,
-email, SSL, optional Basename or ENS, AgentID, and x402-powered lifecycle
-management.
+Built for developers, people working through agents, and autonomous workflows,
+AgentDomain makes identity and communication programmable through APIs, SDKs,
+and agent integrations. Domains, DNS, HTTPS, email, AgentID, optional Basename
+or ENS, and x402 payments support that foundation.
 
 - Website: [agentdomain.app](https://agentdomain.app)
 - Documentation: [docs.agentdomain.app](https://docs.agentdomain.app)
@@ -36,7 +37,7 @@ Install the published SDK:
 npm install @agentdomain/sdk@0.11.0
 ```
 
-See the [changelog](CHANGELOG.md) for public package release notes and
+See the [release notes](https://github.com/0xmdrakib/AgentDomain/releases/tag/npm-v0.11.0) for public package releases and
 compatibility details. The five earlier npm 0.11.0 releases have verified GitHub
 Actions OIDC provenance; LangChain's local publication has no OIDC provenance.
 
@@ -45,10 +46,9 @@ Actions OIDC provenance; LangChain's local publication has no OIDC provenance.
 The **0.11.0** SDK and MCP releases include independent identity inspection,
 renewal observations and unsigned planning. Their published tarballs were
 verified against the reviewed GitHub Actions artifacts on September 14.
-Publication after the event is recorded separately in the [changelog](CHANGELOG.md);
-it is not additional work claimed during the hackathon. See the
-[pre-existing work record](PREEXISTING.md) for the event baseline and the
-[Identity Check](https://agentdomain.app/verify) demo.
+See the [release notes](https://github.com/0xmdrakib/AgentDomain/releases/tag/npm-v0.11.0)
+for publication evidence and the [Identity Check](https://agentdomain.app/verify)
+for read-only inspection.
 
 - `inspectAgentIdentity` observes the AgentDomain registry on Base without
   platform credentials or a wallet. Missing identities, RPC errors, owner
@@ -94,8 +94,7 @@ authorize actions, or prove npm publication. Published outputs:
 [API index](https://docs.agentdomain.app/api-index.json), and
 [discovery](https://docs.agentdomain.app/.well-known/agentdomain.json).
 
-For the ETHOnline contribution and reused-work distinction, see
-[PREEXISTING.md](PREEXISTING.md). For AI assistance in development, see
+For AI assistance in development, see
 [AI_DISCLOSURE.md](AI_DISCLOSURE.md).
 
 ## Tech stack
