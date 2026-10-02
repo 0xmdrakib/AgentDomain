@@ -230,6 +230,18 @@ test('setup updates preserve Python and pnpm inputs without removed pip-install 
   }
 });
 
+test('build and release workflows use a coordinated supported Node 22 runtime', async () => {
+  const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.equal(manifest.engines.node, '>=22.19.0');
+  for (const file of ['public-ci.yml', 'publish-npm.yml', 'publish-python.yml']) {
+    const setup = Object.values(workflows[file].jobs).flatMap((job) =>
+      (job.steps ?? []).filter((step) => step.uses?.startsWith('actions/setup-node@')),
+    );
+    assert.ok(setup.length > 0, `${file}: missing Node setup`);
+    for (const step of setup) assert.equal(step.with['node-version'], '22.23.2');
+  }
+});
+
 test('release OIDC remains isolated to main-only production publishing after validation', () => {
   for (const [file, environment] of [
     ['publish-npm.yml', 'npm-production'],
