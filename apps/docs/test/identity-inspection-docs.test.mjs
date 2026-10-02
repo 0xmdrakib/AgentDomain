@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
@@ -62,161 +61,27 @@ test('the release catalog records all eight published packages with exact regist
   );
 });
 
-test('the dated Python follow-up records both publications with verified artifact attestations', async () => {
-  const changelog = await readFile(new URL('../../../CHANGELOG.md', import.meta.url), 'utf8');
-  const followUp = changelog.match(
-    /^## Python 0\.11\.0 - 2026-09-14 Follow-Up\r?\n[\s\S]*?(?=^## )/m,
-  )?.[0];
-  assert.ok(followUp, 'Missing dated Python publication follow-up');
-  assert.equal(changelog.match(/^## .+/m)?.[0], '## Python 0.11.0 - 2026-09-14 Follow-Up');
+test('retired root records are absent and release evidence remains linked', async () => {
+  for (const name of ['CHANGELOG.md', 'PREEXISTING.md']) {
+    await assert.rejects(readFile(new URL(`../../../${name}`, import.meta.url)), {
+      code: 'ENOENT',
+    });
+  }
+  const readme = await readFile(new URL('../../../README.md', import.meta.url), 'utf8');
   assert.equal(
-    markdownLinkTarget(followUp, '`agentdomain-crewai` 0.11.0'),
-    'https://pypi.org/project/agentdomain-crewai/0.11.0/',
+    new Set([...readme.matchAll(/\[release notes\]\(([^)]+)\)/g)].map(([, url]) => url)).size,
+    1,
   );
-  assert.match(followUp, /is now published on PyPI\. This first publication used/);
-  assert.equal(
-    markdownLinkTarget(followUp, 'GitHub Actions run 34873297689'),
-    'https://github.com/0xmdrakib/AgentDomain/actions/runs/34873297689',
+  assert.ok(readme.includes('https://github.com/0xmdrakib/AgentDomain/releases/tag/npm-v0.11.0'));
+  assert.match(
+    readme,
+    /AgentDomain is the agent-native identity and communications infrastructure/,
   );
   assert.match(
-    followUp,
-    /attempt 1, from reviewed public commit `99232d692d736737100ed4dec5e1d75130c70c6e`/,
+    readme,
+    /Built for developers, people working through agents, and autonomous workflows/,
   );
-  assert.match(
-    followUp,
-    /Registry metadata and comparison with the reviewed CI artifacts both passed/,
-  );
-  assert.equal(
-    markdownLinkTarget(followUp, '`agentdomain-autogen` 0.11.0'),
-    'https://pypi.org/project/agentdomain-autogen/0.11.0/',
-  );
-  assert.equal(
-    markdownLinkTarget(followUp, 'GitHub Actions run 34874957140'),
-    'https://github.com/0xmdrakib/AgentDomain/actions/runs/34874957140',
-  );
-  assert.match(
-    followUp,
-    /attempt 1, from the same reviewed public commit `99232d692d736737100ed4dec5e1d75130c70c6e`/,
-  );
-  assert.match(
-    followUp,
-    /Registry metadata, sizes and SHA-256 hashes match the reviewed CI artifacts/,
-  );
-  assert.match(followUp, /identical copies of all four Python archives and the same manifest/);
-  const artifacts = followUp
-    .split(/\r?\n/)
-    .filter((line) => /^\| (?:Wheel|Source distribution)\s*\|/.test(line))
-    .map((line) =>
-      line
-        .split('|')
-        .slice(1, -1)
-        .map((cell) => cell.trim()),
-    );
-  assert.deepEqual(artifacts, [
-    [
-      'Wheel',
-      '14,556 bytes',
-      '`c93ec113a4acdfcd1821066d613e81f6ebe3589c755185c74b88357301063ed3`',
-      '2026-09-14 17:14:44',
-    ],
-    [
-      'Source distribution',
-      '12,390 bytes',
-      '`f6a56b78ed9786f6e335fca2474bce6d7a31eb1f6adcaacdd823143c7fea5892`',
-      '2026-09-14 17:14:45',
-    ],
-    [
-      'Wheel',
-      '17,174 bytes',
-      '`27b49abe4a43b93657b58d54d0fba6785b6a53c317313a8ccf7d930ca89bea00`',
-      '2026-09-14 17:30:56.309991',
-    ],
-    [
-      'Source distribution',
-      '13,815 bytes',
-      '`6cd122cc58b5c144992d4f751f171896a036703b4a83f80ff9e2358c5e1d3a37`',
-      '2026-09-14 17:30:57.443951',
-    ],
-  ]);
-  assert.match(followUp, /Cryptographic attestation verification passed for both CrewAI artifacts/);
-  assert.match(
-    followUp,
-    /`pypi-attestations` 0\.0\.30 and Sigstore 4\.5\.0 with online production TUF/,
-  );
-  assert.match(
-    followUp,
-    /verified signatures, the `publish\/v1` predicate and signed artifact names\/hashes/,
-  );
-  assert.match(followUp, /`0xmdrakib\/AgentDomain` repository\/workflow at `refs\/heads\/main`/);
-  assert.match(
-    followUp,
-    /signed Fulcio deployment-environment\s+claim also matches `pypi-production`/,
-  );
-  assert.match(
-    followUp,
-    /Cryptographic attestation verification also passed for both AutoGen artifacts/,
-  );
-  assert.match(followUp, /all four Python artifacts completed at 17:35:09 UTC/);
-  assert.match(followUp, /official PyPA `Attestation\.verify` with online production TUF/);
-  assert.match(followUp, /\*\*eight published packages\*\*: \*\*six npm packages\*\*/);
-  assert.match(followUp, /\*\*two PyPI packages\*\*, all at \*\*0\.11\.0\*\*/);
-  assert.doesNotMatch(followUp, /unpublished|source candidate|still pending/i);
-  assert.match(
-    followUp,
-    /post-event publication follow-up,\s+not additional implementation claimed during ETHOnline/,
-  );
-});
-
-test('the dated LangChain follow-up separates registry signatures from OIDC and preserves release history', async () => {
-  const changelog = await readFile(new URL('../../../CHANGELOG.md', import.meta.url), 'utf8');
-  const followUp = changelog.match(
-    /^## LangChain 0\.11\.0 - 2026-09-14 Follow-Up\r?\n[\s\S]*?(?=^## )/m,
-  )?.[0];
-  assert.ok(followUp, 'Missing dated LangChain publication follow-up');
-  assert.match(followUp, /`@agentdomain\/langchain-plugin@0\.11\.0` was published on npm/);
-  assert.match(followUp, /approximately 14:25 UTC by `0xmdrakib`/);
-  assert.match(followUp, /owner-authorized one-time local\s+publication with official npm web 2FA/);
-  assert.match(followUp, /12,032-byte registry tarball has SHA-256/);
-  assert.ok(followUp.includes('83295a7f7398f52e08314562a2e900a145177cbd863d186b1f702f9d6bb7c355'));
-  assert.match(followUp, /SHA-512 matches the exact reviewed GitHub Actions archive/);
-  assert.equal(
-    markdownLinkTarget(followUp, 'run 34837830930'),
-    'https://github.com/0xmdrakib/AgentDomain/actions/runs/34837830930',
-  );
-  assert.ok(followUp.includes('f975c685477d6602a12511701f36e429fb7fe1b1'));
-  assert.match(
-    followUp,
-    /ECDSA signature, but this local publication has \*\*no\s+OIDC provenance\*\*/,
-  );
-  assert.match(
-    followUp,
-    /five earlier npm 0\.11\.0 releases below have verified\s+GitHub Actions OIDC provenance/,
-  );
-  assert.match(followUp, /that claim does not extend to LangChain/);
-  assert.match(followUp, /six published npm packages/);
-  assert.match(
-    followUp,
-    /two unpublished\s+Python source candidates\*\*, `agentdomain-crewai` and `agentdomain-autogen`/,
-  );
-  assert.match(
-    followUp,
-    /post-event publication follow-up, not additional\s+implementation claimed during ETHOnline/,
-  );
-  assert.match(changelog, /## npm 0\.11\.0 - 2026-09-14/);
-  assert.match(changelog, /five packages before stopping at the first LangChain/);
-  assert.match(changelog, /At the end of that run/);
-  assert.match(changelog, /post-event publication update/);
-  const eventRelease = changelog.match(
-    /^## SDK\/MCP 0\.10\.0 - 2026-09-13\r?\n[\s\S]*?(?=^## )/m,
-  )?.[0];
-  assert.ok(eventRelease, 'Missing historical September 13 release');
-  assert.match(
-    eventRelease,
-    /SDK and MCP 0\.10\.0 are published on npm with GitHub Actions provenance/,
-  );
-  assert.match(eventRelease, /separate LangChain\s+0\.1\.0 source candidate/);
-  assert.match(eventRelease, /first npm publication\s+remains pending/);
-  assert.doesNotMatch(eventRelease, /0\.11\.0|September 14|2026-09-14/);
+  assert.doesNotMatch(readme, /CHANGELOG\.md|PREEXISTING\.md|ETHOnline|ETHGlobal|hackathon/i);
 });
 
 test('AI disclosure states human control without event-submission claims', async () => {
@@ -225,21 +90,12 @@ test('AI disclosure states human control without event-submission claims', async
   assert.match(source, /OpenAI Codex has assisted its development/);
   assert.match(source, /not permission to sign a transaction, spend funds/);
   assert.match(source, /human approval callback/);
-  assert.equal(markdownLinkTarget(source, 'changelog'), 'CHANGELOG.md');
+  assert.equal(
+    markdownLinkTarget(source, 'release notes'),
+    'https://github.com/0xmdrakib/AgentDomain/releases/tag/npm-v0.11.0',
+  );
+  assert.doesNotMatch(source, /private operational plans|backend implementation/);
   assert.doesNotMatch(source, /ETHOnline|ETHGlobal|hackathon|submission|post-event|demo/i);
-});
-
-test('publication follow-ups preserve historical changelog entries', async () => {
-  for (const [name, expectedHash] of [
-    ['CHANGELOG.md', 'b028ff760c650ca6833d067a364942229521c3eb704ac8c8c1a7df62ba17305b'],
-  ]) {
-    const source = (
-      await readFile(new URL(`../../../${name}`, import.meta.url), 'utf8')
-    ).replaceAll('\r\n', '\n');
-    // Freeze the pre-Python-publication text, independent of checkout line endings.
-    const historical = source.slice(source.indexOf('## LangChain 0.11.0 - 2026-09-14 Follow-Up'));
-    assert.equal(createHash('sha256').update(historical).digest('hex'), expectedHash, name);
-  }
 });
 
 test('inspection docs pin verified 0.11.0 releases without treating the source catalog as registry proof', async () => {
@@ -333,25 +189,12 @@ test('renewal docs separate unsigned plans, future spending authority and actual
   assert.match(source, /network gas/);
 });
 
-test('public records preserve the event baseline and general AI disclosure', async () => {
-  const preexisting = await readFile(new URL('../../../PREEXISTING.md', import.meta.url), 'utf8');
+test('general AI disclosure retains assisted workflows without event or internal-role claims', async () => {
   const ai = await readFile(new URL('../../../AI_DISCLOSURE.md', import.meta.url), 'utf8');
-  for (const value of [
-    'f1bac8f44830cd8e57cfa148ad876ef6933966a0',
-    '2026-09-03T04:22:48Z',
-    '2026-09-06T01:18:16Z',
-    '2026-09-08T22:33:10Z',
-    '4ac0d284e603a2289c248a981821ee975899e699',
-  ]) {
-    assert.ok(preexisting.includes(value), `Missing baseline evidence: ${value}`);
-  }
-  assert.match(preexisting, /new event work in this entry, not pre-event code/);
   assert.match(ai, /Resumable registration, payment-state handling and recovery/);
   assert.match(ai, /Read-only identity and renewal inspection/);
-  for (const source of [preexisting, ai]) {
-    assert.doesNotMatch(
-      source,
-      /coordinating implementation|frontend owner|parent handles|\bFermat\b/i,
-    );
-  }
+  assert.doesNotMatch(
+    ai,
+    /ETHOnline|ETHGlobal|hackathon|coordinating implementation|frontend owner|parent handles|\bFermat\b/i,
+  );
 });
