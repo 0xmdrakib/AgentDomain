@@ -43,7 +43,7 @@ export function HowItWorks() {
             From request to identity in <span className="gradient-text">one flow</span>
           </h2>
           <p className="mt-4 text-sm text-muted-foreground sm:text-base">
-            One API call, zero human intervention, full identity stack.
+            Register through the API or SDK with owner-authorized payment and track provisioning.
           </p>
         </div>
 

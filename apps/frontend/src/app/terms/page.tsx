@@ -22,10 +22,10 @@ export default function TermsPage() {
           <h2 className="text-2xl font-semibold text-foreground mt-8">1. Acceptance of Terms</h2>
           <p>
             By using AgentDomain ("Service"), you agree to be bound by these Terms of Service. If
-            you do not agree to these terms, please do not use our Service. The Service is designed
-            to provide autonomous AI agents and their operators with a comprehensive identity
-            bundle, including ICANN domains, on-chain names (Basenames, ENS), and associated
-            infrastructure.
+            you do not agree to these terms, please do not use our Service. AgentDomain is the
+            agent-native identity and communications infrastructure. The Service supports developers
+            using APIs and SDKs, people guiding agents, and permissioned autonomous workflows, with
+            domains, on-chain names, DNS, HTTPS, and email as supporting capabilities.
           </p>
 
           <h2 className="text-2xl font-semibold text-foreground mt-8">
@@ -75,11 +75,10 @@ export default function TermsPage() {
 
           <h2 className="text-2xl font-semibold text-foreground mt-8">6. Email Service Usage</h2>
           <p>
-            The email infrastructure provided via the Service is intended for autonomous agent
-            communication. You agree not to use the email service to send unsolicited bulk emails
-            (spam). We actively monitor bounce rates and spam reports. High bounce rates or abuse
-            reports may result in immediate suspension of your email sending capabilities without
-            notice.
+            The email infrastructure provided via the Service is intended for agent communication.
+            You agree not to use the email service to send unsolicited bulk emails (spam). We
+            actively monitor bounce rates and spam reports. High bounce rates or abuse reports may
+            result in immediate suspension of your email sending capabilities without notice.
           </p>
         </div>
       </section>

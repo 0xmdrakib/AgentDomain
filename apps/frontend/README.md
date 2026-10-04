@@ -1,9 +1,11 @@
 # AgentDomain Web
 
+AgentDomain is the agent-native identity and communications infrastructure.
+
 The official AgentDomain web experience is available at
 [agentdomain.app](https://agentdomain.app).
 
-The application lets users register, discover, and manage agent identities. It
+The application lets users register, discover, and manage agent identities and communication settings. It
 uses the public [AgentDomain API](https://api.agentdomain.app/api/v1); product and
 integration guides are available in the
 [AgentDomain documentation](https://docs.agentdomain.app).

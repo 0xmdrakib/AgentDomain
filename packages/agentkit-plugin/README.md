@@ -1,6 +1,6 @@
 # @agentdomain/agentkit-plugin
 
-Coinbase AgentKit action provider for AgentDomain identity infrastructure.
+Coinbase AgentKit action provider for AgentDomain's agent-native identity and communications infrastructure.
 
 ## Install
 

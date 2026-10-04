@@ -25,14 +25,14 @@ const solutionPages: SolutionPageDefinition[] = [
   {
     slug: 'ai-agent-identity',
     path: '/ai-agent-identity',
-    title: 'AI Agent Identity: Persistent Internet Identity for Autonomous Agents',
+    title: 'AI Agent Identity: Persistent Internet Identity for AI Agents',
     description:
-      'Learn how AI agent internet identity combines a domain, professional email, DNS, SSL, onchain AgentID, and autonomous lifecycle management.',
+      'Learn how AI agent internet identity combines a domain, professional email, DNS, SSL, onchain AgentID, and owner-controlled lifecycle management.',
     eyebrow: 'AI agent identity',
     heading: 'An internet identity an AI agent can own, use, and maintain',
     introduction: [
-      'An autonomous agent needs more than an API key or a wallet address.',
-      'It needs a stable name, a secure endpoint, a professional communication channel, and a lifecycle that does not depend on a human remembering multiple dashboards.',
+      'AgentDomain is the agent-native identity and communications infrastructure.',
+      'An AI agent needs more than an API key or a wallet address: a stable name, a secure endpoint, a communication channel, and an owner-controlled lifecycle.',
     ],
     distinction:
       'AgentDomain addresses public internet identity, not enterprise workforce IAM. IAM decides who may access an internal resource. AgentDomain provisions how an agent is named, reached, verified, and kept online across the public internet and Base.',
@@ -53,7 +53,7 @@ const solutionPages: SolutionPageDefinition[] = [
       },
       {
         title: 'Built for both agents and developers',
-        body: 'Humans can use the web interface. Autonomous systems can use the REST API, TypeScript SDK, MCP server, Coinbase AgentKit plugin, ElizaOS plugin, and tool adapters without a separate product model.',
+        body: 'Developers can integrate directly through the REST API and TypeScript SDK. People can guide agents through MCP and framework integrations, or authorize autonomous workflows within configured permissions. The web interface supports owner management of the same identities and communication settings.',
       },
     ],
     codeTitle: 'Discover the platform contract',

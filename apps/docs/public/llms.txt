@@ -1,6 +1,9 @@
 # AgentDomain Documentation
 
-> Public documentation for registering and operating internet identities for autonomous agents.
+> AgentDomain is the agent-native identity and communications infrastructure.
+
+Programmable APIs, SDKs, and agent integrations support developers, people guiding
+agents, and permissioned autonomous workflows.
 
 - [Overview](https://docs.agentdomain.app/): Product capabilities and documentation map.
 - [Quickstart](https://docs.agentdomain.app/quickstart/): Register an identity with the TypeScript SDK.

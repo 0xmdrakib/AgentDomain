@@ -1,5 +1,7 @@
 # AgentDomain Documentation
 
+AgentDomain is the agent-native identity and communications infrastructure.
+
 The official AgentDomain documentation is available at
 [docs.agentdomain.app](https://docs.agentdomain.app).
 

@@ -21,8 +21,7 @@ export default defineConfig({
     starlight({
       title: 'AgentDomain Docs',
       titleDelimiter: '|',
-      description:
-        'Build, register, and operate durable internet identities for autonomous agents.',
+      description: 'Programmable identity and communication infrastructure for AI agents.',
       logo: {
         light: './src/assets/logo.svg',
         dark: './src/assets/logo-black.svg',

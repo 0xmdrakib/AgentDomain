@@ -844,8 +844,7 @@ export const purchaseServicePlanAction = {
 
 export const agentDomainPlugin = {
   name: 'agentdomain',
-  description:
-    'Identity infrastructure for AI agents on Base (domain + Basename + DNS + email + SSL).',
+  description: 'Programmable identity and communication infrastructure for AI agents.',
   actions: [
     quoteRegistrationAction,
     registerIdentityAction,

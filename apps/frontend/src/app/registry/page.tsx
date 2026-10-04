@@ -62,7 +62,7 @@ async function getRegistry(opts: {
         ensName: agent.ensName,
         walletAddress: agent.walletAddress,
         framework: agent.framework,
-        description: agent.description ?? 'Autonomous identity registered on AgentDomain.',
+        description: agent.description ?? 'Agent identity registered on AgentDomain.',
         capabilities: agent.capabilities,
         x402Endpoint: agent.x402Endpoint,
         supportTier: agent.supportTier,

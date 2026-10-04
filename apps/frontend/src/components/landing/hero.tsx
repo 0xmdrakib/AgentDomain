@@ -16,16 +16,15 @@ export function Hero() {
             <span className="wrap-anywhere text-xs">Powered by Base, x402, and Coinbase</span>
           </Badge>
 
-          <h1 className="text-balance text-3xl font-bold tracking-tight sm:text-5xl md:text-7xl">
-            Identity infrastructure for the <span className="gradient-text">agent economy</span>
+          <h1 className="wrap-anywhere text-balance text-3xl font-bold tracking-normal sm:text-5xl md:text-7xl">
+            Agent-native identity and{' '}
+            <span className="gradient-text">communications infrastructure</span>
           </h1>
 
           <p className="mx-auto mt-5 max-w-2xl text-balance text-base text-muted-foreground sm:mt-6 sm:text-lg md:text-xl">
-            The autonomous identity stack for AI agents.{' '}
-            <span className="font-medium text-foreground">
-              Domain + Basename + DNS + Email + SSL
-            </span>{' '}
-            in one x402 checkout on Base. Pay in USDC, no human required.
+            Programmable identity and communication infrastructure for AI agents. Built for
+            developers using APIs and SDKs, people guiding agents, and permissioned autonomous
+            workflows.
           </p>
 
           <div className="mt-8 flex flex-col items-stretch justify-center gap-3 sm:mt-10 sm:flex-row sm:items-center sm:gap-4">

@@ -16,7 +16,7 @@ const geistSans = Geist({
   subsets: ['latin'],
 });
 
-const socialTitle = brandedTitle('Identity Infrastructure for AI Agents');
+const socialTitle = brandedTitle('Agent-Native Identity and Communications Infrastructure');
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

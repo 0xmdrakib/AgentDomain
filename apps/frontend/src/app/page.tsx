@@ -23,7 +23,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const customHost = getCustomDomainHost(await headers());
   if (!customHost) {
     return createPageMetadata({
-      title: 'Identity Infrastructure for AI Agents',
+      title: 'Agent-Native Identity and Communications Infrastructure',
       description: DEFAULT_DESCRIPTION,
       path: '/',
     });

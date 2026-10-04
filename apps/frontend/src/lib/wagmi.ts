@@ -84,7 +84,8 @@ export function getWagmiConfig() {
               projectId,
               metadata: {
                 name: 'AgentDomain',
-                description: 'Identity infrastructure for AI agents',
+                description:
+                  'Programmable identity and communication infrastructure for AI agents.',
                 url: appOrigin,
                 icons: [`${appOrigin}${BRAND_ASSETS.appIcon}`],
               },
