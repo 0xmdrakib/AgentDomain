@@ -15,6 +15,7 @@ overrides:
   devalue@>=5.0.0 <5.9.3: 5.9.3
   fast-uri@>=3.0.0 <3.1.8: 3.1.8
   hono@<4.13.7: 4.13.7
+  http-cache-semantics: 4.3.0
   ip-address@<=10.7.0: 10.7.1
   qs@<6.16.0: 6.16.0
   sharp@<0.35.4: 0.35.4
@@ -23,6 +24,11 @@ overrides:
   use-sync-external-store@<1.4.0: 1.4.0
   uuid@<11.1.1: 11.1.1
   ws@>=8.0.0 <8.21.0: 8.21.0
+
+patchedDependencies:
+  http-cache-semantics@4.3.0:
+    hash: 3131ab995666b9ca4aade60067942f6415b2649067a41d2357925027529c548b
+    path: patches/http-cache-semantics@4.3.0.patch
 
 importers:
   .:
@@ -6282,10 +6288,10 @@ packages:
         integrity: sha512-q+310vW8zmymYHALr1da4HyXUQ0zgiIwIicEfotYPWGN0OJVEN/58IJ3A4GBYcEq3LGAZqKb+ugvP0GNB9CEAA==,
       }
 
-  http-cache-semantics@4.2.0:
+  http-cache-semantics@4.3.0:
     resolution:
       {
-        integrity: sha512-dTxcvPXqPvXBQpq5dUr6mEMJX4oIEFv6bwom3FDwKRDsuIjjJGANqhBuoAn9c1RQJIdAKav33ED65E2ys+87QQ==,
+        integrity: sha512-M5t5LlJpS1UHMjvwRQVdFHvPISGeLAxNcrWuJkeGh0KxsqCHZ1O3NXZU/8x7cD0BDcGW8kapxMKTvwlqrNkHkA==,
       }
 
   http-errors@2.0.1:
@@ -13437,7 +13443,7 @@ snapshots:
       get-tsconfig: 5.0.0-beta.4
       github-slugger: 2.0.0
       html-escaper: 3.0.3
-      http-cache-semantics: 4.2.0
+      http-cache-semantics: 4.3.0(patch_hash=3131ab995666b9ca4aade60067942f6415b2649067a41d2357925027529c548b)
       js-yaml: 4.3.2
       jsonc-parser: 3.3.1
       magic-string: 1.2.3
@@ -14831,7 +14837,8 @@ snapshots:
 
   html-whitespace-sensitive-tag-names@3.0.1: {}
 
-  http-cache-semantics@4.2.0: {}
+  http-cache-semantics@4.3.0(patch_hash=3131ab995666b9ca4aade60067942f6415b2649067a41d2357925027529c548b):
+    {}
 
   http-errors@2.0.1:
     dependencies:

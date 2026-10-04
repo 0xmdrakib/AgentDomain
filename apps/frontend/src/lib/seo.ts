@@ -5,7 +5,7 @@ export const SITE_URL = 'https://agentdomain.app';
 export const SITE_NAME = 'AgentDomain';
 export const TITLE_TEMPLATE = `${SITE_NAME} | %s`;
 export const DEFAULT_DESCRIPTION =
-  'Identity and communications infrastructure for AI agents: domains, DNS, SSL, professional email, onchain identity, and autonomous renewals through one programmable platform.';
+  'AgentDomain is the agent-native identity and communications infrastructure. Built for developers, people guiding agents, and permissioned autonomous workflows.';
 
 export const SOCIAL_IMAGE = BRAND_SOCIAL_IMAGE;
 

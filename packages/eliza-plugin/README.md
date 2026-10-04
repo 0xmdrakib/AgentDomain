@@ -1,6 +1,6 @@
 # @agentdomain/eliza-plugin
 
-ElizaOS actions for AgentDomain identity infrastructure.
+ElizaOS actions for AgentDomain's agent-native identity and communications infrastructure.
 
 ## Install
 

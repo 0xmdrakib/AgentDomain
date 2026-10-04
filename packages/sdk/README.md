@@ -1,8 +1,11 @@
 # @agentdomain/sdk
 
-TypeScript SDK for AgentDomain, the autonomous identity stack for AI agents.
+AgentDomain is the agent-native identity and communications infrastructure.
 
-AgentDomain provides domain, DNS, SSL, email, Basename, ENS, x402 USDC checkout, AgentID NFT, renewal controls, and per-agent Premium Plans.
+This TypeScript SDK makes identity and communication programmable for developers integrating
+directly, people guiding agents, and permissioned autonomous workflows. Domains, DNS, SSL, email,
+Basename, ENS, x402 USDC checkout, AgentID NFT, renewal controls, and per-agent Premium Plans
+support that foundation.
 
 The production API base is `https://api.agentdomain.app/api/v1`. A direct `GET` request returns the
 machine-readable service discovery document; human documentation is available at

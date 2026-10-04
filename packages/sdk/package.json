@@ -1,7 +1,7 @@
 {
   "name": "@agentdomain/sdk",
   "version": "0.11.0",
-  "description": "TypeScript SDK for AgentDomain identity, DNS, email, renewal, and x402 workflows",
+  "description": "TypeScript SDK for AgentDomain agent-native identity and communications APIs, renewals, and x402 workflows",
   "keywords": [
     "agentdomain",
     "ai-agents",

@@ -42,6 +42,7 @@ const allowedPackageRoots = new Set([
   'sdk',
   'shared',
 ]);
+const allowedReviewedPatchFiles = new Set(['patches/http-cache-semantics@4.3.0.patch']);
 
 const forbiddenPathRules = [
   [/^apps\/web(?:\/|$)/i, 'private web application path'],
@@ -121,7 +122,8 @@ function normalizePath(path) {
   return path.split(sep).join('/').replace(/^\.\//, '');
 }
 
-function repositoryScopeViolation(path) {
+export function repositoryScopeViolation(path) {
+  if (allowedReviewedPatchFiles.has(path)) return null;
   const [topLevel, child] = path.split('/');
   if (!child) return allowedRootFiles.has(topLevel) ? null : 'unapproved root file';
   if (topLevel === '.github' || topLevel === 'scripts') return null;
@@ -457,5 +459,7 @@ function runSelfTest() {
   console.log('Public boundary checker self-test passed.');
 }
 
-if (args.has('--self-test')) runSelfTest();
-else checkRepository();
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  if (args.has('--self-test')) runSelfTest();
+  else checkRepository();
+}

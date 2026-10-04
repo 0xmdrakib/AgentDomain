@@ -35,7 +35,7 @@ const features = [
   {
     icon: Code2,
     title: 'Drop-in SDK + MCP',
-    desc: 'TypeScript SDK, MCP server, and agent-facing APIs for autonomous purchases.',
+    desc: 'TypeScript SDK, MCP server, and APIs for developer-controlled, human-guided, or permissioned autonomous workflows.',
   },
   {
     icon: Users,
@@ -53,13 +53,13 @@ export function Features() {
       <div className="container">
         <div className="mx-auto mb-12 max-w-2xl text-center sm:mb-16">
           <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
-            Everything your agent needs
+            Identity and communications
             <br />
-            <span className="gradient-text">in one checkout.</span>
+            <span className="gradient-text">for your agents.</span>
           </h2>
           <p className="mt-4 text-sm text-muted-foreground sm:text-base">
-            Stop wiring eight services together. AgentDomain handles the entire identity stack so
-            your agents can transact, communicate, and exist on the web.
+            Domains, DNS, HTTPS, email, AgentID, and payments support a programmable foundation for
+            naming, reaching, and communicating with agents.
           </p>
         </div>
 

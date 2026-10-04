@@ -20,6 +20,19 @@ import { DOCS_ROOT, validateInternalLinks } from '../scripts/validate-content.mj
 test('machine docs are deterministic, source-derived and valid OpenAPI without external resolution', async () => {
   const first = await createMachineDocuments();
   assert.deepEqual(await createMachineDocuments(), first);
+  assert.ok(
+    first['llms-full.txt'].includes(
+      'AgentDomain is the agent-native identity and communications infrastructure.',
+    ),
+  );
+  assert.match(
+    first['llms-full.txt'].replace(/\s+/g, ' '),
+    /Developers can integrate directly through APIs and SDKs, people can guide agents, and autonomous workflows can operate within configured permissions/,
+  );
+  assert.doesNotMatch(
+    first['llms-full.txt'],
+    /Build, register, and operate durable internet identities for autonomous agents/,
+  );
   const result = await validateMachineDocuments(first);
   assert.equal(result.files, 4);
   assert.equal(result.pages, 21);
