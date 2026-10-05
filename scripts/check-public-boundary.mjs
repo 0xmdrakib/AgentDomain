@@ -42,7 +42,10 @@ const allowedPackageRoots = new Set([
   'sdk',
   'shared',
 ]);
-const allowedReviewedPatchFiles = new Set(['patches/http-cache-semantics@4.3.0.patch']);
+const allowedReviewedPatchFiles = new Set([
+  'patches/braces@3.0.3.patch',
+  'patches/http-cache-semantics@4.3.0.patch',
+]);
 
 const forbiddenPathRules = [
   [/^apps\/web(?:\/|$)/i, 'private web application path'],

@@ -12,9 +12,22 @@ test('allows the exact reviewed http-cache-semantics 4.3.0 patch file', async ()
   assert.equal(repositoryScopeViolation(path), null);
 });
 
+test('allows the exact reviewed braces 3.0.3 patch file', async () => {
+  const path = 'patches/braces@3.0.3.patch';
+  const patch = await readFile(new URL(`../${path}`, import.meta.url), 'utf8');
+  assert.match(patch, /^diff --git a\/lib\/compile\.js b\/lib\/compile\.js\r?\n/);
+  assert.equal(repositoryScopeViolation(path), null);
+});
+
 test('rejects neighboring unapproved patches and the patches directory itself', () => {
   for (const path of [
     'patches',
+    'patches/braces@3.0.4.patch',
+    'patches/braces@3.0.2.patch',
+    'patches/braces@3.0.3.patch.bak',
+    'patches/nested/braces@3.0.3.patch',
+    'patches/braces@3.0.3.patch/private.js',
+    'Patches/braces@3.0.3.patch',
     'patches/http-cache-semantics@4.3.1.patch',
     'patches/http-cache-semantics@4.2.0.patch',
     'patches/another-package@4.3.0.patch',
