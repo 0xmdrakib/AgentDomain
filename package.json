@@ -20,7 +20,7 @@
     "lint": "turbo run lint",
     "lint:public": "turbo run lint --filter=!@agentdomain/contracts",
     "test": "turbo run test",
-    "test:dependency-security": "node --test scripts/http-cache-semantics.test.mjs",
+    "test:dependency-security": "node --test scripts/http-cache-semantics.test.mjs scripts/braces.test.mjs",
     "test:license-gate": "node --test scripts/check-production-licenses.test.mjs",
     "test:public": "pnpm test:dependency-security && node --test scripts/check-public-boundary.test.mjs scripts/verify-release-ci.test.mjs && pnpm test:license-gate && pnpm --filter @agentdomain/contracts test && turbo run test --filter=!@agentdomain/contracts",
     "typecheck": "turbo run typecheck",
@@ -55,6 +55,7 @@
       "ws@>=8.0.0 <8.21.0": "8.21.0"
     },
     "patchedDependencies": {
+      "braces@3.0.3": "patches/braces@3.0.3.patch",
       "http-cache-semantics@4.3.0": "patches/http-cache-semantics@4.3.0.patch"
     },
     "onlyBuiltDependencies": [
