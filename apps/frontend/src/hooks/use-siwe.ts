@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAccount, useChainId, useSignMessage, useConfig } from 'wagmi';
 import { SiweMessage } from 'siwe';
 import { getAddress } from 'viem';
 import { clearWalletConnectionStorage } from '@/lib/wagmi';
 import { disconnectWalletConnections } from '@/lib/wallet-connections';
 import { formatWalletAuthError } from '@/lib/wallet-auth-errors';
+import { requestSiwe } from '@/lib/siwe-request';
 
 export interface SiweSession {
   authenticated: boolean;
@@ -42,22 +43,35 @@ export function useSiwe(): UseSiweReturn {
   const [session, setSession] = useState<SiweSession>({ authenticated: false });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const activeOperation = useRef<AbortController | null>(null);
+  const sessionRead = useRef<AbortController | null>(null);
+
+  // Obsolete HTTP is abortable; a wallet prompt stays pending until the wallet settles it.
+  useEffect(
+    () => () => {
+      activeOperation.current?.abort();
+    },
+    [address, chainId, isConnected],
+  );
 
   // Refresh session on mount + whenever wallet changes
   useEffect(() => {
     setError(null);
+    setSession({ authenticated: false });
     if (!address) {
-      setSession({ authenticated: false });
       return;
     }
 
     let cancelled = false;
-    const refresh = () =>
-      fetch('/api/v1/auth/session', { credentials: 'include', cache: 'no-store' })
-        .then((res) => res.json())
+    const refresh = () => {
+      if (activeOperation.current) return;
+      sessionRead.current?.abort();
+      const controller = new AbortController();
+      sessionRead.current = controller;
+      return requestSiwe<SiweSession>('session', { signal: controller.signal })
         .then((data) => {
-          if (cancelled) return;
-          const nextSession = data as SiweSession;
+          if (cancelled || controller.signal.aborted) return;
+          const nextSession = data;
           if (
             nextSession.authenticated &&
             nextSession.address &&
@@ -66,32 +80,46 @@ export function useSiwe(): UseSiweReturn {
             setSession({ authenticated: false });
             return;
           }
-          setSession(data as SiweSession);
+          setSession(nextSession);
+          setError(null);
         })
-        .catch(() => {
-          if (!cancelled) setSession({ authenticated: false });
+        .catch((e) => {
+          if (cancelled || controller.signal.aborted) return;
+          setSession({ authenticated: false });
+          setError(formatWalletAuthError(e));
+        })
+        .finally(() => {
+          if (sessionRead.current === controller) sessionRead.current = null;
         });
+    };
     void refresh();
     window.addEventListener('agentdomain:session-changed', refresh);
     return () => {
       cancelled = true;
+      sessionRead.current?.abort();
+      sessionRead.current = null;
       window.removeEventListener('agentdomain:session-changed', refresh);
     };
   }, [address]);
 
   const signIn = useCallback(async (): Promise<boolean> => {
+    if (activeOperation.current) return false;
     if (!isConnected || !address) {
       setError('Connect your wallet first');
       return false;
     }
+    const controller = new AbortController();
+    activeOperation.current = controller;
+    sessionRead.current?.abort();
     setLoading(true);
     setError(null);
 
     try {
       // 1. Fetch nonce
-      const nonceRes = await fetch('/api/v1/auth/nonce', { credentials: 'include' });
-      if (!nonceRes.ok) throw new Error('Failed to get nonce');
-      const { nonce } = (await nonceRes.json()) as { nonce: string };
+      const { nonce } = await requestSiwe<{ nonce: string }>('nonce', {
+        signal: controller.signal,
+      });
+      controller.signal.throwIfAborted();
 
       // 2. Build SIWE message — SIWE 3.x requires EIP-55 checksummed address.
       const checksummedAddress = getAddress(address);
@@ -113,24 +141,14 @@ export function useSiwe(): UseSiweReturn {
         account: checksummedAddress,
         message: messageString,
       });
+      controller.signal.throwIfAborted();
 
       // 4. Verify
-      const verifyRes = await fetch('/api/v1/auth/verify', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+      const data = await requestSiwe<{ address: string; chainId: number }>('verify', {
+        signal: controller.signal,
         body: JSON.stringify({ message: messageString, signature }),
       });
-
-      if (!verifyRes.ok) {
-        const body = (await verifyRes.json().catch(() => ({}))) as {
-          error?: string;
-          message?: string;
-        };
-        throw new Error(body.message ?? body.error ?? `Verification failed (${verifyRes.status})`);
-      }
-
-      const data = (await verifyRes.json()) as { address: string; chainId: number };
+      controller.signal.throwIfAborted();
       setSession({
         authenticated: true,
         address: data.address,
@@ -139,20 +157,26 @@ export function useSiwe(): UseSiweReturn {
       window.dispatchEvent(new Event('agentdomain:session-changed'));
       return true;
     } catch (e) {
-      setError(formatWalletAuthError(e));
+      if (!controller.signal.aborted) setError(formatWalletAuthError(e));
       return false;
     } finally {
+      activeOperation.current = null;
       setLoading(false);
     }
   }, [address, chainId, isConnected, signMessageAsync]);
 
   const signOut = useCallback(async () => {
+    if (activeOperation.current) return;
+    const controller = new AbortController();
+    activeOperation.current = controller;
+    sessionRead.current?.abort();
     setLoading(true);
+    setError(null);
     try {
-      await fetch('/api/v1/auth/session', {
-        method: 'DELETE',
-        credentials: 'include',
+      await requestSiwe('sign-out', {
+        signal: controller.signal,
       });
+      controller.signal.throwIfAborted();
       setSession({ authenticated: false });
       window.dispatchEvent(new Event('agentdomain:session-changed'));
       try {
@@ -160,7 +184,10 @@ export function useSiwe(): UseSiweReturn {
       } finally {
         clearWalletConnectionStorage();
       }
+    } catch (e) {
+      if (!controller.signal.aborted) setError(formatWalletAuthError(e));
     } finally {
+      activeOperation.current = null;
       setLoading(false);
     }
   }, [config]);

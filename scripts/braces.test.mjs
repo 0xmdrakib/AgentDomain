@@ -1,17 +1,23 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
+import { parsers } from 'prettier/plugins/yaml';
 
 // Downstream backport of the depth/cycle changes in micromatch/braces PR #72,
-// commit 28d440b5dd449dbf1fe6f3506cf94ecca4d02660 (unmerged/unreleased).
+// commit 28d440b5dd449dbf1fe6f3506cf94ecca4d02660 (closed, unmerged/unreleased).
 // Keep npm 3.0.3's unrelated quote and comma parsing behavior unchanged.
+// This mitigation does not resolve the version-based GHSA-vfj7-8cjw-p6xm alert.
 const frontendRequire = createRequire(new URL('../apps/frontend/package.json', import.meta.url));
 const tailwindRequire = createRequire(frontendRequire.resolve('tailwindcss/package.json'));
 const micromatchRequire = createRequire(tailwindRequire.resolve('micromatch/package.json'));
 const chokidarRequire = createRequire(tailwindRequire.resolve('chokidar/package.json'));
+const eslintRequire = createRequire(frontendRequire.resolve('eslint-config-next'));
+const nextPluginRequire = createRequire(eslintRequire.resolve('@next/eslint-plugin-next'));
 const braces = micromatchRequire('braces');
 const nested = (depth, open = '{', close = '}', value = 'x') =>
   open.repeat(depth) + value + close.repeat(depth);
@@ -32,9 +38,66 @@ function nestedAst(depth) {
   return root;
 }
 
-test('Micromatch and Chokidar resolve the same patched, officially versioned braces', () => {
+test('every installed Tailwind and Next ESLint path resolves the same patched braces 3.0.3', () => {
   assert.equal(micromatchRequire('braces/package.json').version, '3.0.3');
   assert.equal(micromatchRequire.resolve('braces'), chokidarRequire.resolve('braces'));
+  for (const consumerRequire of [tailwindRequire, nextPluginRequire]) {
+    const fastGlobRequire = createRequire(consumerRequire.resolve('fast-glob/package.json'));
+    const matcherRequire = createRequire(fastGlobRequire.resolve('micromatch/package.json'));
+    assert.equal(matcherRequire.resolve('braces'), micromatchRequire.resolve('braces'));
+  }
+});
+
+test('the manifest and every locked braces resolution retain the exact backport hash', async () => {
+  const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  const patchPath = 'patches/braces@3.0.3.patch';
+  assert.equal(manifest.pnpm.patchedDependencies['braces@3.0.3'], patchPath);
+  const patch = await readFile(new URL(`../${patchPath}`, import.meta.url));
+  const hash = createHash('sha256').update(patch).digest('hex');
+  const lockfile = await readFile(new URL('../pnpm-lock.yaml', import.meta.url), 'utf8');
+  const { children } = parsers.yaml.parse(lockfile);
+  assert.equal(children.length, 1);
+  const root = children[0].children.find(({ type }) => type === 'documentBody').children[0];
+  const mappingEntries = (node) => {
+    assert.ok(['mapping', 'flowMapping'].includes(node.type));
+    return node.children.map(({ children: [key, value] }) => [
+      key.children[0].value,
+      value.children[0],
+    ]);
+  };
+  const sections = Object.fromEntries(mappingEntries(root));
+  const lockedPatch = Object.fromEntries(mappingEntries(sections.patchedDependencies))[
+    'braces@3.0.3'
+  ];
+  assert.deepEqual(
+    Object.fromEntries(mappingEntries(lockedPatch).map(([key, value]) => [key, value.value])),
+    { hash, path: patchPath },
+  );
+  const reference = `3.0.3(patch_hash=${hash})`;
+  assert.deepEqual(
+    mappingEntries(sections.packages)
+      .map(([key]) => key)
+      .filter((key) => key.startsWith('braces@')),
+    ['braces@3.0.3'],
+  );
+  assert.deepEqual(
+    mappingEntries(sections.snapshots)
+      .map(([key]) => key)
+      .filter((key) => key.startsWith('braces@')),
+    [`braces@${reference}`],
+  );
+  const consumers = [];
+  for (const [name, snapshot] of mappingEntries(sections.snapshots)) {
+    for (const [section, dependencies] of mappingEntries(snapshot)) {
+      if (!['dependencies', 'optionalDependencies'].includes(section)) continue;
+      for (const [dependency, resolution] of mappingEntries(dependencies)) {
+        if (dependency !== 'braces') continue;
+        assert.equal(resolution.value, reference, `${name}: must not bypass the backport`);
+        consumers.push(name);
+      }
+    }
+  }
+  assert.deepEqual(consumers.sort(), ['chokidar@3.6.0', 'micromatch@4.0.8']);
 });
 
 for (const method of methods) {
@@ -183,6 +246,28 @@ test('actual Micromatch compile/expand consumers retain normal behavior and reje
   assert.throws(() => micromatch.braces(nested(101, '{', '}', 'a,b')), depthError);
   assert.throws(() => micromatch.braceExpand(nested(101, '{', '}', 'a,b')), depthError);
 });
+
+for (const [name, consumerRequire] of [
+  ['Tailwind', tailwindRequire],
+  ['Next ESLint', nextPluginRequire],
+]) {
+  test(`${name} Fast-glob task generation preserves globs and rejects deep patterns`, () => {
+    const fastGlob = consumerRequire('fast-glob');
+    assert.deepEqual(fastGlob.generateTasks(['src/*.{js,ts}', '!src/ignored/**']), [
+      {
+        dynamic: true,
+        positive: ['src/*.js', 'src/*.ts'],
+        negative: ['src/ignored/**'],
+        base: 'src',
+        patterns: ['src/*.js', 'src/*.ts', '!src/ignored/**'],
+      },
+    ]);
+    assert.throws(
+      () => fastGlob.generateTasks('src/' + nested(101, '{', '}', 'a,b') + '/*.ts'),
+      depthError,
+    );
+  });
+}
 
 test('actual Chokidar watch-helper consumer uses the patch without opening file watchers', async () => {
   const { FSWatcher } = tailwindRequire('chokidar');
