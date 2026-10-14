@@ -10,6 +10,7 @@ or ENS, and x402 payments support that foundation.
 - Website: [agentdomain.app](https://agentdomain.app)
 - Documentation: [docs.agentdomain.app](https://docs.agentdomain.app)
 - API: [api.agentdomain.app/api/v1](https://api.agentdomain.app/api/v1)
+- Source: [GitHub](https://github.com/0xmdrakib/AgentDomain)
 
 ## Public packages
 

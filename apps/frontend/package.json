@@ -8,7 +8,7 @@
     "assets:generate": "node scripts/generate-web-assets.mjs",
     "dev": "pnpm run assets && next dev",
     "build": "pnpm run assets && pnpm run test:isolation && next build && node scripts/check-build.mjs",
-    "build:cloudflare": "pnpm --filter @agentdomain/shared build && pnpm --filter @agentdomain/sdk build && pnpm run assets && pnpm run test:isolation && opennextjs-cloudflare build && node scripts/check-build.mjs && node scripts/check-open-next.mjs",
+    "build:cloudflare": "pnpm --filter @agentdomain/shared build && pnpm --filter @agentdomain/sdk build && pnpm run assets && pnpm run test:isolation && opennextjs-cloudflare build && opennextjs-cloudflare populateCache local && node scripts/check-build.mjs && node scripts/check-open-next.mjs",
     "build:cloudflare:production": "node scripts/production-release-gate.mjs && pnpm run build:cloudflare",
     "preview": "pnpm run build:cloudflare && opennextjs-cloudflare preview --env preview",
     "deploy": "pnpm run build:cloudflare:production && node ../../scripts/seo/indexnow.mjs verify --site=frontend --production && opennextjs-cloudflare deploy --env=\"\" && node ../../scripts/seo/indexnow.mjs submit --site=frontend --production",
@@ -16,6 +16,7 @@
     "start": "next start",
     "test:isolation": "node --test test/isolation.test.mjs",
     "test": "pnpm run assets && node --test test/*.test.mjs && tsx --test test/*.test.ts && pnpm run test:seo",
+    "test:siwe": "tsx --test test/siwe-request.test.ts test/siwe-hook.test.ts",
     "test:seo": "node --test ../../scripts/seo/test/*.test.mjs",
     "typecheck": "pnpm run assets && tsc --noEmit",
     "lint": "eslint ."
@@ -32,7 +33,7 @@
     "clsx": "^2.1.1",
     "ethers": "6.17.0",
     "lucide-react": "1.40.0",
-    "next": "16.3.6",
+    "next": "16.3.8",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "server-only": "0.0.1",
@@ -44,19 +45,19 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@opennextjs/cloudflare": "1.20.6",
+    "@opennextjs/cloudflare": "1.20.10",
     "@types/node": "^22.10.5",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.7",
     "autoprefixer": "^10.5.3",
     "dotenv": "17.4.2",
     "eslint": "^9.17.0",
-    "eslint-config-next": "16.3.6",
+    "eslint-config-next": "16.3.8",
     "postcss": "^8.5.28",
     "tailwindcss": "^3.4.17",
     "tailwindcss-animate": "^1.0.7",
     "tsx": "^4.23.13",
     "typescript": "^5.7.2",
-    "wrangler": "4.129.0"
+    "wrangler": "4.148.0"
   }
 }

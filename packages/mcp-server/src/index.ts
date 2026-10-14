@@ -48,6 +48,7 @@ import {
   dnsRecordSchema,
   dnsRecordObjectSchema,
   type DnsRecordInput,
+  type ServicePlanSku,
 } from '@agentdomain/shared';
 import {
   AGENTDOMAIN_API_BASE_URL,
@@ -1160,7 +1161,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           .object({
             agentId: z.string(),
             plan: z.enum(['starter', 'pro', 'enterprise']),
-            planSku: z.custom<import('@agentdomain/shared').ServicePlanSku>().optional(),
+            planSku: z.custom<ServicePlanSku>().optional(),
           })
           .parse(args);
         const result = await client.purchaseServicePlan(a);
@@ -1178,7 +1179,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           .object({
             agentId: z.string().uuid(),
             plan: z.enum(['included', 'starter', 'pro', 'enterprise']),
-            planSku: z.custom<import('@agentdomain/shared').ServicePlanSku>(),
+            planSku: z.custom<ServicePlanSku>(),
           })
           .parse(args);
         const result = await client.scheduleServicePlanRenewal(a.agentId, {

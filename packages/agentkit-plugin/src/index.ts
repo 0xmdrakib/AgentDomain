@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import { AgentDomain, encodeSetAutoRenewCalldata } from '@agentdomain/sdk';
-import { DNS_RECORD_TYPES, dnsRecordSchema, type DnsRecordInput } from '@agentdomain/shared';
+import {
+  DNS_RECORD_TYPES,
+  dnsRecordSchema,
+  type DnsRecordInput,
+  type ServicePlanSku,
+} from '@agentdomain/shared';
 import {
   AGENTDOMAIN_API_BASE_URL,
   SERVICE_PLAN_KEYS,
@@ -176,7 +181,7 @@ const ServicePlanStatusSchema = z.object({
 const PurchaseServicePlanSchema = z.object({
   agentId: z.string().min(1),
   plan: z.enum(['starter', 'pro', 'enterprise']),
-  planSku: z.custom<import('@agentdomain/shared').ServicePlanSku>().optional(),
+  planSku: z.custom<ServicePlanSku>().optional(),
 });
 
 const SetRegistryVisibilitySchema = z.object({
@@ -186,7 +191,7 @@ const SetRegistryVisibilitySchema = z.object({
 const ScheduleServicePlanRenewalSchema = z.object({
   agentId: z.string().uuid(),
   plan: z.enum(['included', 'starter', 'pro', 'enterprise']),
-  planSku: z.custom<import('@agentdomain/shared').ServicePlanSku>(),
+  planSku: z.custom<ServicePlanSku>(),
 });
 
 const UpdatePrimaryEmailSchema = z.object({

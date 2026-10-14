@@ -80,6 +80,28 @@ test('shared responsive footer links MCP integration to the exact published docs
   assert.deepEqual(mcpFooterLinks(source), [expectedMcpLink]);
 });
 
+test('homepage organization metadata points to the current public GitHub source', async () => {
+  const source = await readFile(new URL('../src/lib/seo.ts', import.meta.url), 'utf8');
+  const tree = ts.createSourceFile('seo.ts', source, ts.ScriptTarget.Latest, true);
+  const homepage = tree.statements.find(
+    (node) => ts.isFunctionDeclaration(node) && node.name?.text === 'homepageJsonLd',
+  );
+  assert.ok(homepage);
+  const links = [];
+  function collect(node) {
+    if (ts.isPropertyAssignment(node) && node.name.getText(tree) === 'sameAs') {
+      assert.ok(ts.isArrayLiteralExpression(node.initializer));
+      for (const element of node.initializer.elements) {
+        assert.ok(ts.isStringLiteral(element));
+        links.push(element.text);
+      }
+    }
+    ts.forEachChild(node, collect);
+  }
+  collect(homepage);
+  assert.deepEqual(links, ['https://github.com/0xmdrakib/AgentDomain']);
+});
+
 test('footer link regression rejects the old route and URL lookalikes', async () => {
   const source = await readFile(footerUrl, 'utf8');
   for (const href of [

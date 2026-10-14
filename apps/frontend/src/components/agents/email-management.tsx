@@ -279,6 +279,8 @@ export function EmailManagement({
   async function updateRead(message: EmailMessage, read: boolean) {
     if (!(await ensureSignedIn())) return;
     try {
+      // Browser event handler in this client component; fixed same-origin API path.
+      // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
       const res = await fetch(`/api/v1/agents/${agentId}/email/${message.id}`, {
         method: 'PATCH',
         credentials: 'include',
@@ -386,6 +388,8 @@ export function EmailManagement({
     setAliasLoading(true);
     try {
       const transport = addressMutationRequest(agentId, request);
+      // Browser-only mutation; helper encodes the ID and query into a fixed same-origin API path.
+      // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
       const res = await fetch(transport.url, {
         ...transport.init,
         signal: AbortSignal.timeout(API_TIMEOUT_MS),

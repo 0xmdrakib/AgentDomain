@@ -13,6 +13,52 @@ const expectedLinks = [
   'https://docs.agentdomain.app',
 ];
 
+const expectedIcons = [
+  'PanelsTopLeft',
+  'Workflow',
+  'CircleDollarSign',
+  'LibraryBig',
+  'BadgeCheck',
+  'Headset',
+  'BookOpen',
+];
+
+function navigationIcons(filename, source) {
+  const tree = ts.createSourceFile(
+    filename,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const icons = [];
+  function collect(node, inLinks = false) {
+    const scope =
+      inLinks ||
+      (ts.isFunctionDeclaration(node) && node.name?.text === 'NavLinks') ||
+      (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'links');
+    if (scope && ts.isPropertyAssignment(node) && node.name.getText(tree) === 'icon') {
+      assert.ok(ts.isIdentifier(node.initializer));
+      icons.push(node.initializer.text);
+    }
+    if (scope && ts.isJsxSelfClosingElement(node)) {
+      const name = node.tagName.getText(tree);
+      icons.push(name);
+      const attributes = new Map(
+        node.attributes.properties
+          .filter(ts.isJsxAttribute)
+          .map((attribute) => [attribute.name.getText(tree), attribute.initializer]),
+      );
+      assert.ok(attributes.has('aria-hidden'), `${name} must be decorative`);
+      assert.equal(attributes.get('className')?.text, 'h-4 w-4 shrink-0');
+      assert.equal(attributes.get('strokeWidth')?.getText(tree), '{1.75}');
+    }
+    ts.forEachChild(node, (child) => collect(child, scope));
+  }
+  collect(tree);
+  return icons;
+}
+
 function navigationLinks(filename, source) {
   const tree = ts.createSourceFile(
     filename,
@@ -48,7 +94,7 @@ function navigationLinks(filename, source) {
 }
 
 for (const filename of ['nav.tsx', 'public-nav.tsx']) {
-  test(`${filename} keeps support text-only in both navigation layouts`, async () => {
+  test(`${filename} keeps routes and matching decorative icons in both navigation layouts`, async () => {
     const source = await readFile(
       new URL(`../src/components/landing/${filename}`, import.meta.url),
       'utf8',
@@ -59,8 +105,16 @@ for (const filename of ['nav.tsx', 'public-nav.tsx']) {
       expectedLinks,
     );
     assert.ok(source.includes('Support'));
-    assert.doesNotMatch(source, /<Mail\b/);
-    assert.doesNotMatch(source, /import\s*\{[^}]*\bMail\b[^}]*\}\s*from 'lucide-react'/);
+    assert.deepEqual(navigationIcons(filename, source), expectedIcons);
+    assert.notDeepEqual(
+      navigationIcons(filename, source.replaceAll('BadgeCheck', 'BookOpen')),
+      expectedIcons,
+    );
+    assert.equal((source.match(/<LayoutDashboard\b/g) ?? []).length, 2);
+    if (filename === 'public-nav.tsx') {
+      assert.equal((source.match(/<UserRoundPlus\b/g) ?? []).length, 2);
+      assert.equal((source.match(/<Icon\b[^>]*aria-hidden/g) ?? []).length, 2);
+    }
     assert.match(source, /<Menu\b/);
     assert.match(source, /<X\b/);
   });
