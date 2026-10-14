@@ -99,6 +99,22 @@ jobs:
       - name: Verify public source and production dependencies
         run: pnpm ci:public
 
+      - name: Exercise isolated SIWE hook browser regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools="$RUNNER_TEMP/siwe-browser-tools"
+          archive="$RUNNER_TEMP/playwright-core-1.62.1.tgz"
+          mkdir -p "$tools"
+          curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
+            --connect-timeout 10 --max-time 60 --retry 0 \
+            --output "$archive" https://registry.npmjs.org/playwright-core/-/playwright-core-1.62.1.tgz
+          printf '%s  %s\n' 'c0f612c0404963d187ada2125eacaab71d276b42e93b75c45fb8cd0e19ed6dec7bb73512ee42e766c3a516bb85241e078bfae10cc8d71aa1dec0367af2761957' "$archive" | sha512sum --check --status
+          tar -xzf "$archive" -C "$tools"
+          browser="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          test -n "$browser"
+          AGENTDOMAIN_TEST_BROWSER_EXECUTABLE="$browser" node apps/frontend/test/siwe-auth.browser.mjs "$tools/package"
+
       - name: Test release guards and build the exact Python distributions
         shell: bash
         run: |

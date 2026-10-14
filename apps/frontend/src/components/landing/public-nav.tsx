@@ -1,17 +1,29 @@
 /* eslint-disable @next/next/no-html-link-for-pages -- Public pages use full navigation to avoid shipping router JavaScript. */
 
-import { Menu, X } from 'lucide-react';
+import {
+  BadgeCheck,
+  BookOpen,
+  CircleDollarSign,
+  Headset,
+  LayoutDashboard,
+  LibraryBig,
+  Menu,
+  PanelsTopLeft,
+  UserRoundPlus,
+  Workflow,
+  X,
+} from 'lucide-react';
 import { BrandMark } from '@/components/brand/brand-mark';
 import { Button } from '@/components/ui/button';
 
 const links = [
-  { href: '/#features', label: 'Features' },
-  { href: '/#how-it-works', label: 'How it works' },
-  { href: '/#pricing', label: 'Pricing' },
-  { href: '/registry', label: 'Registry' },
-  { href: '/verify', label: 'Identity Check' },
-  { href: 'mailto:contact@agentdomain.app', label: 'Support' },
-  { href: 'https://docs.agentdomain.app', label: 'Docs' },
+  { href: '/#features', label: 'Features', icon: PanelsTopLeft },
+  { href: '/#how-it-works', label: 'How it works', icon: Workflow },
+  { href: '/#pricing', label: 'Pricing', icon: CircleDollarSign },
+  { href: '/registry', label: 'Registry', icon: LibraryBig },
+  { href: '/verify', label: 'Identity Check', icon: BadgeCheck },
+  { href: 'mailto:contact@agentdomain.app', label: 'Support', icon: Headset },
+  { href: 'https://docs.agentdomain.app', label: 'Docs', icon: BookOpen },
 ] as const;
 
 export function PublicNav() {
@@ -28,24 +40,34 @@ export function PublicNav() {
           </span>
         </a>
 
-        <nav className="hidden items-center gap-7 text-sm xl:flex" aria-label="Primary navigation">
-          {links.map((link) => (
+        <nav
+          className="hidden items-center gap-4 text-sm xl:flex 2xl:gap-6"
+          aria-label="Primary navigation"
+        >
+          {links.map(({ href, label, icon: Icon }) => (
             <a
-              key={link.href}
-              href={link.href}
+              key={href}
+              href={href}
               className="inline-flex items-center gap-2 whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground"
             >
-              {link.label}
+              <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
+              {label}
             </a>
           ))}
         </nav>
 
-        <div className="hidden items-center gap-2 xl:flex">
+        <div className="hidden shrink-0 items-center gap-2 xl:flex">
           <Button asChild variant="ghost" size="sm">
-            <a href="/dashboard">Dashboard</a>
+            <a href="/dashboard">
+              <LayoutDashboard className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
+              Dashboard
+            </a>
           </Button>
           <Button asChild size="sm">
-            <a href="/register">Register</a>
+            <a href="/register">
+              <UserRoundPlus className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
+              Register
+            </a>
           </Button>
         </div>
 
@@ -58,22 +80,29 @@ export function PublicNav() {
           </summary>
           <div className="safe-x absolute left-0 right-0 top-full z-50 border-b border-border/90 bg-card p-4 shadow-[0_22px_48px_-34px_rgba(20,21,18,0.5)]">
             <nav className="grid gap-1 text-sm" aria-label="Mobile navigation">
-              {links.map((link) => (
+              {links.map(({ href, label, icon: Icon }) => (
                 <a
-                  key={link.href}
-                  href={link.href}
+                  key={href}
+                  href={href}
                   className="touch-target flex items-center gap-2 rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent/80 hover:text-foreground"
                 >
-                  {link.label}
+                  <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
+                  {label}
                 </a>
               ))}
             </nav>
             <div className="mt-4 grid gap-3 border-t border-border/40 pt-4">
               <Button asChild variant="secondary" className="w-full">
-                <a href="/dashboard">Dashboard</a>
+                <a href="/dashboard">
+                  <LayoutDashboard className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
+                  Dashboard
+                </a>
               </Button>
               <Button asChild className="w-full">
-                <a href="/register">Register</a>
+                <a href="/register">
+                  <UserRoundPlus className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
+                  Register
+                </a>
               </Button>
             </div>
           </div>

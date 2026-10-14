@@ -313,7 +313,7 @@ export class RegistrationClient {
 
   async get(id: string, options: RegistrationRequestOptions = {}): Promise<RegistrationProgress> {
     if (!id) throw new Error('A registration ID is required.');
-    const data = await this.read(`/registrations/${encodeURIComponent(id)}`, options);
+    const data = await this.read(`/registrations/${encodeApiPathSegment(id)}`, options);
     const parsed = registrationProgressSchema.safeParse(data);
     if (!parsed.success)
       throw new RegistrationProtocolError('Invalid registration status response.');
@@ -530,7 +530,7 @@ export class RegistrationClient {
 
   private assertStatusUrl(value: Pick<RegistrationProgress, 'registrationId' | 'statusUrl'>): void {
     const expected = new URL(
-      this.url(`/registrations/${encodeURIComponent(value.registrationId)}`),
+      this.url(`/registrations/${encodeApiPathSegment(value.registrationId)}`),
     );
     const received = new URL(value.statusUrl, expected);
     if (received.href !== expected.href)
@@ -550,7 +550,9 @@ export class RegistrationClient {
       ...handle,
       registrationId: typeof id === 'string' && id ? id : null,
       statusUrl:
-        typeof id === 'string' && id ? this.url(`/registrations/${encodeURIComponent(id)}`) : null,
+        typeof id === 'string' && id
+          ? this.url(`/registrations/${encodeApiPathSegment(id)}`)
+          : null,
       endedAt: new Date().toISOString(),
       ...(typeof paymentIdentifier === 'string' && /^0x[0-9a-f]{64}$/i.test(paymentIdentifier)
         ? { paymentIdentifier }
@@ -566,7 +568,7 @@ export class RegistrationClient {
     const now = new Date().toISOString();
     return {
       registrationId: id,
-      statusUrl: this.url(`/registrations/${encodeURIComponent(id)}`),
+      statusUrl: this.url(`/registrations/${encodeApiPathSegment(id)}`),
       domain: typeof value === 'string' ? '' : value.domain,
       startedAt: typeof value === 'string' ? now : (value.startedAt ?? now),
       endedAt: now,
@@ -582,6 +584,8 @@ export class RegistrationClient {
       const headers = await this.readHeaders(scope.signal, expectedPayer);
       try {
         const response = await withinSignal(scope.signal, () =>
+          // Trusted constructor base + encoded ID/query; server status URLs are checked, never fetched.
+          // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
           fetch(url.toString(), {
             headers,
             credentials: this.credentials(),
@@ -694,6 +698,13 @@ export class RegistrationClient {
     }
     return { 'X-Agent-Signature': header };
   }
+}
+
+/** Keep identifiers in one URL segment; URL parsers normalize even percent-encoded dot segments. */
+export function encodeApiPathSegment(value: string): string {
+  if (value === '.' || value === '..')
+    throw new TypeError('API identifiers must not be dot segments.');
+  return encodeURIComponent(value);
 }
 
 /** Resolve once before signing or sending any request; never repair a base URL after payment. */

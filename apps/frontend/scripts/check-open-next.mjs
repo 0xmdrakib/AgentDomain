@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -12,12 +12,24 @@ function filesUnder(directory) {
   });
 }
 
-export function checkOpenNextBuild() {
-  const output = resolve(root, '.open-next');
+export function checkOpenNextBuild(directory = root) {
+  const output = resolve(directory, '.open-next');
   const worker = resolve(output, 'worker.js');
   const assets = resolve(output, 'assets');
   if (!existsSync(worker) || !existsSync(assets)) {
     throw new Error('OpenNext worker or static assets are missing.');
+  }
+
+  const buildId = readFileSync(resolve(assets, 'BUILD_ID'), 'utf8').trim();
+  const cacheRoot = resolve(assets, 'cdn-cgi/_next_cache');
+  const cache = resolve(cacheRoot, buildId);
+  if (
+    !buildId ||
+    dirname(cache) !== cacheRoot ||
+    !existsSync(cache) ||
+    !filesUnder(cache).some((file) => file.endsWith('.cache'))
+  ) {
+    throw new Error('Current prerender cache is missing from deployment assets.');
   }
 
   const files = [worker, ...filesUnder(assets)];

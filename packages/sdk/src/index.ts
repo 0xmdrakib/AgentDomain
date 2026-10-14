@@ -104,6 +104,7 @@ import {
 } from '@agentdomain/shared/constants';
 import {
   RegistrationClient,
+  encodeApiPathSegment,
   normalizeApiBaseUrl,
   type RegistrationHandle,
   type RegistrationListOptions,
@@ -154,6 +155,7 @@ const RENEWAL_VAULT_ABI = [
 ] as const;
 
 export interface AgentDomainOptions {
+  /** Trusted application configuration, never an untrusted request parameter. Supports custom APIs. */
   apiUrl?: string;
   apiKey?: string;
   walletClient?: WalletClient<Transport, Chain, Account>;
@@ -702,6 +704,8 @@ export class AgentDomain {
 
   async checkAvailability(name: string, opts: { tld: string }): Promise<AvailabilityResult> {
     const url = `${this.apiUrl}/domains/availability?name=${encodeURIComponent(name)}&tld=${encodeURIComponent(opts.tld)}`;
+    // Trusted constructor API base; inputs are encoded path/query data, not destination URLs.
+    // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
     const res = await fetch(url);
     if (!res.ok) throw new Error(await responseError(res));
     return res.json();
@@ -825,7 +829,7 @@ export class AgentDomain {
   }
 
   async getAgentsByWallet(wallet: Address): Promise<AgentRow[]> {
-    const url = `${this.apiUrl}/agents/by-wallet/${wallet}`;
+    const url = `${this.apiUrl}/agents/by-wallet/${encodeApiPathSegment(wallet)}`;
     const res = await fetch(url, {
       headers: await this.authHeaders(undefined, { useApiKey: false }),
     });
@@ -835,7 +839,7 @@ export class AgentDomain {
   }
 
   async getAgentById(agentId: string): Promise<AgentRow> {
-    const url = `${this.apiUrl}/agents/${agentId}`;
+    const url = `${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}`;
     const res = await fetch(url, { headers: await this.authHeaders() });
     if (!res.ok) throw new Error(await responseError(res));
     return res.json();
@@ -874,7 +878,9 @@ export class AgentDomain {
       idempotencyKey?: string;
     },
   ): Promise<EmailResult> {
-    const url = `${this.apiUrl}/agents/${agentId}/email/send`;
+    const url = `${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}/email/send`;
+    // Trusted constructor API base; inputs are encoded path/query data, not destination URLs.
+    // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
     const res = await fetch(url, {
       method: 'POST',
       headers: await this.authHeaders({
@@ -901,7 +907,9 @@ export class AgentDomain {
       idempotencyKey?: string;
     },
   ) {
-    const res = await fetch(`${this.apiUrl}/agents/${agentId}/email/batch`, {
+    // Trusted constructor API base; inputs are encoded path/query data, not destination URLs.
+    // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
+    const res = await fetch(`${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}/email/batch`, {
       method: 'POST',
       headers: await this.authHeaders({
         'Content-Type': 'application/json',
@@ -922,7 +930,7 @@ export class AgentDomain {
   }
 
   async getEmailUsage(agentId: string): Promise<EmailUsageResult> {
-    const res = await fetch(`${this.apiUrl}/agents/${agentId}/email/usage`, {
+    const res = await fetch(`${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}/email/usage`, {
       headers: await this.authHeaders(),
     });
     if (!res.ok) throw new Error(await responseError(res));
@@ -930,9 +938,12 @@ export class AgentDomain {
   }
 
   async getEmailWebhook(agentId: string): Promise<{ webhook: EmailWebhookConfig | null }> {
-    const res = await fetch(`${this.apiUrl}/agents/${agentId}/email/webhook`, {
-      headers: await this.authHeaders(),
-    });
+    const res = await fetch(
+      `${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}/email/webhook`,
+      {
+        headers: await this.authHeaders(),
+      },
+    );
     if (!res.ok) throw new Error(await responseError(res));
     return res.json();
   }
@@ -941,11 +952,15 @@ export class AgentDomain {
     agentId: string,
     args: { url: string; payloadMode?: 'metadata' | 'inline_text'; enabled?: boolean },
   ): Promise<{ webhook: EmailWebhookConfig; signingSecret?: string }> {
-    const res = await fetch(`${this.apiUrl}/agents/${agentId}/email/webhook`, {
-      method: 'PUT',
-      headers: await this.authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(args),
-    });
+    // Trusted constructor API base; inputs are encoded path/query data, not destination URLs.
+    const res = await fetch(
+      `${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}/email/webhook`, // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
+      {
+        method: 'PUT',
+        headers: await this.authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(args),
+      },
+    );
     if (!res.ok) throw new Error(await responseError(res));
     return res.json();
   }
@@ -953,10 +968,13 @@ export class AgentDomain {
   async rotateEmailWebhookSecret(
     agentId: string,
   ): Promise<{ webhook: EmailWebhookConfig; signingSecret: string }> {
-    const res = await fetch(`${this.apiUrl}/agents/${agentId}/email/webhook`, {
-      method: 'PATCH',
-      headers: await this.authHeaders(),
-    });
+    const res = await fetch(
+      `${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}/email/webhook`,
+      {
+        method: 'PATCH',
+        headers: await this.authHeaders(),
+      },
+    );
     if (!res.ok) throw new Error(await responseError(res));
     return res.json();
   }
@@ -966,7 +984,9 @@ export class AgentDomain {
     username: string,
     options: EmailAddressMutationOptions = {},
   ): Promise<PrimaryEmailUpdateResult> {
-    const res = await fetch(`${this.apiUrl}/agents/${agentId}/email`, {
+    // Trusted constructor API base; inputs are encoded path/query data, not destination URLs.
+    // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
+    const res = await fetch(`${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}/email`, {
       method: 'PATCH',
       headers: await this.authHeaders(emailAddressHeaders(options)),
       body: JSON.stringify({ username, confirmReplace: true }),
@@ -980,11 +1000,15 @@ export class AgentDomain {
     username: string,
     options: EmailAddressMutationOptions = {},
   ): Promise<EmailAliasCreateResult> {
-    const res = await fetch(`${this.apiUrl}/agents/${agentId}/email/aliases`, {
-      method: 'POST',
-      headers: await this.authHeaders(emailAddressHeaders(options)),
-      body: JSON.stringify({ username }),
-    });
+    // Trusted constructor API base; inputs are encoded path/query data, not destination URLs.
+    const res = await fetch(
+      `${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}/email/aliases`, // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
+      {
+        method: 'POST',
+        headers: await this.authHeaders(emailAddressHeaders(options)),
+        body: JSON.stringify({ username }),
+      },
+    );
     if (!res.ok) throw new Error(await responseError(res));
     return emailAddressResult(res, emailAliasCreatedSchema, 'alias-create', options);
   }
@@ -995,10 +1019,14 @@ export class AgentDomain {
     options: EmailAddressMutationOptions = {},
   ): Promise<EmailAliasDeleteResult> {
     const params = new URLSearchParams({ emailAddress });
-    const res = await fetch(`${this.apiUrl}/agents/${agentId}/email/aliases?${params}`, {
-      method: 'DELETE',
-      headers: await this.authHeaders(emailAddressHeaders(options)),
-    });
+    // Trusted constructor API base; inputs are encoded path/query data, not destination URLs.
+    const res = await fetch(
+      `${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}/email/aliases?${params}`, // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
+      {
+        method: 'DELETE',
+        headers: await this.authHeaders(emailAddressHeaders(options)),
+      },
+    );
     if (!res.ok) throw new Error(await responseError(res));
     return emailAddressResult(res, emailAliasDeletedSchema, 'alias-delete', options);
   }
@@ -1011,7 +1039,9 @@ export class AgentDomain {
     if (args.limit) params.set('limit', String(args.limit));
     if (args.unreadOnly) params.set('unreadOnly', 'true');
     if (args.sync !== undefined) params.set('sync', String(args.sync));
-    const url = `${this.apiUrl}/agents/${agentId}/email?${params.toString()}`;
+    const url = `${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}/email?${params.toString()}`;
+    // Trusted constructor API base; inputs are encoded path/query data, not destination URLs.
+    // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
     const res = await fetch(url, { headers: await this.authHeaders() });
     if (!res.ok) throw new Error(await responseError(res));
     const result: EmailListResult = await res.json();
@@ -1026,16 +1056,20 @@ export class AgentDomain {
     agentId: string,
     messageId: string,
   ): Promise<{ deleted: true; messageId: string }> {
-    const res = await fetch(`${this.apiUrl}/agents/${agentId}/email/${messageId}`, {
-      method: 'DELETE',
-      headers: await this.authHeaders(),
-    });
+    // Trusted constructor API base; inputs are encoded path/query data, not destination URLs.
+    const res = await fetch(
+      `${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}/email/${encodeApiPathSegment(messageId)}`, // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
+      {
+        method: 'DELETE',
+        headers: await this.authHeaders(),
+      },
+    );
     if (!res.ok) throw new Error(await responseError(res));
     return res.json();
   }
 
   async listDnsRecords(agentId: string): Promise<DnsRecord[]> {
-    const res = await fetch(`${this.apiUrl}/agents/${agentId}/dns`, {
+    const res = await fetch(`${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}/dns`, {
       headers: await this.authHeaders(),
     });
     if (!res.ok) throw new Error(await responseError(res));
@@ -1043,15 +1077,20 @@ export class AgentDomain {
   }
 
   async getDnsCapabilities(agentId: string): Promise<DnsCapabilities> {
-    const res = await fetch(`${this.apiUrl}/agents/${agentId}/dns/capabilities`, {
-      headers: await this.authHeaders(),
-    });
+    const res = await fetch(
+      `${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}/dns/capabilities`,
+      {
+        headers: await this.authHeaders(),
+      },
+    );
     if (!res.ok) throw new Error(await responseError(res));
     return res.json();
   }
 
   async createDnsRecord(agentId: string, record: DnsRecordInput): Promise<DnsRecord> {
-    const res = await fetch(`${this.apiUrl}/agents/${agentId}/dns`, {
+    // Trusted constructor API base; inputs are encoded path/query data, not destination URLs.
+    // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
+    const res = await fetch(`${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}/dns`, {
       method: 'POST',
       headers: await this.authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(record),
@@ -1065,20 +1104,28 @@ export class AgentDomain {
     recordId: string,
     record: Partial<DnsRecordInput>,
   ): Promise<DnsRecord> {
-    const res = await fetch(`${this.apiUrl}/agents/${agentId}/dns/${recordId}`, {
-      method: 'PATCH',
-      headers: await this.authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(record),
-    });
+    // Trusted constructor API base; inputs are encoded path/query data, not destination URLs.
+    const res = await fetch(
+      `${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}/dns/${encodeApiPathSegment(recordId)}`, // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
+      {
+        method: 'PATCH',
+        headers: await this.authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(record),
+      },
+    );
     if (!res.ok) throw new Error(await responseError(res));
     return res.json();
   }
 
   async deleteDnsRecord(agentId: string, recordId: string): Promise<{ success: boolean }> {
-    const res = await fetch(`${this.apiUrl}/agents/${agentId}/dns/${recordId}`, {
-      method: 'DELETE',
-      headers: await this.authHeaders(),
-    });
+    // Trusted constructor API base; inputs are encoded path/query data, not destination URLs.
+    const res = await fetch(
+      `${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}/dns/${encodeApiPathSegment(recordId)}`, // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
+      {
+        method: 'DELETE',
+        headers: await this.authHeaders(),
+      },
+    );
     if (!res.ok) throw new Error(await responseError(res));
     return res.json();
   }
@@ -1120,9 +1167,13 @@ export class AgentDomain {
   }
 
   async exportDnsZone(agentId: string, scope: 'user' | 'all' = 'user'): Promise<string> {
-    const res = await fetch(`${this.apiUrl}/agents/${agentId}/dns/export?scope=${scope}`, {
-      headers: await this.authHeaders(),
-    });
+    // Trusted constructor API base; inputs are encoded path/query data, not destination URLs.
+    const res = await fetch(
+      `${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}/dns/export?scope=${encodeURIComponent(scope)}`, // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
+      {
+        headers: await this.authHeaders(),
+      },
+    );
     if (!res.ok) throw new Error(await responseError(res));
     return res.text();
   }
@@ -1136,7 +1187,9 @@ export class AgentDomain {
       baseRevision?: string;
     },
   ): Promise<DnsChangePreview> {
-    const res = await fetch(`${this.apiUrl}/agents/${agentId}/dns/batch`, {
+    // Trusted constructor API base; inputs are encoded path/query data, not destination URLs.
+    // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
+    const res = await fetch(`${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}/dns/batch`, {
       method: 'POST',
       headers: await this.authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload),
@@ -1149,7 +1202,9 @@ export class AgentDomain {
     agentId: string,
     payload: { zoneFile: string; mode: DnsBulkMode; dryRun: boolean; baseRevision?: string },
   ): Promise<DnsChangePreview> {
-    const res = await fetch(`${this.apiUrl}/agents/${agentId}/dns/import`, {
+    // Trusted constructor API base; inputs are encoded path/query data, not destination URLs.
+    // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
+    const res = await fetch(`${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}/dns/import`, {
       method: 'POST',
       headers: await this.authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload),
@@ -1166,7 +1221,9 @@ export class AgentDomain {
       );
     }
 
-    const url = `${this.apiUrl}/agents/${agentId}/renewal/fund`;
+    const url = `${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}/renewal/fund`;
+    // Trusted constructor API base; inputs are encoded path/query data, not destination URLs.
+    // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
     let res = await fetch(url, {
       method: 'POST',
       headers: await this.authHeaders({ 'Content-Type': 'application/json' }),
@@ -1183,6 +1240,8 @@ export class AgentDomain {
         maxTimeoutSeconds: number;
       };
       const authorization = await this.buildEip3009Authorization(challenge, walletAddress);
+      // Trusted constructor API base; inputs are encoded path/query data, not destination URLs.
+      // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
       res = await fetch(url, {
         method: 'POST',
         headers: await this.authHeaders({ 'Content-Type': 'application/json' }),
@@ -1199,7 +1258,7 @@ export class AgentDomain {
   }
 
   async getRenewalStatus(agentId: string): Promise<RenewalStatus> {
-    const url = `${this.apiUrl}/agents/${agentId}/renewal/status`;
+    const url = `${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}/renewal/status`;
     const res = await fetch(url, { headers: await this.authHeaders() });
     if (!res.ok) throw new Error(await responseError(res));
     return res.json();
@@ -1279,7 +1338,9 @@ export class AgentDomain {
   }
 
   async withdrawFromVault(agentId: string, amountUsdc: string): Promise<VaultWithdrawResult> {
-    const url = `${this.apiUrl}/agents/${agentId}/renewal/withdraw`;
+    const url = `${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}/renewal/withdraw`;
+    // Trusted constructor API base; inputs are encoded path/query data, not destination URLs.
+    // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
     const res = await fetch(url, {
       method: 'POST',
       headers: await this.authHeaders({ 'Content-Type': 'application/json' }),
@@ -1297,7 +1358,7 @@ export class AgentDomain {
   }
 
   async reconfigureSsl(agentId: string): Promise<SslReconfigureResult> {
-    const url = `${this.apiUrl}/agents/${agentId}/ssl`;
+    const url = `${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}/ssl`;
     const res = await fetch(url, {
       method: 'POST',
       headers: await this.authHeaders(),
@@ -1307,7 +1368,7 @@ export class AgentDomain {
   }
 
   async getServicePlan(agentId: string): Promise<ServicePlanStatusResult> {
-    const url = `${this.apiUrl}/agents/${agentId}/plan`;
+    const url = `${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}/plan`;
     const res = await fetch(url, { headers: await this.authHeaders() });
     if (!res.ok) throw new Error(await responseError(res));
     return res.json();
@@ -1325,7 +1386,7 @@ export class AgentDomain {
       );
     }
 
-    const url = `${this.apiUrl}/agents/${args.agentId}/plan`;
+    const url = `${this.apiUrl}/agents/${encodeApiPathSegment(args.agentId)}/plan`;
     const body = JSON.stringify({
       plan: args.plan,
       planSku: args.planSku,
@@ -1361,7 +1422,9 @@ export class AgentDomain {
     agentId: string,
     registryHidden: boolean,
   ): Promise<RegistryVisibilityResult> {
-    const url = `${this.apiUrl}/agents/${agentId}/plan`;
+    const url = `${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}/plan`;
+    // Trusted constructor API base; inputs are encoded path/query data, not destination URLs.
+    // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
     const res = await fetch(url, {
       method: 'PATCH',
       headers: await this.authHeaders({ 'Content-Type': 'application/json' }),
@@ -1376,7 +1439,9 @@ export class AgentDomain {
     args: { plan: ServicePlanKey; planSku?: ServicePlanSku },
   ): Promise<ServicePlanRenewalResult> {
     const planSku = args.planSku ?? args.plan;
-    const res = await fetch(`${this.apiUrl}/agents/${agentId}/plan`, {
+    // Trusted constructor API base; inputs are encoded path/query data, not destination URLs.
+    // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
+    const res = await fetch(`${this.apiUrl}/agents/${encodeApiPathSegment(agentId)}/plan`, {
       method: 'PATCH',
       headers: await this.authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ renewalPlan: args.plan, renewalPlanSku: planSku }),
@@ -1406,7 +1471,7 @@ export class AgentDomain {
   }
 
   async revokeApiKey(keyId: string): Promise<{ revoked: boolean }> {
-    const res = await fetch(`${this.apiUrl}/keys/${keyId}`, {
+    const res = await fetch(`${this.apiUrl}/keys/${encodeApiPathSegment(keyId)}`, {
       method: 'DELETE',
       headers: await this.authHeaders(undefined, { useApiKey: false }),
     });

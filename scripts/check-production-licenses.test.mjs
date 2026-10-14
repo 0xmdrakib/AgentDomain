@@ -97,8 +97,8 @@ test('repository pins reviewed production dependencies and excludes unsafe graph
   assert.match(lockfile, /qs@6\.16\.0:/);
   assert.doesNotMatch(lockfile, /qs@6\.15\.3:/);
   assert.equal(rootPackage.pnpm.overrides['fast-uri@>=3.0.0 <3.1.8'], '3.1.8');
-  assert.equal(frontendPackage.dependencies.next, '16.3.6');
-  assert.equal(frontendPackage.devDependencies['eslint-config-next'], '16.3.6');
+  assert.equal(frontendPackage.dependencies.next, '16.3.8');
+  assert.equal(frontendPackage.devDependencies['eslint-config-next'], '16.3.8');
   assert.equal(frontendPackage.dependencies.wagmi, '3.7.7');
   assert.equal(frontendPackage.dependencies['@coinbase/wallet-sdk'], '4.3.7');
   assert.equal(frontendPackage.dependencies['@walletconnect/ethereum-provider'], '2.21.8');
@@ -111,7 +111,7 @@ test('repository pins reviewed production dependencies and excludes unsafe graph
   assert.doesNotMatch(workflow, /deny-licenses:/);
 });
 
-test('security overrides patch every locked resolution while preserving dependency majors', async () => {
+test('security overrides cover every locked resolution at the reviewed official versions', async () => {
   const manifest = JSON.parse(await readFile(path.join(repoRoot, 'package.json'), 'utf8'));
   const lockfile = await readFile(path.join(repoRoot, 'pnpm-lock.yaml'), 'utf8');
   const { children } = parsers.yaml.parse(lockfile);
@@ -131,8 +131,14 @@ test('security overrides patch every locked resolution while preserving dependen
     'brace-expansion@>=4.0.0 <5.0.12': '5.0.12',
     'devalue@>=5.0.0 <5.9.3': '5.9.3',
     'fast-uri@>=3.0.0 <3.1.8': '3.1.8',
+    'glob@>=10.2.0 <10.5.0': '10.5.0',
     'hono@<4.13.7': '4.13.7',
     'ip-address@<=10.7.0': '10.7.1',
+    'postcss-selector-parser@<7.1.6': '7.1.6',
+    'proxy-addr@>=2.0.0 <2.0.8': '2.0.8',
+    'sharp@<0.35.5': '0.35.5',
+    'smol-toml@<1.9.0': '1.9.0',
+    'source-map-js@>=1.0.0 <1.2.2': '1.2.2',
     'undici@>=7.0.0 <7.29.1': '7.29.1',
     'undici@>=8.0.0 <8.10.2': '8.10.2',
   };
@@ -149,11 +155,18 @@ test('security overrides patch every locked resolution while preserving dependen
       'brace-expansion': ['1.1.21', '2.1.7', '5.0.12'],
       devalue: ['5.9.3'],
       'fast-uri': ['3.1.8'],
+      glob: ['10.5.0', '13.0.6'],
       hono: ['4.13.7'],
       'ip-address': ['10.7.1'],
-      next: ['16.3.6'],
-      'eslint-config-next': ['16.3.6'],
-      undici: ['7.29.1', '8.10.2'],
+      '@modelcontextprotocol/sdk': ['1.31.0'],
+      next: ['16.3.8'],
+      'eslint-config-next': ['16.3.8'],
+      'postcss-selector-parser': ['7.1.6'],
+      'proxy-addr': ['2.0.8'],
+      sharp: ['0.35.5'],
+      'smol-toml': ['1.9.0'],
+      'source-map-js': ['1.2.2'],
+      undici: ['6.29.0', '7.29.1', '8.10.2'],
     })) {
       assert.deepEqual(
         [
@@ -165,5 +178,14 @@ test('security overrides patch every locked resolution while preserving dependen
         `${section}: ${name} must contain only the reviewed patched resolutions`,
       );
     }
+    for (const key of keys.filter((key) => key.startsWith('@img/sharp-'))) {
+      const expectedVersion = key.startsWith('@img/sharp-libvips-') ? '1.3.4' : '0.35.5';
+      assert.ok(
+        key.endsWith(`@${expectedVersion}`),
+        `${section}: outdated Sharp native package ${key}`,
+      );
+    }
+    assert.ok(keys.includes('@img/sharp-linux-x64@0.35.5'));
+    assert.ok(keys.includes('@img/sharp-libvips-linux-x64@1.3.4'));
   }
 });

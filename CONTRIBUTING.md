@@ -15,6 +15,7 @@ own documented Python version and dependency requirements.
 
 ## Pull requests
 
+Open pull requests in the [public GitHub repository](https://github.com/0xmdrakib/AgentDomain/pulls).
 Keep each pull request focused and explain the public behavior it changes. Add
 or update tests and documentation when a public contract changes.
 

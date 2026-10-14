@@ -1,10 +1,15 @@
 import type { Address, Hex } from 'viem';
-import { SERVICE_PLAN_INTERVALS, SERVICE_PLAN_KEYS, SUPPORTED_TLDS } from './constants.js';
+import {
+  ENTERPRISE_EMAIL_TIERS,
+  SERVICE_PLAN_INTERVALS,
+  SERVICE_PLAN_KEYS,
+  SUPPORTED_TLDS,
+} from './constants.js';
 
 export type SupportedTld = (typeof SUPPORTED_TLDS)[number];
 export type ServicePlanKey = (typeof SERVICE_PLAN_KEYS)[number];
 export type ServicePlanInterval = (typeof SERVICE_PLAN_INTERVALS)[number];
-export type EnterpriseEmailTier = (typeof import('./constants.js').ENTERPRISE_EMAIL_TIERS)[number];
+export type EnterpriseEmailTier = (typeof ENTERPRISE_EMAIL_TIERS)[number];
 export type ServicePlanSku = 'included' | 'starter' | 'pro' | `enterprise-${EnterpriseEmailTier}`;
 
 export interface ServicePlanLimits {

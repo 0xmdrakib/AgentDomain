@@ -4,7 +4,18 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { AuthButton } from '@/components/wallet/auth-button';
-import { Menu, X } from 'lucide-react';
+import {
+  BadgeCheck,
+  BookOpen,
+  CircleDollarSign,
+  Headset,
+  LayoutDashboard,
+  LibraryBig,
+  Menu,
+  PanelsTopLeft,
+  Workflow,
+  X,
+} from 'lucide-react';
 import { BrandMark } from '@/components/brand/brand-mark';
 
 const WALLET_DIALOG_OPEN_ATTR = 'data-agentdomain-wallet-dialog-open';
@@ -49,12 +60,16 @@ export function LandingNav() {
             AgentDomain
           </span>
         </Link>
-        <nav className="hidden items-center gap-8 text-sm xl:flex">
+        <nav
+          className="hidden items-center gap-4 text-sm xl:flex 2xl:gap-6"
+          aria-label="Primary navigation"
+        >
           <NavLinks onNavigate={() => setOpen(false)} />
         </nav>
-        <div className="hidden items-center gap-3 xl:flex">
+        <div className="hidden shrink-0 items-center gap-2 xl:flex">
           <Link href="/dashboard">
             <Button variant="ghost" size="sm">
+              <LayoutDashboard className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
               Dashboard
             </Button>
           </Link>
@@ -74,12 +89,13 @@ export function LandingNav() {
             data-agentdomain-mobile-nav="true"
             className="safe-x absolute left-0 right-0 top-full z-50 border-b border-border/90 bg-card p-4 shadow-[0_22px_48px_-34px_rgba(20,21,18,0.5)] xl:hidden"
           >
-            <nav className="grid gap-1 text-sm">
+            <nav className="grid gap-1 text-sm" aria-label="Mobile navigation">
               <NavLinks onNavigate={() => setOpen(false)} mobile />
             </nav>
             <div className="mt-4 grid gap-3 border-t border-border/40 pt-4">
               <Link href="/dashboard" onClick={() => setOpen(false)}>
                 <Button variant="secondary" className="w-full">
+                  <LayoutDashboard className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
                   Dashboard
                 </Button>
               </Link>
@@ -105,24 +121,31 @@ function NavLinks({ onNavigate, mobile }: { onNavigate: () => void; mobile?: boo
   return (
     <>
       <Link href="/#features" className={linkClass} onClick={onNavigate}>
+        <PanelsTopLeft className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
         Features
       </Link>
       <Link href="/#how-it-works" className={linkClass} onClick={onNavigate}>
+        <Workflow className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
         How it works
       </Link>
       <Link href="/#pricing" className={linkClass} onClick={onNavigate}>
+        <CircleDollarSign className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
         Pricing
       </Link>
       <Link href="/registry" className={linkClass} onClick={onNavigate}>
+        <LibraryBig className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
         Registry
       </Link>
       <Link href="/verify" className={linkClass} onClick={onNavigate}>
+        <BadgeCheck className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
         Identity Check
       </Link>
       <a href="mailto:contact@agentdomain.app" className={linkClass} onClick={onNavigate}>
+        <Headset className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
         Support
       </a>
       <Link href="https://docs.agentdomain.app" className={linkClass} onClick={onNavigate}>
+        <BookOpen className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
         Docs
       </Link>
     </>
