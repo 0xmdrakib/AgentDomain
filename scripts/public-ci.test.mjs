@@ -3,14 +3,14 @@ import { spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { runCi } from './public-ci.mjs';
+import { publicLintArgs, runCi } from './public-ci.mjs';
 
 const publicSteps = [
   ['check:public-boundary'],
   ['check:production-licenses'],
   ['audit', '--prod', '--audit-level', 'high'],
   ['format:check'],
-  ['lint:public'],
+  ['lint:public', '--filter=!@agentdomain/langchain-plugin'],
   ['typecheck:public'],
   ['test:public'],
   ['build:public'],
@@ -40,6 +40,54 @@ function capture(args) {
 
 test('public CI retains every source gate and audits without repeating security tests', () => {
   assert.deepEqual(capture([]), publicSteps);
+});
+
+const lintManifest = {
+  scripts: {
+    'lint:public': 'turbo run lint --filter=!@agentdomain/contracts',
+    'typecheck:public': 'turbo run typecheck --filter=!@agentdomain/contracts',
+  },
+};
+const langchainManifest = {
+  name: '@agentdomain/langchain-plugin',
+  scripts: { lint: 'tsc --noEmit', typecheck: 'tsc --noEmit && tsc -p tsconfig.test.json' },
+};
+
+test('only the exact duplicated LangChain compiler command can be deferred to typecheck', () => {
+  assert.deepEqual(publicLintArgs(lintManifest, langchainManifest), publicSteps[4]);
+  for (const [task, command] of [
+    ['lint', 'eslint .'],
+    ['lint', 'tsc --noEmit && node extra-lint.mjs'],
+    ['typecheck', 'tsc -p tsconfig.test.json'],
+    ['typecheck', 'tsc --noEmit || tsc -p tsconfig.test.json'],
+    ['typecheck', 'tsc --noEmit --project other.json && tsc -p tsconfig.test.json'],
+    ...['prelint', 'postlint', 'pretypecheck', 'posttypecheck'].map((task) => [
+      task,
+      'node hook.mjs',
+    ]),
+  ]) {
+    assert.deepEqual(
+      publicLintArgs(lintManifest, {
+        ...langchainManifest,
+        scripts: { ...langchainManifest.scripts, [task]: command },
+      }),
+      ['lint:public'],
+      `${task} drift must restore the complete lint gate`,
+    );
+  }
+  for (const task of ['lint:public', 'typecheck:public']) {
+    assert.deepEqual(
+      publicLintArgs(
+        { scripts: { ...lintManifest.scripts, [task]: `pnpm --filter @agentdomain/docs ${task}` } },
+        langchainManifest,
+      ),
+      ['lint:public'],
+    );
+  }
+  for (const changed of [{}, { name: '@agentdomain/docs', scripts: langchainManifest.scripts }]) {
+    assert.deepEqual(publicLintArgs(lintManifest, changed), ['lint:public']);
+  }
+  assert.deepEqual(publicLintArgs({}, langchainManifest), ['lint:public']);
 });
 
 test('combined CI validates this invocation before reusing docs and keeps every Worker dry-run', () => {
