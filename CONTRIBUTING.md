@@ -13,6 +13,13 @@ This is a repository QA prerequisite, not a Python runtime dependency for
 consumers of the npm packages. The standalone Python integrations have their
 own documented Python version and dependency requirements.
 
+Run `pnpm ci:public` for public source validation. The hosted Linux workflow uses
+`pnpm ci:public --cloudflare` to also build the Worker and dry-run both Cloudflare
+environments. This combined command reuses the docs checks and build completed
+within that invocation, validates their generated output, and does not skip the
+Worker build. Standalone `pnpm ci:cloudflare` always runs the full docs check;
+there is no persisted validation receipt or environment-based skip flag.
+
 ## Pull requests
 
 Open pull requests in the [public GitHub repository](https://github.com/0xmdrakib/AgentDomain/pulls).

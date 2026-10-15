@@ -96,8 +96,8 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Verify public source and production dependencies
-        run: pnpm ci:public
+      - name: Verify public source, production dependencies, and Cloudflare artifacts
+        run: pnpm ci:public --cloudflare
 
       - name: Exercise isolated SIWE hook browser regressions
         shell: bash
@@ -119,7 +119,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node --test scripts/npm-release.test.mjs scripts/verify-release-ci.test.mjs
+          node --test scripts/npm-release.test.mjs
           python -B -m unittest discover -s scripts -p test_release_artifacts.py
           python -B -m unittest discover -s scripts -p test_python_boundary.py
           python -m venv "$RUNNER_TEMP/python-build"
@@ -157,9 +157,6 @@ jobs:
           "$RUNNER_TEMP/agentdomain-autogen/bin/python" -I -c 'import importlib.util, importlib.metadata, sysconfig; from pathlib import Path; assert importlib.metadata.version("agentdomain-autogen") == "0.11.0"; assert Path(importlib.util.find_spec("agentdomain_autogen").origin).resolve().is_relative_to(Path(sysconfig.get_path("purelib")).resolve())'
           "$RUNNER_TEMP/agentdomain-autogen/bin/python" packages/autogen-plugin/test/verify_artifacts.py "$RUNNER_TEMP/python-release/dist"
           AGENTDOMAIN_AUTOGEN_PYTHON="$RUNNER_TEMP/agentdomain-autogen/bin/python" node --test packages/mcp-server/test/autogen.integration.test.mjs
-
-      - name: Build and dry-run Cloudflare artifacts on Linux
-        run: pnpm ci:cloudflare
 
       - name: Exercise generated footer routes in the Cloudflare runtime
         shell: bash

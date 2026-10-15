@@ -242,6 +242,28 @@ test('build and release workflows use a coordinated supported Node 22 runtime', 
   }
 });
 
+test('public workflow combines checks once without weakening required contexts or runtime qualification', () => {
+  const workflow = workflows['public-ci.yml'];
+  const job = workflow.jobs.verify;
+  assert.equal(job.name, 'Boundary, packages, frontend, docs, and Cloudflare');
+  assert.equal(workflows['codeql.yml'].jobs.analyze.name, 'JavaScript and TypeScript');
+  assert.equal(workflows['dependency-review.yml'].jobs.review.name, 'Review dependency changes');
+  assert.equal(workflow.on.pull_request, null);
+  assert.deepEqual(workflow.on.push.branches, ['main']);
+  assert.equal(job.if, undefined);
+  const commands = job.steps.flatMap((step) => (step.run ? [step.run] : []));
+  assert.equal(commands.filter((command) => command === 'pnpm ci:public --cloudflare').length, 1);
+  assert.doesNotMatch(commands.join('\n'), /pnpm ci:cloudflare|verify-release-ci\.test\.mjs/);
+  assert.ok(
+    commands.some((command) => command.includes('node --test scripts/npm-release.test.mjs')),
+  );
+  assert.ok(commands.some((command) => command.includes('siwe-auth.browser.mjs')));
+  assert.ok(commands.some((command) => command.includes('footer-routes.smoke.mjs')));
+  for (const step of job.steps) {
+    assert.equal(step['continue-on-error'], undefined);
+  }
+});
+
 test('release OIDC remains isolated to main-only production publishing after validation', () => {
   for (const [file, environment] of [
     ['publish-npm.yml', 'npm-production'],
