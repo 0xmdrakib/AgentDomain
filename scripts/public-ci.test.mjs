@@ -67,6 +67,18 @@ function capture(args) {
   return commands;
 }
 
+function withNextBuildOverride(value, run) {
+  const original = process.env.SKIP_NEXT_APP_BUILD;
+  try {
+    if (value === undefined) delete process.env.SKIP_NEXT_APP_BUILD;
+    else process.env.SKIP_NEXT_APP_BUILD = value;
+    return run();
+  } finally {
+    if (original === undefined) delete process.env.SKIP_NEXT_APP_BUILD;
+    else process.env.SKIP_NEXT_APP_BUILD = original;
+  }
+}
+
 test('public CI retains every source gate and audits without repeating security tests', () => {
   assert.deepEqual(capture([]), publicSteps);
 });
@@ -279,6 +291,78 @@ test('combined CI defers only the earlier frontend build and keeps every Worker 
     ...combinedPublicSteps,
     ...cloudflareSteps('validate:output'),
   ]);
+});
+
+test('nonempty Next-build overrides reject both Cloudflare modes before running any command', () => {
+  const original = process.env.SKIP_NEXT_APP_BUILD;
+  for (const value of [
+    '1',
+    'true',
+    'yes',
+    '0',
+    'false',
+    'no',
+    'TRUE',
+    'YES',
+    ' true ',
+    ' ',
+    'unknown',
+  ]) {
+    withNextBuildOverride(value, () => {
+      assert.deepEqual(publicBuildArgs(buildManifest, frontendBuildManifest, buildConfig), [
+        'build:public',
+      ]);
+      for (const args of [['--cloudflare'], ['--cloudflare-only']]) {
+        const commands = [];
+        assert.throws(
+          () => runCi(args, (command) => commands.push(command)),
+          /SKIP_NEXT_APP_BUILD must be unset or empty for Cloudflare CI\./,
+        );
+        assert.deepEqual(commands, [], `${value} must reject before the first command`);
+      }
+      assert.deepEqual(capture([]), publicSteps, 'ordinary public CI must remain unchanged');
+    });
+    assert.equal(process.env.SKIP_NEXT_APP_BUILD, original);
+  }
+});
+
+test('absent or empty Next-build overrides preserve deferral and standalone Cloudflare checks', () => {
+  const original = process.env.SKIP_NEXT_APP_BUILD;
+  for (const value of [undefined, '']) {
+    withNextBuildOverride(value, () => {
+      assert.deepEqual(
+        publicBuildArgs(buildManifest, frontendBuildManifest, buildConfig),
+        combinedPublicSteps.at(-1),
+      );
+      assert.deepEqual(capture(['--cloudflare']), [
+        ...combinedPublicSteps,
+        ...cloudflareSteps('validate:output'),
+      ]);
+      assert.deepEqual(capture(['--cloudflare-only']), cloudflareSteps('check'));
+      assert.deepEqual(capture([]), publicSteps);
+    });
+    assert.equal(process.env.SKIP_NEXT_APP_BUILD, original);
+  }
+});
+
+test('Next-build override fixtures restore the environment even when a callback fails', () => {
+  const original = process.env.SKIP_NEXT_APP_BUILD;
+  const failure = new Error('fixture failed');
+  for (const outer of [undefined, '', 'original-override']) {
+    withNextBuildOverride(outer, () => {
+      for (const value of [undefined, '', 'true']) {
+        assert.throws(
+          () =>
+            withNextBuildOverride(value, () => {
+              throw failure;
+            }),
+          (actual) => actual === failure,
+        );
+        assert.equal(process.env.SKIP_NEXT_APP_BUILD, outer);
+      }
+    });
+    assert.equal(process.env.SKIP_NEXT_APP_BUILD, original);
+  }
 });
 
 test('standalone commands never defer builds or trust output left by another invocation', () => {
