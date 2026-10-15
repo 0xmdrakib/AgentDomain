@@ -62,6 +62,7 @@ function matchesBuildScripts(manifest, expected) {
 
 export function publicBuildArgs(manifest, frontend, config) {
   const duplicatesCloudflareBuild =
+    !process.env.SKIP_NEXT_APP_BUILD &&
     manifest?.name === 'agentdomain-public' &&
     matchesBuildScripts(manifest, rootBuildScripts) &&
     frontend?.name === '@agentdomain/frontend' &&
@@ -145,7 +146,13 @@ function runPnpm(args) {
   }
 }
 
+function assertNextBuildEnabled() {
+  if (process.env.SKIP_NEXT_APP_BUILD)
+    throw new Error('SKIP_NEXT_APP_BUILD must be unset or empty for Cloudflare CI.');
+}
+
 export function runPublicCi(run = runPnpm, { cloudflare = false } = {}) {
+  if (cloudflare) assertNextBuildEnabled();
   for (const args of [
     ['check:public-boundary'],
     ['check:production-licenses'],
@@ -180,7 +187,10 @@ export function runCi(args, run = runPnpm) {
   if (args.length === 0) return runPublicCi(run);
   if (args.length === 1 && args[0] === '--cloudflare')
     return runPublicCi(run, { cloudflare: true });
-  if (args.length === 1 && args[0] === '--cloudflare-only') return runCloudflareChecks(run);
+  if (args.length === 1 && args[0] === '--cloudflare-only') {
+    assertNextBuildEnabled();
+    return runCloudflareChecks(run);
+  }
   throw new Error('Usage: pnpm ci:public [--cloudflare] or pnpm ci:cloudflare');
 }
 
