@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { publicLintArgs, runCi } from './public-ci.mjs';
+import { publicBuildArgs, publicLintArgs, runCi } from './public-ci.mjs';
 
 const publicSteps = [
   ['check:public-boundary'],
@@ -15,6 +15,35 @@ const publicSteps = [
   ['test:public'],
   ['build:public'],
 ];
+const combinedPublicSteps = [
+  ...publicSteps.slice(0, -1),
+  ['build:public', '--filter=!@agentdomain/frontend'],
+];
+const buildManifest = JSON.parse(
+  await readFile(new URL('../package.json', import.meta.url), 'utf8'),
+);
+const frontendBuildManifest = JSON.parse(
+  await readFile(new URL('../apps/frontend/package.json', import.meta.url), 'utf8'),
+);
+const buildConfig = {
+  sources: {},
+  hasOverrides: false,
+  adapter: {
+    name: '@opennextjs/cloudflare',
+    version: '1.20.10',
+    dependencies: { '@opennextjs/aws': '4.1.9' },
+  },
+  adapterBuild: { name: '@opennextjs/aws', version: '4.1.9' },
+};
+for (const path of [
+  'apps/frontend/open-next.config.ts',
+  'apps/frontend/next.config.mjs',
+  'apps/frontend/wrangler.jsonc',
+  'scripts/cloudflare-checks.mjs',
+  'turbo.json',
+]) {
+  buildConfig.sources[path] = await readFile(new URL(`../${path}`, import.meta.url), 'utf8');
+}
 const dryRuns = (workspace) =>
   [['--env='], ['--env', 'preview']].map((environment) => [
     '--filter',
@@ -90,22 +119,178 @@ test('only the exact duplicated LangChain compiler command can be deferred to ty
   assert.deepEqual(publicLintArgs({}, langchainManifest), ['lint:public']);
 });
 
-test('combined CI validates this invocation before reusing docs and keeps every Worker dry-run', () => {
+test('only the audited complete OpenNext build can replace the earlier frontend build', () => {
+  assert.deepEqual(
+    publicBuildArgs(buildManifest, frontendBuildManifest, buildConfig),
+    combinedPublicSteps.at(-1),
+  );
+  const crlfSources = Object.fromEntries(
+    Object.entries(buildConfig.sources).map(([path, source]) => [
+      path,
+      source.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n'),
+    ]),
+  );
+  assert.deepEqual(
+    publicBuildArgs(buildManifest, frontendBuildManifest, { ...buildConfig, sources: crlfSources }),
+    combinedPublicSteps.at(-1),
+  );
+});
+
+test('root command or lifecycle drift restores the complete earlier build', () => {
+  for (const task of ['build', 'build:public', 'ci:public', 'ci:cloudflare']) {
+    for (const [name, command] of [
+      [task, `${buildManifest.scripts[task]} && node extra.mjs`],
+      [task, undefined],
+      [`pre${task}`, ''],
+      [`post${task}`, 'node hook.mjs'],
+    ]) {
+      assert.deepEqual(
+        publicBuildArgs(
+          { ...buildManifest, scripts: { ...buildManifest.scripts, [name]: command } },
+          frontendBuildManifest,
+          buildConfig,
+        ),
+        ['build:public'],
+        `${name} drift must disable deferral`,
+      );
+    }
+  }
+});
+
+test('frontend command or lifecycle drift restores the complete earlier build', () => {
+  for (const task of ['assets', 'test:isolation', 'build', 'build:cloudflare']) {
+    for (const [name, command] of [
+      [task, `${frontendBuildManifest.scripts[task]} && node extra.mjs`],
+      [task, undefined],
+      [`pre${task}`, 'node hook.mjs'],
+      [`post${task}`, ''],
+    ]) {
+      assert.deepEqual(
+        publicBuildArgs(
+          buildManifest,
+          {
+            ...frontendBuildManifest,
+            scripts: { ...frontendBuildManifest.scripts, [name]: command },
+          },
+          buildConfig,
+        ),
+        ['build:public'],
+        `${name} drift must disable deferral`,
+      );
+    }
+  }
+  for (const command of [
+    'next build',
+    frontendBuildManifest.scripts['build:cloudflare'].replace(
+      ' populateCache local',
+      ' populateCache remote',
+    ),
+    frontendBuildManifest.scripts['build:cloudflare'].replace(
+      'opennextjs-cloudflare build',
+      'opennextjs-cloudflare build --skipNextBuild',
+    ),
+  ]) {
+    assert.deepEqual(
+      publicBuildArgs(
+        buildManifest,
+        {
+          ...frontendBuildManifest,
+          scripts: { ...frontendBuildManifest.scripts, 'build:cloudflare': command },
+        },
+        buildConfig,
+      ),
+      ['build:public'],
+    );
+  }
+});
+
+test('identity and pinned adapter or compiler drift restore the complete earlier build', () => {
+  for (const frontend of [
+    {},
+    null,
+    { ...frontendBuildManifest, name: '@agentdomain/docs' },
+    { ...frontendBuildManifest, devDependencies: {} },
+    ...['@opennextjs/cloudflare', 'wrangler'].flatMap((name) =>
+      [undefined, 'new-version', `^${frontendBuildManifest.devDependencies[name]}`].map(
+        (version) => ({
+          ...frontendBuildManifest,
+          devDependencies: { ...frontendBuildManifest.devDependencies, [name]: version },
+        }),
+      ),
+    ),
+    {
+      ...frontendBuildManifest,
+      dependencies: { ...frontendBuildManifest.dependencies, next: 'new-version' },
+    },
+  ]) {
+    assert.deepEqual(publicBuildArgs(buildManifest, frontend, buildConfig), ['build:public']);
+  }
+  for (const manifest of [{}, null, { ...buildManifest, name: 'another-workspace' }]) {
+    assert.deepEqual(publicBuildArgs(manifest, frontendBuildManifest, buildConfig), [
+      'build:public',
+    ]);
+  }
+});
+
+test('config, orchestration or competing config drift restores the complete earlier build', () => {
+  for (const [path, source] of Object.entries(buildConfig.sources)) {
+    for (const changed of [undefined, `${source}\n// changed build assumptions\n`]) {
+      assert.deepEqual(
+        publicBuildArgs(buildManifest, frontendBuildManifest, {
+          ...buildConfig,
+          sources: { ...buildConfig.sources, [path]: changed },
+        }),
+        ['build:public'],
+        `${path} drift must disable deferral`,
+      );
+    }
+  }
+  for (const config of [
+    undefined,
+    {},
+    { ...buildConfig, hasOverrides: true },
+    { sources: buildConfig.sources },
+  ]) {
+    assert.deepEqual(publicBuildArgs(buildManifest, frontendBuildManifest, config), [
+      'build:public',
+    ]);
+  }
+});
+
+test('installed adapter and transitive build-helper drift restore the complete earlier build', () => {
+  for (const [name, manifest] of [
+    ['adapter', undefined],
+    ['adapter', { ...buildConfig.adapter, name: 'another-adapter' }],
+    ['adapter', { ...buildConfig.adapter, version: 'new-version' }],
+    ['adapter', { ...buildConfig.adapter, dependencies: { '@opennextjs/aws': 'new-version' } }],
+    ['adapterBuild', undefined],
+    ['adapterBuild', { ...buildConfig.adapterBuild, name: 'another-build-helper' }],
+    ['adapterBuild', { ...buildConfig.adapterBuild, version: 'new-version' }],
+  ]) {
+    assert.deepEqual(
+      publicBuildArgs(buildManifest, frontendBuildManifest, { ...buildConfig, [name]: manifest }),
+      ['build:public'],
+    );
+  }
+});
+
+test('combined CI defers only the earlier frontend build and keeps every Worker dry-run', () => {
   assert.deepEqual(capture(['--cloudflare']), [
-    ...publicSteps,
+    ...combinedPublicSteps,
     ...cloudflareSteps('validate:output'),
   ]);
 });
 
-test('standalone Cloudflare checks never trust output left by another invocation', () => {
+test('standalone commands never defer builds or trust output left by another invocation', () => {
   capture(['--cloudflare']);
   for (let attempt = 0; attempt < 2; attempt++) {
+    assert.deepEqual(capture([]), publicSteps);
     assert.deepEqual(capture(['--cloudflare-only']), cloudflareSteps('check'));
   }
 });
 
 test('every failed combined stage stops immediately, including reused docs output validation', () => {
-  const expected = [...publicSteps, ...cloudflareSteps('validate:output')];
+  const expected = [...combinedPublicSteps, ...cloudflareSteps('validate:output')];
   for (let failure = 0; failure < expected.length; failure++) {
     const commands = [];
     const error = new Error(`stage ${failure} failed`);
@@ -118,6 +303,27 @@ test('every failed combined stage stops immediately, including reused docs outpu
       (actual) => actual === error,
     );
     assert.deepEqual(commands, expected.slice(0, failure + 1));
+  }
+});
+
+test('every failed standalone stage stops immediately without deferring its build', () => {
+  for (const [args, expected] of [
+    [[], publicSteps],
+    [['--cloudflare-only'], cloudflareSteps('check')],
+  ]) {
+    for (let failure = 0; failure < expected.length; failure++) {
+      const commands = [];
+      const error = new Error(`stage ${failure} failed`);
+      assert.throws(
+        () =>
+          runCi(args, (command) => {
+            commands.push(command);
+            if (commands.length === failure + 1) throw error;
+          }),
+        (actual) => actual === error,
+      );
+      assert.deepEqual(commands, expected.slice(0, failure + 1));
+    }
   }
 });
 
@@ -139,6 +345,9 @@ test('CLI rejects skip flags, unknown options and combined modes before running 
     ['--skip-docs'],
     ['--cloudflare', '--cloudflare-only'],
     ['--cloudflare', '--skip-docs'],
+    ['--skip-frontend'],
+    ['--reuse-frontend'],
+    ['--cloudflare', '--skipNextBuild'],
   ]) {
     assert.throws(() => runCi(args, () => assert.fail('must not run')), /Usage:/);
     const result = spawnSync(process.execPath, [filename, ...args], { encoding: 'utf8' });
