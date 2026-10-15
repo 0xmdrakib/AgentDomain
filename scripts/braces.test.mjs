@@ -11,6 +11,7 @@ import { parsers } from 'prettier/plugins/yaml';
 // Downstream backport of the depth/cycle changes in micromatch/braces PR #72,
 // commit 28d440b5dd449dbf1fe6f3506cf94ecca4d02660 (closed, unmerged/unreleased).
 // Keep npm 3.0.3's unrelated quote and comma parsing behavior unchanged.
+// Downstream guards preserve fallback depth budgets and reject non-string AST values.
 // This mitigation does not resolve the version-based GHSA-vfj7-8cjw-p6xm alert.
 const frontendRequire = createRequire(new URL('../apps/frontend/package.json', import.meta.url));
 const tailwindRequire = createRequire(frontendRequire.resolve('tailwindcss/package.json'));
@@ -26,16 +27,25 @@ const depthError = (error) =>
   /exceeds max depth/.test(error.message);
 const methods = ['parse', 'compile', 'expand', 'stringify'];
 
-function nestedAst(depth) {
-  let node = { type: 'text', value: 'x' };
+function nestedAst(depth, value = 'x', type = 'paren') {
+  let node = { type: 'text', value };
   for (let i = 0; i < depth; i++) {
-    const parent = { type: 'paren', nodes: [node] };
+    const parent = { type, nodes: [node] };
     node.parent = parent;
     node = parent;
   }
   const root = { type: 'root', nodes: [node] };
   node.parent = root;
   return root;
+}
+
+function fallbackAst(depth, at, fallback, type = 'paren') {
+  const ast = nestedAst(depth);
+  let node = ast;
+  for (let i = 0; i < at; i++) node = node.nodes[0];
+  node.type = type;
+  node[fallback] = fallback === 'ranges' ? 1 : true;
+  return ast;
 }
 
 test('every installed Tailwind and Next ESLint path resolves the same patched braces 3.0.3', () => {
@@ -139,6 +149,61 @@ for (const method of ['compile', 'expand', 'stringify']) {
     const ast = { type: 'root', nodes: [] };
     ast.nodes.push(ast);
     assert.throws(() => braces[method](ast), depthError);
+  });
+}
+
+for (const method of ['compile', 'expand', 'stringify']) {
+  test(`${method}: nested root types cannot reset the AST depth cap`, () => {
+    assert.doesNotThrow(() => braces[method](nestedAst(100, 'x', 'root')));
+    assert.throws(() => braces[method](nestedAst(101, 'x', 'root')), depthError);
+  });
+
+  test(`${method}: rejects array, cyclic and deeply nested AST values before coercion`, () => {
+    const cycle = [];
+    cycle.push(cycle);
+    let deep = 'x';
+    for (let i = 0; i < 10000; i++) deep = [deep];
+    for (const value of [[], ['x'], cycle, deep, null, false, 0, {}]) {
+      for (const fallback of [undefined, 'invalid', 'dollar']) {
+        const ast = nestedAst(2, value);
+        if (fallback) ast.nodes[0][fallback] = true;
+        assert.throws(
+          () => braces[method](ast),
+          (error) =>
+            error instanceof TypeError && error.message === 'AST node value must be a string',
+        );
+      }
+    }
+  });
+}
+
+for (const fallback of ['invalid', 'dollar', 'ranges']) {
+  test(`expand: ${fallback} stringify fallback preserves the total 100-level budget`, () => {
+    for (const at of [1, 50, 100]) {
+      for (const type of ['paren', 'root']) {
+        assert.deepEqual(braces.expand(fallbackAst(100, at, fallback, type)), ['x']);
+        for (const depth of [101, 199]) {
+          assert.throws(() => braces.expand(fallbackAst(depth, at, fallback, type)), depthError);
+        }
+      }
+    }
+  });
+
+  test(`expand: ${fallback} stringify fallback preserves stricter fractional budgets`, () => {
+    for (const maxDepth of [1.5, 2.5, 4.5]) {
+      const limit = Math.floor(maxDepth);
+      for (const at of [1, limit]) {
+        for (const type of ['paren', 'root']) {
+          assert.deepEqual(braces.expand(fallbackAst(limit, at, fallback, type), { maxDepth }), [
+            'x',
+          ]);
+          assert.throws(
+            () => braces.expand(fallbackAst(limit + 1, at, fallback, type), { maxDepth }),
+            depthError,
+          );
+        }
+      }
+    }
   });
 }
 
