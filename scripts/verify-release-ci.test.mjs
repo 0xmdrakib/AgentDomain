@@ -285,3 +285,55 @@ test('release OIDC remains isolated to main-only production publishing after val
     assert.deepEqual(publish.permissions, { contents: 'read', 'id-token': 'write' });
   }
 });
+
+test('public CrewAI install uses a pinned verified tool and fresh hash-checked wheels', async () => {
+  const job = workflows['public-ci.yml'].jobs.verify;
+  assert.equal(job['runs-on'], 'ubuntu-24.04');
+  const checkout = job.steps.find((step) => step.uses?.startsWith('actions/checkout@'));
+  assert.equal(checkout.with['persist-credentials'], 'false');
+  const setup = job.steps.find(
+    (step) => step.name === 'Set up checksum-pinned uv for locked CrewAI dependencies',
+  );
+  assert.deepEqual(setup.env, {
+    UV_VERSION: '0.11.33',
+    UV_LINUX_X64_SHA256: 'aa9fca823c03289fb6e3460b3dc864f3ea895cafaf9b99247701a67b17d1b018',
+  });
+  assert.equal(setup.shell, 'bash');
+  assert.equal(setup.if, undefined);
+  assert.equal(setup['continue-on-error'], undefined);
+  for (const command of [
+    'set -euo pipefail',
+    "--proto '=https' --tlsv1.2",
+    '--connect-timeout 10 --max-time 60 --retry 0',
+    'https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz',
+    'sha256sum --check --status',
+    '--strip-components=1 uv-x86_64-unknown-linux-gnu/uv',
+  ]) {
+    assert.ok(setup.run.includes(command), command);
+  }
+  assert.ok(setup.run.indexOf('sha256sum --check --status') < setup.run.indexOf('tar -xzf'));
+  assert.doesNotMatch(setup.run, /\|\s*(?:sh|bash)\b|\|\|/);
+  const crewai = job.steps.find(
+    (step) => step.name === 'Qualify the official CrewAI connector without model or wallet access',
+  );
+  assert.ok(job.steps.indexOf(setup) < job.steps.indexOf(crewai));
+  assert.equal(crewai.if, undefined);
+  assert.equal(crewai['continue-on-error'], undefined);
+  for (const command of [
+    'python -m venv "$RUNNER_TEMP/agentdomain-crewai"',
+    'uv --no-config --no-cache --no-python-downloads pip install --python "$RUNNER_TEMP/agentdomain-crewai/bin/python" --require-hashes --no-build -r packages/mcp-server/examples/crewai/requirements.lock',
+    '-m pip install --no-deps --no-index --force-reinstall "$RUNNER_TEMP/python-release/dist/agentdomain_crewai-0.11.0-py3-none-any.whl"',
+    '-m pip check',
+    'importlib.util.find_spec("agentdomain_crewai")',
+    'packages/mcp-server/test/crewai-package.py',
+    'packages/mcp-server/test/crewai-integration.mjs',
+  ]) {
+    assert.ok(crewai.run.includes(command), command);
+  }
+  assert.doesNotMatch(crewai.run, /--no-verify|--no-deps.*requirements\.lock|\|\|/);
+  const lock = await readFile(
+    new URL('../packages/mcp-server/examples/crewai/requirements.lock', import.meta.url),
+    'utf8',
+  );
+  assert.match(lock, /^uv==0\.11\.33 \\/m);
+});

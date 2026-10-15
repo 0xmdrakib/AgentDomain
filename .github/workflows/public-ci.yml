@@ -16,7 +16,7 @@ concurrency:
 jobs:
   verify:
     name: Boundary, packages, frontend, docs, and Cloudflare
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
       CI: 'true'
@@ -29,6 +29,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Install checksum-pinned Gitleaks
         shell: bash
@@ -126,6 +127,25 @@ jobs:
           "$RUNNER_TEMP/python-build/bin/python" -m pip install --disable-pip-version-check --require-hashes -r scripts/python-build-requirements.lock
           "$RUNNER_TEMP/python-build/bin/python" scripts/release-artifacts.py build-python --output "$RUNNER_TEMP/python-release"
 
+      - name: Set up checksum-pinned uv for locked CrewAI dependencies
+        shell: bash
+        env:
+          UV_VERSION: 0.11.33
+          UV_LINUX_X64_SHA256: aa9fca823c03289fb6e3460b3dc864f3ea895cafaf9b99247701a67b17d1b018
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/uv-${UV_VERSION}-linux-x64.tar.gz"
+          install_dir="$RUNNER_TEMP/uv-${UV_VERSION}"
+          curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
+            --connect-timeout 10 --max-time 60 --retry 0 \
+            --output "$archive" "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz"
+          printf '%s  %s\n' "$UV_LINUX_X64_SHA256" "$archive" | sha256sum --check --status
+          mkdir -p "$install_dir"
+          tar -xzf "$archive" -C "$install_dir" --strip-components=1 uv-x86_64-unknown-linux-gnu/uv
+          chmod 0755 "$install_dir/uv"
+          "$install_dir/uv" --version
+          printf '%s\n' "$install_dir" >> "$GITHUB_PATH"
+
       - name: Qualify the official CrewAI connector without model or wallet access
         shell: bash
         env:
@@ -136,7 +156,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m venv "$RUNNER_TEMP/agentdomain-crewai"
-          "$RUNNER_TEMP/agentdomain-crewai/bin/python" -m pip install --disable-pip-version-check --require-hashes -r packages/mcp-server/examples/crewai/requirements.lock
+          uv --no-config --no-cache --no-python-downloads pip install --python "$RUNNER_TEMP/agentdomain-crewai/bin/python" --require-hashes --no-build -r packages/mcp-server/examples/crewai/requirements.lock
           "$RUNNER_TEMP/agentdomain-crewai/bin/python" -m pip install --no-deps --no-index --force-reinstall "$RUNNER_TEMP/python-release/dist/agentdomain_crewai-0.11.0-py3-none-any.whl"
           "$RUNNER_TEMP/agentdomain-crewai/bin/python" -m pip check
           "$RUNNER_TEMP/agentdomain-crewai/bin/python" -I -c 'import importlib.util, importlib.metadata, sysconfig; from pathlib import Path; assert importlib.metadata.version("agentdomain-crewai") == "0.11.0"; assert Path(importlib.util.find_spec("agentdomain_crewai").origin).resolve().is_relative_to(Path(sysconfig.get_path("purelib")).resolve())'
