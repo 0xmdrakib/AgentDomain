@@ -1,10 +1,11 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runCloudflareChecks } from './cloudflare-checks.mjs';
+import { inspectPublicPrScope } from './public-pr-scope.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 
@@ -183,6 +184,61 @@ export function runPublicCi(run = runPnpm, { cloudflare = false } = {}) {
   }
 }
 
+export function runPublicPrCi(run = runPnpm, inspect = inspectPublicPrScope) {
+  assertNextBuildEnabled();
+  const proof = inspect();
+  const scope = proof.scope;
+  if (!['docs', 'frontend'].includes(scope)) {
+    runPublicCi(run, { cloudflare: true });
+    return 'full';
+  }
+  for (const args of [
+    ['check:public-boundary'],
+    ['check:production-licenses'],
+    ['audit', '--prod', '--audit-level', 'high'],
+    ['format:check'],
+    ['test:dependency-security'],
+    [
+      'exec',
+      'node',
+      '--test',
+      'scripts/check-public-boundary.test.mjs',
+      'scripts/verify-release-ci.test.mjs',
+      'scripts/public-ci.test.mjs',
+      'scripts/public-pr-scope.test.mjs',
+    ],
+    ['test:license-gate'],
+    ['--filter', '@agentdomain/contracts', 'test'],
+  ])
+    run(args);
+  // Reinspect after guards; changing source/context must not leave a reduced success.
+  if (inspect().scope !== scope) throw new Error('PUBLIC_PR_SCOPE_CHANGED');
+  if (scope === 'docs') {
+    run(['--filter', '@agentdomain/docs', 'check']);
+  } else {
+    // Turbo supplies only this workload's build dependency closure, not path authority.
+    run([
+      'exec',
+      'turbo',
+      'run',
+      'lint',
+      'typecheck',
+      'test',
+      '--filter=@agentdomain/frontend...',
+      '--force',
+    ]);
+    run(['--filter', '@agentdomain/frontend', 'build:cloudflare']);
+    // Docs source-contract tests include consumers not represented by workspace edges.
+    run(['--filter', '@agentdomain/docs', 'test']);
+  }
+  const workspace = scope === 'docs' ? '@agentdomain/docs' : '@agentdomain/frontend';
+  for (const environment of [['--env='], ['--env', 'preview']]) {
+    run(['--filter', workspace, 'exec', 'wrangler', 'deploy', '--dry-run', ...environment]);
+  }
+  proof.assertSource();
+  return scope;
+}
+
 export function runCi(args, run = runPnpm) {
   if (args.length === 0) return runPublicCi(run);
   if (args.length === 1 && args[0] === '--cloudflare')
@@ -191,12 +247,16 @@ export function runCi(args, run = runPnpm) {
     assertNextBuildEnabled();
     return runCloudflareChecks(run);
   }
+  if (args.length === 2 && args[0] === '--pull-request' && args[1] === '--cloudflare')
+    return runPublicPrCi(run);
   throw new Error('Usage: pnpm ci:public [--cloudflare] or pnpm ci:cloudflare');
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
-    runCi(process.argv.slice(2));
+    const scope = runCi(process.argv.slice(2));
+    if (typeof scope === 'string' && process.env.GITHUB_OUTPUT)
+      appendFileSync(process.env.GITHUB_OUTPUT, `scope=${scope}\n`);
   } catch (error) {
     console.error(error.message);
     process.exitCode = error.exitCode ?? 1;

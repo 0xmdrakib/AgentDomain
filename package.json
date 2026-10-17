@@ -22,7 +22,7 @@
     "test": "turbo run test",
     "test:dependency-security": "node --test scripts/http-cache-semantics.test.mjs scripts/braces.test.mjs scripts/production-dependencies.test.mjs",
     "test:license-gate": "node --test scripts/check-production-licenses.test.mjs",
-    "test:public": "pnpm test:dependency-security && node --test scripts/check-public-boundary.test.mjs scripts/verify-release-ci.test.mjs scripts/public-ci.test.mjs && pnpm test:license-gate && pnpm --filter @agentdomain/contracts test && turbo run test --filter=!@agentdomain/contracts",
+    "test:public": "pnpm test:dependency-security && node --test scripts/check-public-boundary.test.mjs scripts/verify-release-ci.test.mjs scripts/public-ci.test.mjs scripts/public-pr-scope.test.mjs && pnpm test:license-gate && pnpm --filter @agentdomain/contracts test && turbo run test --filter=!@agentdomain/contracts",
     "typecheck": "turbo run typecheck",
     "typecheck:public": "turbo run typecheck --filter=!@agentdomain/contracts",
     "format:check": "prettier --check \"**/*.{js,mjs,cjs,ts,tsx,md,mdx,json,yml,yaml}\""
