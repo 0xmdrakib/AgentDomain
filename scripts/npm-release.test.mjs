@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import test from 'node:test';
 import {
   PACKAGES,
@@ -18,10 +19,19 @@ const rows =
   ).join('\n') + '\n';
 const env = {
   GITHUB_REPOSITORY: '0xmdrakib/AgentDomain',
+  GITHUB_REPOSITORY_ID: '1310051881',
+  GITHUB_REPOSITORY_OWNER: '0xmdrakib',
+  GITHUB_REPOSITORY_OWNER_ID: '113634586',
+  GITHUB_ACTOR: '0xmdrakib',
+  GITHUB_ACTOR_ID: '113634586',
+  GITHUB_TRIGGERING_ACTOR: '0xmdrakib',
+  GITHUB_WORKFLOW_REF: '0xmdrakib/AgentDomain/.github/workflows/publish-npm.yml@refs/heads/main',
+  GITHUB_SHA: 'a'.repeat(40),
   GITHUB_REF: 'refs/heads/main',
   NODE_AUTH_TOKEN: 'old',
   NPM_BOOTSTRAP_TOKEN: 'sensitive-test',
   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'oidc-test',
+  ACTIONS_ID_TOKEN_REQUEST_URL: 'https://oidc.actions.githubusercontent.com/test',
 };
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'agentdomain-release-test-'));
@@ -43,19 +53,15 @@ test('six exact names, versions, order and safe paths only', () => {
   ])
     assert.throws(() => releaseRows(bad), /NPM_RELEASE_REFUSED/);
 });
-test('bootstrap child environment is exact-target only and strips ambient credentials', () => {
+test('every publication strips ambient credentials and preserves only OIDC transport', () => {
   const ordinary = publishEnvironment(env, '@agentdomain/sdk', VERSION, undefined, false);
   assert.equal(ordinary.NPM_BOOTSTRAP_TOKEN, undefined);
   assert.equal(ordinary.NODE_AUTH_TOKEN, undefined);
   assert.equal(ordinary.ACTIONS_ID_TOKEN_REQUEST_TOKEN, 'oidc-test');
   const boot = publishEnvironment(env, '@agentdomain/langchain-plugin', VERSION, 'test-only', true);
-  assert.equal(boot.NODE_AUTH_TOKEN, 'test-only');
+  assert.equal(boot.NODE_AUTH_TOKEN, undefined);
   assert.equal(boot.NPM_CONFIG_IGNORE_SCRIPTS, 'true');
   assert.equal(boot.NPM_CONFIG_FETCH_RETRIES, '0');
-  assert.throws(() => publishEnvironment(env, '@agentdomain/sdk', VERSION, 'test-only', true));
-  assert.throws(() =>
-    publishEnvironment(env, '@agentdomain/langchain-plugin', '0.11.1', 'test-only', true),
-  );
 });
 test('five OIDC children receive no bootstrap token, even if caller mistakenly supplied one', async (t) => {
   const calls = [];
@@ -79,7 +85,7 @@ test('five OIDC children receive no bootstrap token, even if caller mistakenly s
     assert.equal(childEnv.NPM_BOOTSTRAP_TOKEN, undefined);
   }
 });
-test('one missing project bootstrap receives token only in env, never argv', async (t) => {
+test('LangChain missing-project publication has no static-token fallback', async (t) => {
   const calls = [];
   await publishRelease({
     root: fixture(t),
@@ -94,7 +100,7 @@ test('one missing project bootstrap receives token only in env, never argv', asy
     },
   });
   assert.equal(calls.length, 1);
-  assert.equal(calls[0][2].NODE_AUTH_TOKEN, 'test-only');
+  assert.equal(calls[0][2].NODE_AUTH_TOKEN, undefined);
   assert(!calls[0][1].join(' ').includes('test-only'));
 });
 test('existing project or absent optional token uses OIDC without bootstrap', async (t) => {
@@ -171,25 +177,88 @@ test('already published artifact must match exact immutable integrity', async (t
   await assert.rejects(publishRelease({ root, npmCli: 'npm', mode: 'bootstrap', env, lookup }));
 });
 test('wrong source context refuses before lookup', async (t) => {
+  for (const patch of [
+    { GITHUB_REF: 'refs/heads/feature' },
+    { GITHUB_REPOSITORY: 'someone/AgentDomain' },
+    { GITHUB_REPOSITORY_ID: '42' },
+    { GITHUB_REPOSITORY_OWNER_ID: '42' },
+    { GITHUB_ACTOR_ID: '42' },
+    { GITHUB_SHA: 'unqualified' },
+    { ACTIONS_ID_TOKEN_REQUEST_TOKEN: '' },
+    { ACTIONS_ID_TOKEN_REQUEST_URL: '' },
+    {
+      GITHUB_REPOSITORY: 'Talvono/AgentDomain',
+      GITHUB_REPOSITORY_OWNER: 'Talvono',
+      GITHUB_REPOSITORY_OWNER_ID: '342912183',
+      GITHUB_WORKFLOW_REF: 'Talvono/AgentDomain/.github/workflows/publish-npm.yml@refs/heads/main',
+      ACTIVE_RELEASE_OWNER: 'Talvono',
+    },
+  ]) {
+    await assert.rejects(
+      publishRelease({
+        root: fixture(t),
+        mode: 'bootstrap',
+        env: { ...env, ...patch },
+        lookup: () => {
+          throw Error('must not lookup');
+        },
+      }),
+      /NPM_RELEASE_REFUSED/,
+    );
+  }
+});
+
+test('reviewed policy flip refuses old-owner publication before registry lookup', async (t) => {
+  const root = fixture(t);
+  for (const file of ['npm-release.mjs', 'public-release-identity.mjs'])
+    writeFileSync(join(root, file), readFileSync(new URL(`./${file}`, import.meta.url)));
+  const policy = JSON.parse(readFileSync(new URL('./public-release-policy.json', import.meta.url)));
+  writeFileSync(
+    join(root, 'public-release-policy.json'),
+    JSON.stringify({ ...policy, activeOwner: 'Talvono' }),
+  );
+  const flipped = await import(pathToFileURL(join(root, 'npm-release.mjs')).href);
+  let lookups = 0;
   await assert.rejects(
-    publishRelease({
-      root: fixture(t),
-      mode: 'bootstrap',
-      env: { ...env, GITHUB_REF: 'refs/heads/feature' },
+    flipped.publishRelease({
+      root,
+      mode: 'oidc',
+      env,
       lookup: () => {
-        throw Error('must not lookup');
+        lookups++;
       },
     }),
     /NPM_RELEASE_REFUSED/,
   );
+  assert.equal(lookups, 0);
+  const future = {
+    ...env,
+    GITHUB_REPOSITORY: 'Talvono/AgentDomain',
+    GITHUB_REPOSITORY_OWNER: 'Talvono',
+    GITHUB_REPOSITORY_OWNER_ID: '342912183',
+    GITHUB_WORKFLOW_REF: 'Talvono/AgentDomain/.github/workflows/publish-npm.yml@refs/heads/main',
+  };
+  let publications = 0;
+  await flipped.publishRelease({
+    root,
+    npmCli: 'never-executed',
+    mode: 'oidc',
+    env: future,
+    lookup: async () => ({ status: 404 }),
+    run: async () => {
+      publications++;
+      return 0;
+    },
+  });
+  assert.equal(publications, 5);
+  assert.equal(flipped.publishEnvironment(future).NODE_AUTH_TOKEN, undefined);
 });
-test('workflow confines secret to single final step; PyPI has no static token fallback', () => {
+test('both publishing workflows have no static-token fallback', () => {
   const npm = readFileSync(
     new URL('../.github/workflows/publish-npm.yml', import.meta.url),
     'utf8',
   );
-  assert.equal(npm.split('secrets.NPM_BOOTSTRAP_TOKEN').length - 1, 1);
-  assert(npm.indexOf('secrets.NPM_BOOTSTRAP_TOKEN') > npm.indexOf('oidc\n'));
+  assert(!npm.includes('secrets.'));
   assert.match(npm, /npm_config_ignore_scripts: 'true'/);
   const python = readFileSync(
     new URL('../.github/workflows/publish-python.yml', import.meta.url),
@@ -201,6 +270,28 @@ test('workflow confines secret to single final step; PyPI has no static token fa
   assert(!python.includes('secrets.'));
   assert(python.indexOf('verify-release-ci.mjs') < python.indexOf('build-python --output'));
   assert(!python.split('\n  publish:')[1].includes('actions/checkout'));
+});
+
+test('npm stages the trusted identity helper and policy inside the sealed input inventory', () => {
+  const workflow = readFileSync(
+    new URL('../.github/workflows/publish-npm.yml', import.meta.url),
+    'utf8',
+  );
+  assert.match(
+    workflow,
+    /for script in npm-release\.mjs release-artifacts\.py public-release-identity\.mjs public-release-policy\.json; do/,
+  );
+  assert.match(workflow, /test "\$\(wc -l < "\$checksums"\)" -eq 12/);
+  assert.match(workflow, /test "\$\(wc -l < "\$release_dir\/release\.sha256"\)" -eq 12/);
+  const publish = workflow.split('\n  publish:')[1];
+  assert.ok(
+    publish.indexOf('sha256sum --check --strict release.sha256') <
+      publish.indexOf('tooling/release-artifacts.py'),
+  );
+  assert.ok(
+    publish.indexOf('sha256sum --check --strict release.sha256') <
+      publish.indexOf('tooling/npm-release.mjs'),
+  );
 });
 
 test('Python project choice never narrows validation or native integration tests', () => {
@@ -254,11 +345,11 @@ test('Python publishing stages a fixed verified subset before the pinned OIDC ac
   const validation = workflow.split('\n  validate:\n')[1].split('\n  publish:\n')[0];
   const publish = workflow.split('\n  publish:\n')[1];
   for (const job of [validation, publish]) {
-    assert.equal(
-      job.split('\n').find((line) => line.startsWith('    if:')),
-      "    if: github.ref == 'refs/heads/main' && github.repository == '0xmdrakib/AgentDomain'",
-    );
+    assert.match(job, /github\.repository_id == '1310051881'/);
+    assert.match(job, /github\.actor_id == '113634586'/);
+    assert.match(job, /github\.repository_owner_id == '342912183'/);
   }
+  assert.match(publish, /needs\.validate\.outputs\.publication-authorized == 'true'/);
   assert.match(workflow, /^concurrency:\n  group: publish-python\n  cancel-in-progress: false$/m);
   assert.match(publish, /^    needs: validate$/m);
   assert.match(publish, /^    environment:\n      name: pypi-production$/m);
@@ -270,6 +361,16 @@ test('Python publishing stages a fixed verified subset before the pinned OIDC ac
   assert.match(
     publish,
     /EXPECTED_VERIFIER_SHA256: \$\{\{ needs\.validate\.outputs\.verifier-sha256 \}\}/,
+  );
+  assert.match(
+    publish,
+    /EXPECTED_POLICY_SHA256: \$\{\{ needs\.validate\.outputs\.policy-sha256 \}\}/,
+  );
+  assert.match(validation, /cp scripts\/public-release-policy\.json/);
+  assert.match(validation, /policy-sha256=%s/);
+  assert.ok(
+    publish.indexOf('release-inputs/public-release-policy.json') <
+      publish.indexOf('stage-python --output'),
   );
   assert.match(publish, /^          PROJECT_TO_PUBLISH: \$\{\{ inputs\.project \}\}$/m);
   assert.equal(workflow.split('${{ inputs.project }}').length - 1, 1);

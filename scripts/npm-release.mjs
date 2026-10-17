@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertReleaseContext, releaseContext } from './public-release-identity.mjs';
 
 export const PACKAGES = [
   'shared',
@@ -38,7 +39,7 @@ export function releaseRows(text) {
   return rows;
 }
 
-export function publishEnvironment(base, name, version, token, packageMissing) {
+export function publishEnvironment(base) {
   const env = { ...base };
   for (const key of Object.keys(env)) {
     if (/token|password|npm_config_.*auth/i.test(key) && !key.startsWith('ACTIONS_ID_TOKEN_'))
@@ -47,20 +48,22 @@ export function publishEnvironment(base, name, version, token, packageMissing) {
   env.NPM_CONFIG_IGNORE_SCRIPTS = 'true';
   env.NPM_CONFIG_REGISTRY = 'https://registry.npmjs.org/';
   env.NPM_CONFIG_FETCH_RETRIES = '0';
-  if (token && packageMissing) {
-    if (name !== BOOTSTRAP_NAME || version !== VERSION || /[\r\n]/.test(token)) fail();
-    env.NODE_AUTH_TOKEN = token;
-  }
   return env;
 }
 
-export async function publishRelease({ root, npmCli, mode, env, token, lookup, run }) {
+export async function publishRelease({ root, npmCli, mode, env, lookup, run }) {
+  // Keep the old selector name for LangChain, not its historical token exception.
   if (
     !['oidc', 'bootstrap'].includes(mode) ||
-    env.GITHUB_REPOSITORY !== '0xmdrakib/AgentDomain' ||
-    env.GITHUB_REF !== 'refs/heads/main'
+    !env.ACTIONS_ID_TOKEN_REQUEST_TOKEN ||
+    !env.ACTIONS_ID_TOKEN_REQUEST_URL
   )
     fail();
+  try {
+    assertReleaseContext(releaseContext(env), true, 'publish-npm.yml');
+  } catch {
+    fail();
+  }
   const rows = releaseRows(readFileSync(resolve(root, 'publish-order.tsv'), 'utf8'));
   for (const [name, version, filename] of rows) {
     if ((name === BOOTSTRAP_NAME) !== (mode === 'bootstrap')) continue;
@@ -77,19 +80,7 @@ export async function publishRelease({ root, npmCli, mode, env, token, lookup, r
       continue;
     }
     if (existing.status !== 404) fail();
-    let missing = false;
-    if (mode === 'bootstrap' && token) {
-      const project = await lookup(encodeURIComponent(name));
-      if (![200, 404].includes(project.status)) fail();
-      missing = project.status === 404;
-    }
-    const childEnv = publishEnvironment(
-      env,
-      name,
-      version,
-      mode === 'bootstrap' ? token : undefined,
-      missing,
-    );
+    const childEnv = publishEnvironment(env);
     const result = await run(
       process.execPath,
       [
@@ -130,7 +121,6 @@ async function registry(path) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const token = process.env.NPM_BOOTSTRAP_TOKEN;
   delete process.env.NPM_BOOTSTRAP_TOKEN;
   try {
     await publishRelease({
@@ -138,7 +128,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       npmCli: process.argv[3],
       mode: process.argv[4],
       env: process.env,
-      token,
       lookup: registry,
       run: (command, args, env) =>
         spawnSync(command, args, { env, stdio: 'inherit', timeout: 180_000, shell: false }).status,

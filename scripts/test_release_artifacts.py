@@ -69,6 +69,13 @@ class ReleaseTests(unittest.TestCase):
             "EXPECTED_RELEASE_MANIFEST_SHA256": release.digest(root / "release.json"),
             "GITHUB_SHA": "a" * 40,
             "GITHUB_REPOSITORY": "0xmdrakib/AgentDomain",
+            "GITHUB_REPOSITORY_ID": "1310051881",
+            "GITHUB_REPOSITORY_OWNER": "0xmdrakib",
+            "GITHUB_REPOSITORY_OWNER_ID": "113634586",
+            "GITHUB_ACTOR": "0xmdrakib",
+            "GITHUB_ACTOR_ID": "113634586",
+            "GITHUB_TRIGGERING_ACTOR": "0xmdrakib",
+            "GITHUB_WORKFLOW_REF": "0xmdrakib/AgentDomain/.github/workflows/publish-python.yml@refs/heads/main",
             "GITHUB_REF": "refs/heads/main",
         }
 
@@ -299,12 +306,63 @@ class ReleaseTests(unittest.TestCase):
             ("EXPECTED_RELEASE_MANIFEST_SHA256", "0" * 64),
             ("GITHUB_SHA", "b" * 40),
             ("GITHUB_REPOSITORY", "someone/AgentDomain"),
+            ("GITHUB_REPOSITORY_ID", "42"),
+            ("GITHUB_REPOSITORY_OWNER_ID", "42"),
+            ("GITHUB_ACTOR_ID", "342912183"),
+            ("GITHUB_TRIGGERING_ACTOR", "someone"),
+            ("GITHUB_WORKFLOW_REF", "someone/AgentDomain/.github/workflows/publish-python.yml@refs/heads/main"),
             ("GITHUB_REF", "refs/heads/feature"),
         ):
             with self.subTest(key=key, value=value):
                 with patch.dict(os.environ, {**env, key: value}, clear=True), self.assertRaises(ValueError):
                     release.stage_python(root, "agentdomain-crewai")
                 self.assertFalse((root / "publish-dist").exists())
+
+    def test_only_reviewed_active_policy_allows_future_owner_publication(self):
+        root, manifest, env = self.python_release()
+        future = {**env, "GITHUB_REPOSITORY": "Talvono/AgentDomain", "GITHUB_REPOSITORY_OWNER": "Talvono", "GITHUB_REPOSITORY_OWNER_ID": "342912183", "GITHUB_WORKFLOW_REF": "Talvono/AgentDomain/.github/workflows/publish-python.yml@refs/heads/main", "ACTIVE_RELEASE_OWNER": "Talvono"}
+        self.assertEqual(release.source_repository(future), "Talvono/AgentDomain")
+        with self.assertRaises(ValueError):
+            release.publication_repository(future)
+        with patch.dict(release.POLICY, {"activeOwner": "Talvono"}):
+            with self.assertRaises(ValueError):
+                release.publication_repository(env)
+            self.assertEqual(release.publication_repository(future), "Talvono/AgentDomain")
+            manifest["repository"] = "Talvono/AgentDomain"
+            seal = self.seal(root, manifest)["EXPECTED_RELEASE_MANIFEST_SHA256"]
+            with patch.dict(os.environ, {**future, "EXPECTED_RELEASE_MANIFEST_SHA256": seal}, clear=True):
+                self.assertEqual(len(release.stage_python(root, "all")), 4)
+        self.assertEqual(release.POLICY["activeOwner"], "0xmdrakib")
+
+    def test_staged_verifier_loads_its_hash_bound_sibling_policy(self):
+        root, _, env = self.python_release()
+        verifier = root / "verifier.py"
+        verifier.write_bytes(Path(release.__file__).read_bytes())
+        policy = root / "public-release-policy.json"
+        policy.write_text(json.dumps(release.POLICY), encoding="utf-8")
+        arguments = [sys.executable, "-B", str(verifier), "verify-python", "--output", str(root)]
+        result = subprocess.run(arguments, env=env, cwd=self.root, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        policy.write_text(json.dumps({**release.POLICY, "activeOwner": "Talvono"}), encoding="utf-8")
+        rejected = subprocess.run(arguments, env=env, cwd=self.root, capture_output=True, text=True)
+        self.assertEqual(rejected.returncode, 1)
+
+    def test_qualification_builder_records_actual_known_owner_without_activating_it(self):
+        future = {
+            "GITHUB_REPOSITORY": "Talvono/AgentDomain", "GITHUB_REPOSITORY_ID": "1310051881",
+            "GITHUB_REPOSITORY_OWNER": "Talvono", "GITHUB_REPOSITORY_OWNER_ID": "342912183",
+            "GITHUB_SHA": "a" * 40,
+        }
+        root = self.root / "qualification"
+        with patch.dict(os.environ, future, clear=True), patch.object(release.subprocess, "run"), patch.object(release, "python_inventory", return_value=[]):
+            release.build_python(root)
+        self.assertEqual(json.loads((root / "release.json").read_bytes())["repository"], "Talvono/AgentDomain")
+        self.assertEqual(release.POLICY["activeOwner"], "0xmdrakib")
+        for key in ("GITHUB_REPOSITORY_ID", "GITHUB_REPOSITORY_OWNER_ID"):
+            with patch.dict(os.environ, {**future, key: "42"}, clear=True), patch.object(release.subprocess, "run") as build:
+                with self.assertRaises(ValueError):
+                    release.build_python(self.root / f"rejected-{key}")
+                build.assert_not_called()
 
     def test_stage_rejects_sealed_manifest_row_mismatches(self):
         for key, value in (("filename", "../outside.whl"), ("project", "other"), ("bytes", 1), ("sha256", "0" * 64)):

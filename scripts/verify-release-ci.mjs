@@ -1,16 +1,23 @@
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
+import { appendFileSync } from 'node:fs';
+import {
+  assertReleaseContext,
+  releaseContext,
+  RELEASE_POLICY,
+} from './public-release-identity.mjs';
 
-const repository = '0xmdrakib/AgentDomain';
 export const RELEASE_CI_LIMITS = Object.freeze({ maxBytes: 1_048_576, timeoutMs: 10_000 });
 
 export function verifyReleaseCi(payload, context) {
+  assertReleaseContext(context);
   if (
-    context.repository !== repository ||
-    context.ref !== 'refs/heads/main' ||
-    !/^[0-9a-f]{40}$/.test(context.sha ?? '')
+    payload?.source_commit?.sha !== context.sha ||
+    payload.source_commit.commit?.verification?.verified !== true ||
+    payload.triggering_operator?.login !== RELEASE_POLICY.operator.login ||
+    String(payload.triggering_operator?.id) !== RELEASE_POLICY.operator.id
   )
-    throw new Error('RELEASE_CONTEXT_INVALID');
+    throw new Error('RELEASE_SOURCE_UNQUALIFIED');
   if (!Array.isArray(payload?.workflow_runs) || payload.workflow_runs.length > 10)
     throw new Error('RELEASE_CI_RESPONSE_INVALID');
   const run = payload.workflow_runs.find(
@@ -23,8 +30,13 @@ export function verifyReleaseCi(payload, context) {
       candidate.status === 'completed' &&
       candidate.conclusion === 'success' &&
       candidate.path === '.github/workflows/public-ci.yml' &&
-      candidate.repository?.full_name === repository &&
-      candidate.head_repository?.full_name === repository,
+      [candidate.repository, candidate.head_repository].every(
+        (repo) =>
+          repo?.full_name === context.repository &&
+          String(repo.id) === RELEASE_POLICY.repositoryId &&
+          repo.owner?.login === context.owner &&
+          String(repo.owner?.id) === context.ownerId,
+      ),
   );
   if (!run) throw new Error('RELEASE_CI_SUCCESS_REQUIRED');
   return run.id;
@@ -43,11 +55,13 @@ async function main() {
       chunks.push(chunk);
     }
     const payload = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-    const id = verifyReleaseCi(payload, {
-      repository: process.env.GITHUB_REPOSITORY,
-      ref: process.env.GITHUB_REF,
-      sha: process.env.GITHUB_SHA,
-    });
+    const context = releaseContext(process.env);
+    const id = verifyReleaseCi(payload, context);
+    if (process.env.GITHUB_OUTPUT)
+      appendFileSync(
+        process.env.GITHUB_OUTPUT,
+        `publication-authorized=${context.owner === RELEASE_POLICY.activeOwner}\n`,
+      );
     console.log(`Public CI passed for this exact main commit (run ${id}).`);
   } finally {
     clearTimeout(deadline);
