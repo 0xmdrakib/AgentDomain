@@ -484,7 +484,9 @@ test('public CrewAI install uses a pinned verified tool and fresh hash-checked w
     UV_LINUX_X64_SHA256: 'aa9fca823c03289fb6e3460b3dc864f3ea895cafaf9b99247701a67b17d1b018',
   });
   assert.equal(setup.shell, 'bash');
-  assert.equal(setup.if, undefined);
+  const fullQualification =
+    "github.event_name != 'pull_request' || (steps.public-pr.outputs.scope != 'docs' && steps.public-pr.outputs.scope != 'frontend')";
+  assert.equal(setup.if, fullQualification);
   assert.equal(setup['continue-on-error'], undefined);
   for (const command of [
     'set -euo pipefail',
@@ -502,7 +504,7 @@ test('public CrewAI install uses a pinned verified tool and fresh hash-checked w
     (step) => step.name === 'Qualify the official CrewAI connector without model or wallet access',
   );
   assert.ok(job.steps.indexOf(setup) < job.steps.indexOf(crewai));
-  assert.equal(crewai.if, undefined);
+  assert.equal(crewai.if, fullQualification);
   assert.equal(crewai['continue-on-error'], undefined);
   for (const command of [
     'python -m venv "$RUNNER_TEMP/agentdomain-crewai"',
