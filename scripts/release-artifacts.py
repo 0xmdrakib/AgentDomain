@@ -19,11 +19,34 @@ PYTHON_PACKAGES = {"agentdomain-crewai": "crewai-plugin", "agentdomain-autogen":
 NPM_PACKAGES = ["shared", "sdk", "mcp-server", "agentkit-plugin", "eliza-plugin", "langchain-plugin"]
 MAX_ARCHIVE = 64 * 1024 * 1024
 MAX_EXPANDED = 256 * 1024 * 1024
+POLICY = json.loads(Path(__file__).with_name("public-release-policy.json").read_bytes())
 
 
 def require(condition, code="INVALID_RELEASE_ARTIFACT"):
     if not condition:
         raise ValueError(code)
+
+
+def source_repository(environment):
+    owner = environment.get("GITHUB_REPOSITORY_OWNER")
+    require(owner in POLICY["owners"])
+    repository = f"{owner}/{POLICY['repository']}"
+    require(environment.get("GITHUB_REPOSITORY") == repository)
+    require(environment.get("GITHUB_REPOSITORY_ID") == POLICY["repositoryId"])
+    require(environment.get("GITHUB_REPOSITORY_OWNER_ID") == POLICY["owners"][owner])
+    return repository
+
+
+def publication_repository(environment):
+    repository = source_repository(environment)
+    require(environment.get("GITHUB_REPOSITORY_OWNER") == POLICY["activeOwner"])
+    require(environment.get("GITHUB_REF") == "refs/heads/main")
+    require(re.fullmatch(r"[0-9a-f]{40}", environment.get("GITHUB_SHA", "")))
+    require(environment.get("GITHUB_ACTOR") == POLICY["operator"]["login"])
+    require(environment.get("GITHUB_ACTOR_ID") == POLICY["operator"]["id"])
+    require(environment.get("GITHUB_TRIGGERING_ACTOR") == POLICY["operator"]["login"])
+    require(environment.get("GITHUB_WORKFLOW_REF") == f"{repository}/.github/workflows/publish-python.yml@refs/heads/main")
+    return repository
 
 
 def digest(path):
@@ -131,13 +154,14 @@ def python_inventory(root):
 
 def build_python(root):
     repo = Path(__file__).resolve().parent.parent
+    repository = source_repository(os.environ) if os.environ.get("GITHUB_REPOSITORY") else f"{POLICY['activeOwner']}/{POLICY['repository']}"
     root.mkdir(parents=True, exist_ok=False)
     (root / "dist").mkdir()
     for folder in PYTHON_PACKAGES.values():
         subprocess.run([sys.executable, "-m", "build", "--no-isolation", "--outdir", str(root / "dist"), str(repo / "packages" / folder)], check=True, timeout=180)
     sha = os.environ.get("GITHUB_SHA") or subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
     require(re.fullmatch(r"[0-9a-f]{40}", sha))
-    manifest = {"schema": 1, "repository": "0xmdrakib/AgentDomain", "sha": sha, "version": VERSION, "files": python_inventory(root)}
+    manifest = {"schema": 1, "repository": repository, "sha": sha, "version": VERSION, "files": python_inventory(root)}
     (root / "release.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     seal = digest(root / "release.json")
     if os.environ.get("GITHUB_OUTPUT"):
@@ -147,12 +171,12 @@ def build_python(root):
 
 
 def verify_python(root):
+    repository = publication_repository(os.environ)
     expected = os.environ.get("EXPECTED_RELEASE_MANIFEST_SHA256", "")
     require(re.fullmatch(r"[0-9a-f]{64}", expected))
     require(digest(root / "release.json") == expected)
     manifest = json.loads((root / "release.json").read_bytes())
-    require(manifest == {"schema": 1, "repository": "0xmdrakib/AgentDomain", "sha": os.environ.get("GITHUB_SHA"), "version": VERSION, "files": python_inventory(root)})
-    require(os.environ.get("GITHUB_REPOSITORY") == manifest["repository"] and os.environ.get("GITHUB_REF") == "refs/heads/main")
+    require(manifest == {"schema": 1, "repository": repository, "sha": os.environ.get("GITHUB_SHA"), "version": VERSION, "files": python_inventory(root)})
     return manifest
 
 

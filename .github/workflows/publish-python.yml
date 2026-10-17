@@ -22,7 +22,12 @@ concurrency:
 
 jobs:
   validate:
-    if: github.ref == 'refs/heads/main' && github.repository == '0xmdrakib/AgentDomain'
+    if: >-
+      github.ref == 'refs/heads/main' && github.repository_id == '1310051881' &&
+      github.actor == '0xmdrakib' && github.actor_id == '113634586' &&
+      github.triggering_actor == '0xmdrakib' &&
+      ((github.repository == '0xmdrakib/AgentDomain' && github.repository_owner_id == '113634586') ||
+      (github.repository == 'Talvono/AgentDomain' && github.repository_owner_id == '342912183'))
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
@@ -31,6 +36,8 @@ jobs:
     outputs:
       release-manifest-sha256: ${{ steps.build.outputs.release-manifest-sha256 }}
       verifier-sha256: ${{ steps.build.outputs.verifier-sha256 }}
+      policy-sha256: ${{ steps.build.outputs.policy-sha256 }}
+      publication-authorized: ${{ steps.source-qualification.outputs.publication-authorized }}
     env:
       OTEL_SDK_DISABLED: 'true'
       CREWAI_TELEMETRY_DISABLED: 'true'
@@ -43,13 +50,21 @@ jobs:
           python-version: '3.12'
       - run: node scripts/check-public-boundary.mjs
       - name: Require successful Public CI for this exact main commit
+        id: source-qualification
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh api --method GET "repos/0xmdrakib/AgentDomain/actions/workflows/public-ci.yml/runs" \
+          gh api --method GET "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA" \
+            --jq '{sha, commit: {verification: {verified: .commit.verification.verified}}}' > "$RUNNER_TEMP/release-source.json"
+          gh api --method GET "users/$GITHUB_TRIGGERING_ACTOR" \
+            --jq '{login, id}' > "$RUNNER_TEMP/release-operator.json"
+          gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/public-ci.yml/runs" \
             -f branch=main -f event=push -f status=success -f head_sha="$GITHUB_SHA" -f per_page=10 \
+            | jq --slurpfile source "$RUNNER_TEMP/release-source.json" \
+                --slurpfile operator "$RUNNER_TEMP/release-operator.json" \
+                '. + {source_commit: $source[0], triggering_operator: $operator[0]}' \
             | node scripts/verify-release-ci.mjs
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
@@ -74,7 +89,9 @@ jobs:
           "$RUNNER_TEMP/python-build/bin/python" -m pip install --disable-pip-version-check --require-hashes -r scripts/python-build-requirements.lock
           "$RUNNER_TEMP/python-build/bin/python" scripts/release-artifacts.py build-python --output "$RUNNER_TEMP/python-release"
           cp scripts/release-artifacts.py "$RUNNER_TEMP/python-release/verifier.py"
+          cp scripts/public-release-policy.json "$RUNNER_TEMP/python-release/public-release-policy.json"
           printf 'verifier-sha256=%s\n' "$(sha256sum "$RUNNER_TEMP/python-release/verifier.py" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          printf 'policy-sha256=%s\n' "$(sha256sum "$RUNNER_TEMP/python-release/public-release-policy.json" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
       - name: Test installed CrewAI wheel with real read-only MCP child processes
         shell: bash
         run: |
@@ -107,7 +124,13 @@ jobs:
 
   publish:
     needs: validate
-    if: github.ref == 'refs/heads/main' && github.repository == '0xmdrakib/AgentDomain'
+    if: >-
+      needs.validate.outputs.publication-authorized == 'true' &&
+      github.ref == 'refs/heads/main' && github.repository_id == '1310051881' &&
+      github.actor == '0xmdrakib' && github.actor_id == '113634586' &&
+      github.triggering_actor == '0xmdrakib' &&
+      ((github.repository == '0xmdrakib/AgentDomain' && github.repository_owner_id == '113634586') ||
+      (github.repository == 'Talvono/AgentDomain' && github.repository_owner_id == '342912183'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
@@ -128,11 +151,14 @@ jobs:
         env:
           EXPECTED_RELEASE_MANIFEST_SHA256: ${{ needs.validate.outputs.release-manifest-sha256 }}
           EXPECTED_VERIFIER_SHA256: ${{ needs.validate.outputs.verifier-sha256 }}
+          EXPECTED_POLICY_SHA256: ${{ needs.validate.outputs.policy-sha256 }}
           PROJECT_TO_PUBLISH: ${{ inputs.project }}
         run: |
           set -euo pipefail
           [[ "$EXPECTED_VERIFIER_SHA256" =~ ^[0-9a-f]{64}$ ]]
           printf '%s  release-inputs/verifier.py\n' "$EXPECTED_VERIFIER_SHA256" | sha256sum --check --status
+          [[ "$EXPECTED_POLICY_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          printf '%s  release-inputs/public-release-policy.json\n' "$EXPECTED_POLICY_SHA256" | sha256sum --check --status
           python -B release-inputs/verifier.py stage-python --output release-inputs --project "$PROJECT_TO_PUBLISH"
       # Bootstrap CrewAI first, then register AutoGen's pending publisher after
       # CrewAI converts. Keep this workflow/pypi-production tuple for both;

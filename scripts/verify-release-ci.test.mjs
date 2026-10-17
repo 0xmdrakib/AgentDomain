@@ -1,13 +1,23 @@
 import assert from 'node:assert/strict';
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, mkdtemp, writeFile, rm, copyFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parsers } from 'prettier/plugins/yaml';
 import { RELEASE_CI_LIMITS, verifyReleaseCi } from './verify-release-ci.mjs';
+import { assertReleaseContext, RELEASE_POLICY } from './public-release-identity.mjs';
 
 const context = {
   repository: '0xmdrakib/AgentDomain',
+  repositoryId: '1310051881',
+  owner: '0xmdrakib',
+  ownerId: '113634586',
+  actor: '0xmdrakib',
+  actorId: '113634586',
+  triggeringActor: '0xmdrakib',
+  workflowRef: '0xmdrakib/AgentDomain/.github/workflows/publish-npm.yml@refs/heads/main',
   ref: 'refs/heads/main',
   sha: 'a'.repeat(40),
 };
@@ -19,18 +29,37 @@ const run = {
   status: 'completed',
   conclusion: 'success',
   path: '.github/workflows/public-ci.yml',
-  repository: { full_name: context.repository },
-  head_repository: { full_name: context.repository },
+  repository: {
+    full_name: context.repository,
+    id: 1310051881,
+    owner: { login: context.owner, id: 113634586 },
+  },
+  head_repository: {
+    full_name: context.repository,
+    id: 1310051881,
+    owner: { login: context.owner, id: 113634586 },
+  },
 };
+const payload = (runs = [run]) => ({
+  workflow_runs: runs,
+  source_commit: { sha: context.sha, commit: { verification: { verified: true } } },
+  triggering_operator: { login: '0xmdrakib', id: 113634586 },
+});
 
 test('requires successful Public CI for the exact public main commit', () => {
-  assert.equal(verifyReleaseCi({ workflow_runs: [run] }, context), 1);
+  assert.equal(verifyReleaseCi(payload(), context), 1);
   for (const patch of [
     { repository: 'someone/AgentDomain' },
     { ref: 'refs/heads/codex/feature' },
     { sha: 'a'.repeat(39) },
+    { repositoryId: '1310051882' },
+    { ownerId: '342912183' },
+    { actorId: '342912183' },
+    { actor: 'Talvono' },
+    { triggeringActor: 'someone' },
+    { workflowRef: 'someone/AgentDomain/.github/workflows/publish-npm.yml@refs/heads/main' },
   ])
-    assert.throws(() => verifyReleaseCi({ workflow_runs: [run] }, { ...context, ...patch }));
+    assert.throws(() => verifyReleaseCi(payload(), { ...context, ...patch }));
 });
 
 test('rejects skipped, failed, unrelated, fork and pull-request checks', () => {
@@ -47,10 +76,73 @@ test('rejects skipped, failed, unrelated, fork and pull-request checks', () => {
     { repository: { full_name: 'someone/AgentDomain' } },
     { head_repository: { full_name: 'someone/AgentDomain' } },
     { head_repository: null },
+    { repository: { ...run.repository, id: 42 } },
+    { head_repository: { ...run.head_repository, id: 42 } },
+    { repository: { ...run.repository, owner: { login: context.owner, id: 42 } } },
+    { head_repository: { ...run.head_repository, owner: { login: 'Talvono', id: 342912183 } } },
   ])
-    assert.throws(() => verifyReleaseCi({ workflow_runs: [{ ...run, ...patch }] }, context));
-  for (const payload of [null, {}, { workflow_runs: [] }, { workflow_runs: Array(11).fill(run) }])
-    assert.throws(() => verifyReleaseCi(payload, context));
+    assert.throws(() => verifyReleaseCi(payload([{ ...run, ...patch }]), context));
+  for (const body of [null, {}, payload([]), payload(Array(11).fill(run))])
+    assert.throws(() => verifyReleaseCi(body, context));
+});
+
+test('qualification accepts only both exact owner identities, not publication aliases', () => {
+  const future = {
+    ...context,
+    repository: 'Talvono/AgentDomain',
+    owner: 'Talvono',
+    ownerId: '342912183',
+    workflowRef: 'Talvono/AgentDomain/.github/workflows/publish-npm.yml@refs/heads/main',
+  };
+  const repository = {
+    id: 1310051881,
+    full_name: future.repository,
+    owner: { login: 'Talvono', id: 342912183 },
+  };
+  assert.equal(
+    verifyReleaseCi(payload([{ ...run, repository, head_repository: repository }]), future),
+    1,
+  );
+  assertReleaseContext(context, true);
+  assert.throws(() => assertReleaseContext(future, true));
+  assert.throws(() => assertReleaseContext({ ...future, ownerId: '113634586' }));
+  assert.throws(() => assertReleaseContext({ ...future, actor: 'Talvono', actorId: '342912183' }));
+  assert.equal(RELEASE_POLICY.activeOwner, '0xmdrakib');
+});
+
+test('signature, source SHA and triggering human numeric identity must qualify', () => {
+  for (const patch of [
+    { source_commit: { sha: context.sha, commit: { verification: { verified: false } } } },
+    { source_commit: { sha: 'b'.repeat(40), commit: { verification: { verified: true } } } },
+    { source_commit: {} },
+    { triggering_operator: { login: '0xmdrakib', id: 42 } },
+    { triggering_operator: { login: 'Talvono', id: 113634586 } },
+  ])
+    assert.throws(() => verifyReleaseCi({ ...payload(), ...patch }, context));
+});
+
+test('only a trusted source-policy flip activates Talvono and excludes the former owner', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'agentdomain-policy-test-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  await copyFile(
+    new URL('./public-release-identity.mjs', import.meta.url),
+    join(directory, 'public-release-identity.mjs'),
+  );
+  await writeFile(
+    join(directory, 'public-release-policy.json'),
+    JSON.stringify({ ...RELEASE_POLICY, activeOwner: 'Talvono' }),
+  );
+  const flipped = await import(pathToFileURL(join(directory, 'public-release-identity.mjs')).href);
+  const future = {
+    ...context,
+    repository: 'Talvono/AgentDomain',
+    owner: 'Talvono',
+    ownerId: '342912183',
+    workflowRef: 'Talvono/AgentDomain/.github/workflows/publish-npm.yml@refs/heads/main',
+  };
+  flipped.assertReleaseContext(future, true);
+  assert.throws(() => flipped.assertReleaseContext(context, true));
+  assert.throws(() => assertReleaseContext(future, true));
 });
 
 test('CLI rejects malformed and oversized bodies without logging their contents', () => {
@@ -60,6 +152,56 @@ test('CLI rejects malformed and oversized bodies without logging their contents'
     assert.equal(result.status, 1);
     assert.doesNotMatch(result.stderr, /private-body-marker|xxxxxxxx/);
     assert.equal(result.stdout, '');
+  }
+});
+
+test('CLI emits publication authority only after exact-source qualification', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'agentdomain-qualification-test-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const filename = fileURLToPath(new URL('./verify-release-ci.mjs', import.meta.url));
+  for (const owner of ['0xmdrakib', 'Talvono']) {
+    const repository = `${owner}/AgentDomain`;
+    const ownerId = RELEASE_POLICY.owners[owner];
+    const source = {
+      full_name: repository,
+      id: 1310051881,
+      owner: { login: owner, id: Number(ownerId) },
+    };
+    const output = join(directory, owner);
+    const environment = {
+      ...process.env,
+      GITHUB_REPOSITORY: repository,
+      GITHUB_REPOSITORY_ID: '1310051881',
+      GITHUB_REPOSITORY_OWNER: owner,
+      GITHUB_REPOSITORY_OWNER_ID: ownerId,
+      GITHUB_ACTOR: '0xmdrakib',
+      GITHUB_ACTOR_ID: '113634586',
+      GITHUB_TRIGGERING_ACTOR: '0xmdrakib',
+      GITHUB_WORKFLOW_REF: `${repository}/.github/workflows/publish-npm.yml@refs/heads/main`,
+      GITHUB_REF: context.ref,
+      GITHUB_SHA: context.sha,
+      GITHUB_OUTPUT: output,
+      ACTIVE_RELEASE_OWNER: 'Talvono',
+      PUBLICATION_AUTHORIZED: 'true',
+    };
+    const result = spawnSync(process.execPath, [filename], {
+      env: environment,
+      input: JSON.stringify(payload([{ ...run, repository: source, head_repository: source }])),
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(
+      await readFile(output, 'utf8'),
+      `publication-authorized=${owner === '0xmdrakib'}\n`,
+    );
+    const rejectedOutput = `${output}-rejected`;
+    const rejected = spawnSync(process.execPath, [filename], {
+      env: { ...environment, GITHUB_OUTPUT: rejectedOutput },
+      input: JSON.stringify(payload([])),
+      encoding: 'utf8',
+    });
+    assert.equal(rejected.status, 1);
+    await assert.rejects(readFile(rejectedOutput), { code: 'ENOENT' });
   }
 });
 
@@ -264,7 +406,7 @@ test('public workflow combines checks once without weakening required contexts o
   }
 });
 
-test('release OIDC remains isolated to main-only production publishing after validation', () => {
+test('release OIDC remains isolated to pinned identity and active-policy qualification', () => {
   for (const [file, environment] of [
     ['publish-npm.yml', 'npm-production'],
     ['publish-python.yml', 'pypi-production'],
@@ -276,11 +418,54 @@ test('release OIDC remains isolated to main-only production publishing after val
     assert.equal(workflow.jobs.validate.environment, undefined);
     const publish = workflow.jobs.publish;
     assert.equal(publish.needs, 'validate');
-    for (const job of [workflow.jobs.validate, publish])
+    const github = {
+      ref: 'refs/heads/main',
+      repository_id: '1310051881',
+      repository: '0xmdrakib/AgentDomain',
+      repository_owner_id: '113634586',
+      actor: '0xmdrakib',
+      actor_id: '113634586',
+      triggering_actor: '0xmdrakib',
+    };
+    const evaluate = (job, source, authorized = 'true') =>
+      Function(
+        'github',
+        'needs',
+        `return (${job.if.replaceAll('outputs.publication-authorized', "outputs['publication-authorized']")})`,
+      )(source, { validate: { outputs: { 'publication-authorized': authorized } } });
+    for (const job of [workflow.jobs.validate, publish]) {
+      assert.equal(evaluate(job, github), true);
       assert.equal(
-        job.if,
-        "github.ref == 'refs/heads/main' && github.repository == '0xmdrakib/AgentDomain'",
+        evaluate(job, {
+          ...github,
+          repository: 'Talvono/AgentDomain',
+          repository_owner_id: '342912183',
+        }),
+        true,
       );
+      for (const patch of [
+        { ref: 'refs/heads/feature' },
+        { repository_id: '42' },
+        { repository: 'someone/AgentDomain' },
+        { repository_owner_id: '42' },
+        { actor_id: '42' },
+        { actor: 'Talvono' },
+        { triggering_actor: 'someone' },
+        { repository: 'Talvono/AgentDomain' },
+      ])
+        assert.equal(evaluate(job, { ...github, ...patch }), false);
+    }
+    assert.equal(evaluate(publish, github, 'false'), false);
+    assert.equal(
+      workflow.jobs.validate.outputs['publication-authorized'],
+      '${{ steps.source-qualification.outputs.publication-authorized }}',
+    );
+    const qualification = workflow.jobs.validate.steps.find(
+      (step) => step.id === 'source-qualification',
+    );
+    assert.match(qualification.run, /repos\/\$GITHUB_REPOSITORY\/commits\/\$GITHUB_SHA/);
+    assert.match(qualification.run, /users\/\$GITHUB_TRIGGERING_ACTOR/);
+    assert.match(qualification.run, /source_commit: \$source\[0\]/);
     assert.deepEqual(publish.environment, { name: environment });
     assert.deepEqual(publish.permissions, { contents: 'read', 'id-token': 'write' });
   }
